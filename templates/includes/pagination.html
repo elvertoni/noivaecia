@@ -1,0 +1,17 @@
+{% comment %}
+Reusable pagination bar. Context: page_obj, is_paginated, extra_qs (optional query string like "q=foo&prefix=bar").
+{% endcomment %}
+
+{% if is_paginated %}
+  <div class="pagination">
+    <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <div class="flex gap-2">
+      {% if page_obj.has_previous %}
+        <a href="?{{ extra_qs|default:'' }}page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?{{ extra_qs|default:'' }}page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}

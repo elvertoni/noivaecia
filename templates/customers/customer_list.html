@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div class="page-header">
     <div>
       <h1 class="page-title">Clientes</h1>
       <p class="page-description">Cadastro de clientes da loja.</p>
@@ -24,17 +24,17 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="text-left">Nome</th>
-          <th class="text-left">Cidade</th>
-          <th class="text-left">CPF</th>
-          <th class="text-left">Celular</th>
+          <th>Nome</th>
+          <th>Cidade</th>
+          <th>CPF</th>
+          <th>Celular</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for customer in customers %}
           <tr>
-            <td class="font-medium text-slate-800">{{ customer.name }}</td>
+            <td class="font-medium text-app-ink">{{ customer.name }}</td>
             <td>{{ customer.city|default:'—' }}</td>
             <td>{{ customer.cpf|default:'—' }}</td>
             <td>{{ customer.phone_mobile|default:'—' }}</td>
@@ -51,14 +51,14 @@
   </div>
 
   {% if is_paginated %}
-    <div class="flex items-center justify-between text-sm text-slate-500">
+    <div class="pagination">
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}
-          <a href="?q={{ search }}&page={{ page_obj.previous_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Anterior</a>
+          <a href="?q={{ search }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a href="?q={{ search }}&page={{ page_obj.next_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Próxima</a>
+          <a href="?q={{ search }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
         {% endif %}
       </div>
     </div>

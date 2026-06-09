@@ -9,7 +9,7 @@
     <p class="page-description">Selecione o tipo e os filtros.</p>
   </div>
 
-  <form method="get" class="panel-spacious">
+  <form method="get" class="panel">
     <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
       <div class="field-group md:col-span-2">
         <label class="field-label">Tipo</label>
@@ -47,17 +47,17 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th class="text-left">Número</th>
-            <th class="text-left">Cliente</th>
-            <th class="text-left">Retirada</th>
-            <th class="text-left">Retorno</th>
-            <th class="text-left">Situação</th>
+            <th>Número</th>
+            <th>Cliente</th>
+            <th>Retirada</th>
+            <th>Retorno</th>
+            <th>Situação</th>
           </tr>
         </thead>
         <tbody>
           {% for rental in rentals %}
             <tr>
-              <td class="font-medium text-slate-800">#{{ rental.number }}</td>
+              <td class="font-medium text-app-ink">#{{ rental.number }}</td>
               <td>{{ rental.customer.name }}</td>
               <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
               <td>{{ rental.return_date|date:'d/m/Y' }}</td>

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div class="page-header">
     <div>
       <h1 class="page-title">Categorias</h1>
       <p class="page-description">Prefixos e nomes das categorias do acervo.</p>
@@ -18,15 +18,15 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="text-left">Prefixo</th>
-          <th class="text-left">Nome</th>
+          <th>Prefixo</th>
+          <th>Nome</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for category in categories %}
           <tr>
-            <td class="font-medium text-slate-800">{{ category.prefix }}</td>
+            <td class="font-medium text-app-ink">{{ category.prefix }}</td>
             <td>{{ category.name }}</td>
             <td class="text-right">
               <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>

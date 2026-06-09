@@ -4,17 +4,9 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="page-title">Dashboard</h1>
-      <p class="page-description">Bem-vindo(a), {{ request.user.get_short_name }}.</p>
-    </div>
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-ghost text-sm">
-        Sair
-      </button>
-    </form>
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-description">Bem-vindo(a), {{ request.user.get_short_name }}.</p>
   </div>
 
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -27,12 +19,10 @@
   </div>
 
   <div>
-    <h2 class="text-lg font-semibold text-app-ink">Módulos</h2>
-    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    <h2 class="section-title">Módulos</h2>
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {% for module in modules %}
-        <a href="{{ module.url }}" class="module-tile">
-          {{ module.label }}
-        </a>
+        <a href="{{ module.url }}" class="module-tile">{{ module.label }}</a>
       {% endfor %}
     </div>
   </div>

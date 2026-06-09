@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div class="page-header">
     <div>
       <h1 class="page-title">Produtos</h1>
       <p class="page-description">Itens do acervo por categoria.</p>
@@ -28,10 +28,10 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="text-left">Código</th>
-          <th class="text-left">Descrição</th>
-          <th class="text-left">Cor</th>
-          <th class="text-left">Tamanho</th>
+          <th>Código</th>
+          <th>Descrição</th>
+          <th>Cor</th>
+          <th>Tamanho</th>
           <th class="text-right">Valor</th>
           <th class="text-right">Ações</th>
         </tr>
@@ -39,7 +39,7 @@
       <tbody>
         {% for product in products %}
           <tr>
-            <td class="font-medium text-slate-800">{{ product.category.prefix }}{{ product.code }}</td>
+            <td class="font-medium text-app-ink">{{ product.category.prefix }}{{ product.code }}</td>
             <td>{{ product.description }}</td>
             <td>{{ product.color|default:'—' }}</td>
             <td>{{ product.size|default:'—' }}</td>
@@ -57,14 +57,14 @@
   </div>
 
   {% if is_paginated %}
-    <div class="flex items-center justify-between text-sm text-slate-500">
+    <div class="pagination">
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}
-          <a href="?prefix={{ prefix }}&page={{ page_obj.previous_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Anterior</a>
+          <a href="?prefix={{ prefix }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a href="?prefix={{ prefix }}&page={{ page_obj.next_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Próxima</a>
+          <a href="?prefix={{ prefix }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
         {% endif %}
       </div>
     </div>

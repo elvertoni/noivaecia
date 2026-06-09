@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="page-header">
     <div>
       <h1 class="page-title">Recebimentos</h1>
       <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
@@ -12,8 +12,8 @@
     <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
   </div>
 
-  <div class="panel-spacious">
-    <h2 class="text-lg font-semibold text-app-ink">Gerar parcelas</h2>
+  <div class="panel">
+    <h2 class="section-title">Gerar parcelas</h2>
     <form method="post" action="{% url 'billing:generate' rental.pk %}" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
       {% csrf_token %}
       {% for field in generate_form %}
@@ -30,12 +30,12 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="text-left">Vencimento</th>
+          <th>Vencimento</th>
           <th class="text-right">Valor</th>
           <th class="text-right">Pago</th>
           <th class="text-right">Saldo</th>
           <th class="text-right">Total c/ juros</th>
-          <th class="text-left">Último pgto.</th>
+          <th>Último pgto.</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
@@ -46,13 +46,13 @@
             <td class="text-right">R$ {{ row.obj.amount }}</td>
             <td class="text-right">R$ {{ row.obj.paid_amount }}</td>
             <td class="text-right">R$ {{ row.obj.balance }}</td>
-            <td class="text-right font-medium text-slate-800">R$ {{ row.total_with_interest }}</td>
+            <td class="text-right font-medium text-app-ink">R$ {{ row.total_with_interest }}</td>
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
               {% if not row.obj.is_paid %}
                 <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Pagar</a>
               {% else %}
-                <span class="text-emerald-600">Quitado</span>
+                <span class="badge badge-success">Quitado</span>
               {% endif %}
             </td>
           </tr>

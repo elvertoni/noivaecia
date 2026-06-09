@@ -9,8 +9,8 @@
     <p class="page-description">Área administrativa restrita. Rotinas controladas do banco.</p>
   </div>
 
-  <div class="panel-spacious">
-    <h2 class="text-lg font-semibold text-app-ink">Resumo do banco</h2>
+  <div class="panel">
+    <h2 class="section-title">Resumo do banco</h2>
     <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
       <div><p class="stat-label">Clientes</p><p class="stat-value text-2xl">{{ stats.customers }}</p></div>
       <div><p class="stat-label">Categorias</p><p class="stat-value text-2xl">{{ stats.categories }}</p></div>
@@ -20,12 +20,12 @@
     </div>
   </div>
 
-  <div class="panel-spacious">
-    <h2 class="text-lg font-semibold text-app-ink">Rotinas</h2>
+  <div class="panel">
+    <h2 class="section-title">Rotinas</h2>
     <div class="mt-4 space-y-3">
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>
-          <p class="text-sm font-medium text-slate-800">Recalcular totais das locações</p>
+          <p class="text-sm font-medium text-app-ink">Recalcular totais das locações</p>
           <p class="field-help">Soma novamente os itens de cada locação.</p>
         </div>
         <form method="post" action="{% url 'maintenance:recalc_totals' %}">
@@ -35,7 +35,7 @@
       </div>
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>
-          <p class="text-sm font-medium text-slate-800">Recalcular saldos dos recebimentos</p>
+          <p class="text-sm font-medium text-app-ink">Recalcular saldos dos recebimentos</p>
           <p class="field-help">Recalcula saldo = valor − pago em cada parcela.</p>
         </div>
         <form method="post" action="{% url 'maintenance:recalc_balances' %}">

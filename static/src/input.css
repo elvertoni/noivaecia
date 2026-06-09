@@ -68,10 +68,6 @@
   }
 
   .panel {
-    @apply rounded-xl border border-app-border bg-app-surface p-5;
-  }
-
-  .panel-spacious {
     @apply rounded-xl border border-app-border bg-app-surface p-6;
   }
 
@@ -105,6 +101,10 @@
 
   .text-danger {
     @apply font-medium text-red-700 hover:underline hover:text-red-800;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-app-ink;
   }
 
   .form-actions {
@@ -243,6 +243,18 @@
 
   .nav-link {
     @apply block rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
+  }
+
+  .nav-link-active {
+    @apply bg-white/10 text-white;
+  }
+
+  .pagination {
+    @apply flex items-center justify-between text-sm text-slate-500;
+  }
+
+  .pagination-page {
+    @apply btn btn-secondary px-3 py-1;
   }
 
   .nav-action {
