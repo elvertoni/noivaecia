@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Django
+db.sqlite3
+/staticfiles/
+
+# Node / Tailwind
+node_modules/
+/static/css/output.css
+
+# Agents / local tooling
+.agents/
+.impeccable/
+.interface-design/
+
+# Root logo (copy lives in static/assets/)
+/logo-noivas-e-cia.svg
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

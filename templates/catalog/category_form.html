@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar{% else %}Nova{% endif %} categoria · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+  <div class="panel-spacious">
+    <h1 class="page-title">
+      {% if form.instance.pk %}Editar categoria{% else %}Nova categoria{% endif %}
+    </h1>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

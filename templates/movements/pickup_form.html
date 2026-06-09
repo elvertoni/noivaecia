@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar retirada · Locação #{{ rental.number }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious">
+    <h1 class="page-title">Registrar retirada</h1>
+    <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Registrar</button>
+        <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

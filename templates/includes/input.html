@@ -1,0 +1,13 @@
+{% comment %}
+Reusable text input with label (design system, PRD section 9.4).
+Context: input_label, input_name, input_placeholder, input_value.
+{% endcomment %}
+
+<div class="field-group">
+  <label class="field-label">{{ input_label }}</label>
+  <input type="text"
+         name="{{ input_name }}"
+         value="{{ input_value|default:'' }}"
+         class="field-input"
+         placeholder="{{ input_placeholder|default:'' }}">
+</div>

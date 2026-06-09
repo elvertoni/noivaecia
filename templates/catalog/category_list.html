@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Categorias · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="page-title">Categorias</h1>
+      <p class="page-description">Prefixos e nomes das categorias do acervo.</p>
+    </div>
+    <a href="{% url 'catalog:category_create' %}" class="btn btn-primary">
+      Nova categoria
+    </a>
+  </div>
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">Prefixo</th>
+          <th class="px-4 py-3 text-left">Nome</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for category in categories %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-slate-800">{{ category.prefix }}</td>
+            <td class="px-4 py-3">{{ category.name }}</td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>
+              <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 font-medium text-red-700 hover:underline">Excluir</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="table-empty">Nenhuma categoria cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

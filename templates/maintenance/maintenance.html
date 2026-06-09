@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Manutenção · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="page-title">Manutenção</h1>
+    <p class="page-description">Área administrativa restrita. Rotinas controladas do banco.</p>
+  </div>
+
+  <div class="panel-spacious">
+    <h2 class="text-lg font-semibold text-app-ink">Resumo do banco</h2>
+    <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div><p class="stat-label">Clientes</p><p class="stat-value text-2xl">{{ stats.customers }}</p></div>
+      <div><p class="stat-label">Categorias</p><p class="stat-value text-2xl">{{ stats.categories }}</p></div>
+      <div><p class="stat-label">Produtos</p><p class="stat-value text-2xl">{{ stats.products }}</p></div>
+      <div><p class="stat-label">Locações</p><p class="stat-value text-2xl">{{ stats.rentals }}</p></div>
+      <div><p class="stat-label">Recebimentos</p><p class="stat-value text-2xl">{{ stats.receivables }}</p></div>
+    </div>
+  </div>
+
+  <div class="panel-spacious">
+    <h2 class="text-lg font-semibold text-app-ink">Rotinas</h2>
+    <div class="mt-4 space-y-3">
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-slate-800">Recalcular totais das locações</p>
+          <p class="field-help">Soma novamente os itens de cada locação.</p>
+        </div>
+        <form method="post" action="{% url 'maintenance:recalc_totals' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-secondary">Executar</button>
+        </form>
+      </div>
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-slate-800">Recalcular saldos dos recebimentos</p>
+          <p class="field-help">Recalcula saldo = valor − pago em cada parcela.</p>
+        </div>
+        <form method="post" action="{% url 'maintenance:recalc_balances' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-secondary">Executar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

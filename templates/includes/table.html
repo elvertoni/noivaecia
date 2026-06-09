@@ -1,0 +1,25 @@
+{% comment %}
+Reusable listing table shell (design system, PRD section 9.7).
+Context: table_headers (list), table_rows (list of lists).
+{% endcomment %}
+
+<div class="table-shell">
+  <table class="data-table">
+    <thead>
+      <tr>
+        {% for header in table_headers %}
+          <th>{{ header }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table_rows %}
+        <tr>
+          {% for cell in row %}
+            <td>{{ cell }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

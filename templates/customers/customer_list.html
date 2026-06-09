@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="page-title">Clientes</h1>
+      <p class="page-description">Cadastro de clientes da loja.</p>
+    </div>
+    <a href="{% url 'customers:create' %}" class="btn btn-primary">
+      Novo cliente
+    </a>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <input type="text" name="q" value="{{ search }}" placeholder="Buscar por nome ou CPF"
+           class="field-input">
+    <button type="submit" class="btn btn-secondary">Buscar</button>
+  </form>
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">Nome</th>
+          <th class="px-4 py-3 text-left">Cidade</th>
+          <th class="px-4 py-3 text-left">CPF</th>
+          <th class="px-4 py-3 text-left">Celular</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in customers %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-slate-800">{{ customer.name }}</td>
+            <td class="px-4 py-3">{{ customer.city|default:'—' }}</td>
+            <td class="px-4 py-3">{{ customer.cpf|default:'—' }}</td>
+            <td class="px-4 py-3">{{ customer.phone_mobile|default:'—' }}</td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'customers:update' customer.pk %}" class="text-link">Editar</a>
+              <a href="{% url 'customers:delete' customer.pk %}" class="ml-3 font-medium text-red-700 hover:underline">Excluir</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="table-empty">Nenhum cliente encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <div class="flex items-center justify-between text-sm text-slate-500">
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?q={{ search }}&page={{ page_obj.previous_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?q={{ search }}&page={{ page_obj.next_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

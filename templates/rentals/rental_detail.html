@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load core_tags %}
+
+{% block title %}Locação #{{ rental.number }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="page-title">Locação #{{ rental.number }}</h1>
+      <p class="page-description">{{ rental.customer.name }}</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if request.user|has_module:'movements' %}
+        {% if rental.status == 'pending' %}
+          <a href="{% url 'movements:pickup' rental.pk %}" class="btn btn-primary">Registrar retirada</a>
+        {% elif rental.status == 'picked_up' %}
+          <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary">Registrar devolução</a>
+        {% endif %}
+      {% endif %}
+      {% if request.user|has_module:'billing' %}
+        <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Recebimentos</a>
+      {% endif %}
+      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="panel">
+      <p class="field-label">Retirada</p>
+      <p class="mt-1 text-lg font-semibold text-slate-800">{{ rental.pickup_date|date:'d/m/Y' }}</p>
+    </div>
+    <div class="panel">
+      <p class="field-label">Retorno</p>
+      <p class="mt-1 text-lg font-semibold text-slate-800">{{ rental.return_date|date:'d/m/Y' }}</p>
+    </div>
+    <div class="panel">
+      <p class="field-label">Situação</p>
+      <p class="mt-1 text-lg font-semibold text-slate-800">{{ rental.get_status_display }}</p>
+    </div>
+    <div class="panel">
+      <p class="field-label">Total</p>
+      <p class="mt-1 text-lg font-semibold text-slate-800">R$ {{ rental.total_value }}</p>
+    </div>
+  </div>
+
+  <div class="panel-spacious">
+    <h2 class="text-lg font-semibold text-app-ink">Itens</h2>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="px-4 py-3 text-left">Produto</th>
+            <th class="px-4 py-3 text-left">Descrição</th>
+            <th class="px-4 py-3 text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in rental.items.all %}
+            <tr>
+              <td class="px-4 py-3">{{ item.product }}</td>
+              <td class="px-4 py-3">{{ item.description|default:'—' }}</td>
+              <td class="px-4 py-3 text-right">R$ {{ item.value }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="table-empty">Sem itens.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if rental.return_record %}
+    <div class="panel-spacious">
+      <h2 class="text-lg font-semibold text-app-ink">Devolução</h2>
+      <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+        <p><span class="text-slate-500">Devolvido em:</span> {{ rental.return_record.return_date|date:'d/m/Y' }}</p>
+        <p><span class="text-slate-500">Dias de atraso:</span> {{ rental.return_record.days_late }}</p>
+        <p><span class="text-slate-500">Multa aplicada:</span> R$ {{ rental.return_record.penalty_applied }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if rental.notes %}
+    <div class="panel-spacious">
+      <h2 class="text-lg font-semibold text-app-ink">Observações</h2>
+      <p class="mt-2 text-sm text-slate-700">{{ rental.notes }}</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

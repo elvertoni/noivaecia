@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}Excluir produto · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious">
+    <h1 class="page-title">Excluir produto</h1>
+    <p class="mt-2 text-sm text-slate-600">
+      Tem certeza que deseja excluir <strong>{{ object }}</strong>? Esta ação não pode ser desfeita.
+    </p>
+    <form method="post" class="mt-6 flex items-center gap-3">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger">Excluir</button>
+      <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatórios · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="page-title">Relatórios de acompanhamento</h1>
+    <p class="page-description">Selecione o tipo e os filtros.</p>
+  </div>
+
+  <form method="get" class="panel-spacious">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
+      <div class="field-group md:col-span-2">
+        <label class="field-label">Tipo</label>
+        <select name="type" class="field-input">
+          <option value="">Selecione…</option>
+          {% for key, label in report_types %}
+            <option value="{{ key }}" {% if key == selected_type %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Data inicial</label>
+        <input type="date" name="date_start" value="{{ date_start }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Data final</label>
+        <input type="date" name="date_end" value="{{ date_end }}" class="field-input">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="field-group">
+          <label class="field-label">Prefixo</label>
+          <input type="text" name="prefix" value="{{ prefix }}" class="field-input">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Código</label>
+          <input type="text" name="code" value="{{ code }}" class="field-input">
+        </div>
+      </div>
+    </div>
+    <button type="submit" class="mt-4 btn btn-primary">Gerar relatório</button>
+  </form>
+
+  {% if has_results %}
+    <div class="table-shell">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="px-4 py-3 text-left">Número</th>
+            <th class="px-4 py-3 text-left">Cliente</th>
+            <th class="px-4 py-3 text-left">Retirada</th>
+            <th class="px-4 py-3 text-left">Retorno</th>
+            <th class="px-4 py-3 text-left">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rental in rentals %}
+            <tr>
+              <td class="px-4 py-3 font-medium text-slate-800">#{{ rental.number }}</td>
+              <td class="px-4 py-3">{{ rental.customer.name }}</td>
+              <td class="px-4 py-3">{{ rental.pickup_date|date:'d/m/Y' }}</td>
+              <td class="px-4 py-3">{{ rental.return_date|date:'d/m/Y' }}</td>
+              <td class="px-4 py-3">{{ rental.get_status_display }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="table-empty">Nenhum resultado para os filtros.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

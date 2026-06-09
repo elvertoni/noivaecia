@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cadastre-se · Noivas &amp; Cia{% endblock %}
+
+{% block sidebar %}{% endblock %}
+{% block main_padding %}p-4 sm:p-6{% endblock %}
+
+{% block content %}
+<div class="mx-auto mt-10 max-w-md">
+  <div class="panel-spacious">
+    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" class="mx-auto mb-4 h-20 w-auto">
+    <h1 class="page-title">Criar conta</h1>
+    <p class="page-description">Cadastre-se com seu e-mail.</p>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <p class="text-xs text-slate-600">{{ field.help_text|safe }}</p>
+          {% endif %}
+          {% if field.errors %}
+            <p class="field-error">{{ field.errors|striptags }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary w-full">
+        Cadastrar
+      </button>
+    </form>
+
+    <p class="mt-4 text-center text-sm text-slate-500">
+      Já tem conta?
+      <a href="{% url 'login' %}" class="text-link">Entrar</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

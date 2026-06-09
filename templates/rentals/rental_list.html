@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Locações · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="page-title">Locações</h1>
+      <p class="page-description">Contratos de locação.</p>
+    </div>
+    <a href="{% url 'rentals:create' %}" class="btn btn-primary">
+      Nova locação
+    </a>
+  </div>
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">Número</th>
+          <th class="px-4 py-3 text-left">Cliente</th>
+          <th class="px-4 py-3 text-left">Retirada</th>
+          <th class="px-4 py-3 text-left">Retorno</th>
+          <th class="px-4 py-3 text-right">Total</th>
+          <th class="px-4 py-3 text-left">Situação</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rental in rentals %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-slate-800">#{{ rental.number }}</td>
+            <td class="px-4 py-3">{{ rental.customer.name }}</td>
+            <td class="px-4 py-3">{{ rental.pickup_date|date:'d/m/Y' }}</td>
+            <td class="px-4 py-3">{{ rental.return_date|date:'d/m/Y' }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ rental.total_value }}</td>
+            <td class="px-4 py-3">{{ rental.get_status_display }}</td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="table-empty">Nenhuma locação cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <div class="flex items-center justify-between text-sm text-slate-500">
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

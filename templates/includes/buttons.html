@@ -1,0 +1,16 @@
+{% comment %}
+Reusable button styles (design system, PRD section 9.3).
+Include and copy the class set, or override the label via context.
+{% endcomment %}
+
+<button class="btn btn-primary">
+  {{ primary_label|default:'Salvar' }}
+</button>
+
+<button class="btn btn-secondary">
+  {{ secondary_label|default:'Cancelar' }}
+</button>
+
+<button class="btn btn-danger">
+  {{ danger_label|default:'Excluir' }}
+</button>

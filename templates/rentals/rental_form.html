@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}Nova locação · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <div class="panel-spacious">
+    <h1 class="page-title">Nova locação</h1>
+
+    <form method="post" class="mt-6 space-y-6">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {% for field in form %}
+          <div class="field-group {% if field.name == 'notes' %}md:col-span-2{% endif %}">
+            <label class="field-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-app-ink">Itens</h2>
+          <button type="button" id="add-item" class="btn btn-secondary min-h-9 px-3 py-1.5">Adicionar item</button>
+        </div>
+
+        {{ items.management_form }}
+        {% if items.non_form_errors %}
+          <div class="mt-2 alert alert-error">{{ items.non_form_errors }}</div>
+        {% endif %}
+
+        <div id="item-forms" class="mt-4 space-y-3">
+          {% for item_form in items %}
+            <div class="item-form rounded-xl border border-slate-200 p-4">
+              {{ item_form.id }}
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {% for field in item_form.visible_fields %}
+                  {% if field.name != 'DELETE' %}
+                    <div class="field-group">
+                      <label class="field-label">{{ field.label }}</label>
+                      {{ field }}
+                      {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <label class="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+                {{ item_form.DELETE }} Remover este item
+              </label>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<template id="empty-form">
+  <div class="item-form rounded-xl border border-slate-200 p-4">
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+      {% for field in items.empty_form.visible_fields %}
+        {% if field.name != 'DELETE' %}
+          <div class="field-group">
+            <label class="field-label">{{ field.label }}</label>
+            {{ field }}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <label class="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+      {{ items.empty_form.DELETE }} Remover este item
+    </label>
+  </div>
+</template>
+
+<script>
+  (function () {
+    const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
+    const container = document.getElementById('item-forms');
+    const tpl = document.getElementById('empty-form').innerHTML;
+    document.getElementById('add-item').addEventListener('click', function () {
+      const index = parseInt(totalForms.value, 10);
+      container.insertAdjacentHTML('beforeend', tpl.replace(/__prefix__/g, index));
+      totalForms.value = index + 1;
+    });
+  })();
+</script>
+{% endblock %}

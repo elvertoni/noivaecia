@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Recebimentos · Locação #{{ rental.number }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="page-title">Recebimentos</h1>
+      <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
+    </div>
+    <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
+  </div>
+
+  <div class="panel-spacious">
+    <h2 class="text-lg font-semibold text-app-ink">Gerar parcelas</h2>
+    <form method="post" action="{% url 'billing:generate' rental.pk %}" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+      {% csrf_token %}
+      {% for field in generate_form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">Gerar</button>
+    </form>
+  </div>
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">Vencimento</th>
+          <th class="px-4 py-3 text-right">Valor</th>
+          <th class="px-4 py-3 text-right">Pago</th>
+          <th class="px-4 py-3 text-right">Saldo</th>
+          <th class="px-4 py-3 text-right">Total c/ juros</th>
+          <th class="px-4 py-3 text-left">Último pgto.</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="px-4 py-3">{{ row.obj.due_date|date:'d/m/Y' }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ row.obj.amount }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ row.obj.paid_amount }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ row.obj.balance }}</td>
+            <td class="px-4 py-3 text-right font-medium text-slate-800">R$ {{ row.total_with_interest }}</td>
+            <td class="px-4 py-3">{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
+            <td class="px-4 py-3 text-right">
+              {% if not row.obj.is_paid %}
+                <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Pagar</a>
+              {% else %}
+                <span class="text-emerald-600">Quitado</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="table-empty">Nenhum recebimento gerado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

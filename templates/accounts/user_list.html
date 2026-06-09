@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Usuários · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="panel-spacious">
+  <h1 class="page-title">Usuários</h1>
+  <p class="page-description">Gerencie o acesso por módulo de cada usuário.</p>
+
+  <div class="mt-4 overflow-hidden rounded-xl border border-slate-200">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">E-mail</th>
+          <th class="px-4 py-3 text-left">Nome</th>
+          <th class="px-4 py-3 text-left">Equipe</th>
+          <th class="px-4 py-3 text-left">Módulos liberados</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+          <tr>
+            <td class="px-4 py-3">{{ user.email }}</td>
+            <td class="px-4 py-3">{{ user.get_full_name }}</td>
+            <td class="px-4 py-3">{{ user.is_staff|yesno:'Sim,Não' }}</td>
+            <td class="px-4 py-3">{% if user.is_superuser %}Todos{% else %}{{ user.allowed_modules }}{% endif %}</td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'user_permissions' user.pk %}" class="text-link">Permissões</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="table-empty">Nenhum usuário cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

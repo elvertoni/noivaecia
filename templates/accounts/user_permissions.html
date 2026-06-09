@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Permissões · {{ target_user.email }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl panel-spacious">
+  <h1 class="page-title">Permissões de módulo</h1>
+  <p class="page-description">{{ target_user.email }}</p>
+
+  <form method="post" class="mt-6 space-y-3">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {% for module in modules %}
+        <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+          <input type="checkbox" name="modules" value="{{ module.key }}"
+                 class="h-4 w-4 rounded border-slate-300 accent-brand-700 focus:ring-brand-300"
+                 {% if module.allowed %}checked{% endif %}>
+          {{ module.label }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" class="btn btn-primary">
+        Salvar
+      </button>
+      <a href="{% url 'user_list' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

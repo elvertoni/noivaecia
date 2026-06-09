@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Produtos · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="page-title">Produtos</h1>
+      <p class="page-description">Itens do acervo por categoria.</p>
+    </div>
+    <a href="{% url 'catalog:product_create' %}" class="btn btn-primary">
+      Novo produto
+    </a>
+  </div>
+
+  <form method="get" class="flex gap-2">
+    <select name="prefix" class="field-input">
+      <option value="">Todas as categorias</option>
+      {% for category in categories %}
+        <option value="{{ category.prefix }}" {% if category.prefix == prefix %}selected{% endif %}>{{ category.prefix }} · {{ category.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary">Filtrar</button>
+  </form>
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="px-4 py-3 text-left">Código</th>
+          <th class="px-4 py-3 text-left">Descrição</th>
+          <th class="px-4 py-3 text-left">Cor</th>
+          <th class="px-4 py-3 text-left">Tamanho</th>
+          <th class="px-4 py-3 text-right">Valor</th>
+          <th class="px-4 py-3 text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-slate-800">{{ product.category.prefix }}{{ product.code }}</td>
+            <td class="px-4 py-3">{{ product.description }}</td>
+            <td class="px-4 py-3">{{ product.color|default:'—' }}</td>
+            <td class="px-4 py-3">{{ product.size|default:'—' }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ product.value }}</td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'catalog:product_update' product.pk %}" class="text-link">Editar</a>
+              <a href="{% url 'catalog:product_delete' product.pk %}" class="ml-3 font-medium text-red-700 hover:underline">Excluir</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="table-empty">Nenhum produto encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <div class="flex items-center justify-between text-sm text-slate-500">
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?prefix={{ prefix }}&page={{ page_obj.previous_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?prefix={{ prefix }}&page={{ page_obj.next_page_number }}" class="btn btn-secondary min-h-8 px-3 py-1">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

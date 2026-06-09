@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Noivas &amp; Cia · Locação para grandes eventos{% endblock %}
+
+{% block sidebar %}{% endblock %}
+{% block main_padding %}p-4 sm:p-6{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl py-10">
+  <section class="mx-auto max-w-3xl text-center">
+    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia - Trajes de Festas" class="mx-auto h-32 w-auto sm:h-40">
+    <h1 class="mt-6 text-2xl font-semibold leading-tight text-app-ink sm:text-3xl">
+      Sistema de gestão comercial e locação
+    </h1>
+    <p class="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-700">
+      Controle clientes, acervo, contratos, retiradas, devoluções e financeiro
+      com uma interface direta para a rotina da loja.
+    </p>
+
+    <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <a href="{% url 'signup' %}" class="btn btn-primary w-full sm:w-auto">
+        Cadastre-se
+      </a>
+      <a href="{% url 'login' %}" class="btn btn-secondary w-full sm:w-auto">
+        Login
+      </a>
+    </div>
+
+    <div class="mt-10 grid grid-cols-1 gap-3 text-left sm:grid-cols-3">
+      <div class="surface-section p-4">
+        <p class="text-sm font-semibold text-app-ink">Cadastros</p>
+        <p class="mt-1 text-sm leading-6 text-slate-600">Clientes, categorias e produtos organizados para consulta rápida.</p>
+      </div>
+      <div class="surface-section p-4">
+        <p class="text-sm font-semibold text-app-ink">Locações</p>
+        <p class="mt-1 text-sm leading-6 text-slate-600">Contratos, itens, retirada e devolução em um fluxo previsível.</p>
+      </div>
+      <div class="surface-section p-4">
+        <p class="text-sm font-semibold text-app-ink">Financeiro</p>
+        <p class="mt-1 text-sm leading-6 text-slate-600">Parcelas, pagamentos, saldos e juros visíveis no atendimento.</p>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block footer %}Noivas &amp; Cia · Sistema de gerenciamento comercial e locação{% endblock %}

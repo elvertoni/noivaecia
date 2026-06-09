@@ -1,0 +1,88 @@
+{% load static core_tags %}
+
+<!-- Mobile top bar (visible below lg) -->
+<div class="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-slate-800 bg-slate-950 px-4 text-slate-100 lg:hidden">
+  <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" class="h-9 w-auto">
+  <button type="button" id="sidebar-open" aria-label="Abrir menu" class="rounded-lg p-2 transition-colors hover:bg-white/10">
+    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+</div>
+
+<!-- Backdrop (mobile, when sidebar open) -->
+<div id="sidebar-backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 lg:hidden"></div>
+
+<aside id="sidebar"
+       class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-slate-800 bg-slate-950 text-slate-100 transition-transform duration-200 lg:static lg:translate-x-0">
+  <div class="flex items-center justify-between px-4 py-4">
+    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" class="h-12 w-auto">
+    <button type="button" id="sidebar-close" aria-label="Fechar menu" class="rounded-lg p-1.5 transition-colors hover:bg-white/10 lg:hidden">
+      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <nav class="flex-1 space-y-1 px-3">
+    <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
+
+    {% if request.user|has_module:'customers' or request.user|has_module:'catalog' or request.user|has_module:'company' %}
+      <p class="nav-section">Cadastros</p>
+      {% if request.user|has_module:'customers' %}
+        <a href="{% url 'customers:list' %}" class="nav-link">Clientes</a>
+      {% endif %}
+      {% if request.user|has_module:'catalog' %}
+        <a href="{% url 'catalog:category_list' %}" class="nav-link">Categorias</a>
+        <a href="{% url 'catalog:product_list' %}" class="nav-link">Produtos</a>
+      {% endif %}
+      {% if request.user|has_module:'company' %}
+        <a href="{% url 'company:edit' %}" class="nav-link">Empresa</a>
+      {% endif %}
+    {% endif %}
+
+    {% if request.user|has_module:'rentals' or request.user|has_module:'billing' %}
+      <p class="nav-section">Movimentação</p>
+      {% if request.user|has_module:'rentals' %}
+        <a href="{% url 'rentals:list' %}" class="nav-link">Locações</a>
+      {% endif %}
+    {% endif %}
+
+    {% if request.user|has_module:'catalog' or request.user|has_module:'reports' %}
+      <p class="nav-section">Consultas</p>
+      {% if request.user|has_module:'catalog' %}
+        <a href="{% url 'catalog:availability' %}" class="nav-link">Disponibilidade</a>
+      {% endif %}
+      {% if request.user|has_module:'reports' %}
+        <a href="{% url 'reports:report' %}" class="nav-link">Relatórios</a>
+      {% endif %}
+    {% endif %}
+
+    {% if request.user.is_staff %}
+      <p class="nav-section">Administração</p>
+      <a href="{% url 'user_list' %}" class="nav-link">Usuários</a>
+      <a href="{% url 'maintenance:index' %}" class="nav-link">Manutenção</a>
+    {% endif %}
+  </nav>
+  {% if request.user.is_authenticated %}
+    <form method="post" action="{% url 'logout' %}" class="px-3 pb-5">
+      {% csrf_token %}
+      <button type="submit" class="nav-action">Sair</button>
+    </form>
+  {% endif %}
+</aside>
+
+<script>
+  (function () {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const open = function () {
+      sidebar.classList.remove('-translate-x-full');
+      backdrop.classList.remove('hidden');
+    };
+    const close = function () {
+      sidebar.classList.add('-translate-x-full');
+      backdrop.classList.add('hidden');
+    };
+    const openBtn = document.getElementById('sidebar-open');
+    const closeBtn = document.getElementById('sidebar-close');
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+  })();
+</script>

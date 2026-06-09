@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar{% else %}Novo{% endif %} cliente · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <div class="panel-spacious">
+    <h1 class="page-title">
+      {% if form.instance.pk %}Editar cliente{% else %}Novo cliente{% endif %}
+    </h1>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {% for field in form %}
+          <div class="field-group {% if field.name == 'notes' or field.name == 'address' %}md:col-span-2{% endif %}">
+            <label class="field-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a href="{% url 'customers:list' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

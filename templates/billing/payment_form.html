@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar pagamento · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious">
+    <h1 class="page-title">Registrar pagamento</h1>
+    <p class="page-description">
+      Locação #{{ receivable.rental.number }} · vence {{ receivable.due_date|date:'d/m/Y' }}
+    </p>
+    <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+      <p><span class="text-slate-500">Saldo:</span> R$ {{ receivable.balance }}</p>
+      <p><span class="text-slate-500">Total c/ juros:</span> R$ {{ total_with_interest }}</p>
+    </div>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Registrar</button>
+        <a href="{% url 'billing:list' receivable.rental_id %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Disponibilidade · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <h1 class="page-title">Disponibilidade do produto</h1>
+    <p class="page-description">Informe prefixo, código e data.</p>
+  </div>
+
+  <form method="get" class="panel-spacious">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div class="field-group">
+        <label class="field-label">Prefixo</label>
+        <input type="text" name="prefix" value="{{ prefix }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Código</label>
+        <input type="text" name="code" value="{{ code }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Data</label>
+        <input type="date" name="date" value="{{ date }}" class="field-input">
+      </div>
+    </div>
+    <button type="submit" class="mt-4 btn btn-primary">Consultar</button>
+  </form>
+
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  {% if checked %}
+    <div class="panel-spacious">
+      <h2 class="text-lg font-semibold text-app-ink">{{ product }}</h2>
+      {% if rental %}
+        <div class="badge badge-danger mt-3">Locado nesta data</div>
+        <div class="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+          <p><span class="font-medium text-slate-600">Locação:</span> #{{ rental.number }}</p>
+          <p><span class="font-medium text-slate-600">Cliente:</span> {{ rental.customer.name }}</p>
+          <p><span class="font-medium text-slate-600">Retirada:</span> {{ rental.pickup_date|date:'d/m/Y' }}</p>
+          <p><span class="font-medium text-slate-600">Retorno:</span> {{ rental.return_date|date:'d/m/Y' }}</p>
+        </div>
+      {% else %}
+        <div class="badge badge-success mt-3">Disponível nesta data</div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Noivas &amp; Cia{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/output.css' %}">
+</head>
+<body class="min-h-screen bg-app-bg font-sans text-app-ink">
+  <div class="flex min-h-screen">
+    {% block sidebar %}
+      {% include 'includes/sidebar.html' %}
+    {% endblock %}
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      <main class="flex-1 {% block main_padding %}p-4 pt-20 sm:p-6 sm:pt-20 lg:pt-6{% endblock %}">
+        {% include 'includes/alerts.html' %}
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="flex items-center gap-2 px-6 py-4 text-xs text-slate-600">
+        <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="" class="h-5 w-auto">
+        {% block footer %}Noivas &amp; Cia{% endblock %}
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

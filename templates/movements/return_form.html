@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar devolução · Locação #{{ rental.number }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious">
+    <h1 class="page-title">Registrar devolução</h1>
+    <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
+    <p class="mt-1 text-xs text-slate-600">Retorno previsto: {{ rental.return_date|date:'d/m/Y' }}. Dias de atraso e multa são calculados automaticamente.</p>
+
+    <form method="post" class="mt-6 space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Registrar</button>
+        <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
