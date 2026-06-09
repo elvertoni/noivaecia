@@ -10,6 +10,8 @@ from core.ui import INPUT_CLASS
 
 from .models import User
 
+PASSWORD_CONFIRM_HELP_TEXT = 'Repita a senha para confirmar.'
+
 
 class EmailUserCreationForm(UserCreationForm):
     """Signup form keyed on a unique email (RF-06)."""
@@ -22,6 +24,27 @@ class EmailUserCreationForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs['class'] = INPUT_CLASS
+        self.fields['email'].label = 'E-mail'
+        self.fields['email'].widget.attrs.update({
+            'autocomplete': 'email',
+            'placeholder': 'seu@email.com',
+        })
+        self.fields['first_name'].label = 'Nome'
+        self.fields['first_name'].widget.attrs.update({
+            'autocomplete': 'given-name',
+            'placeholder': 'Seu nome',
+        })
+        self.fields['password1'].label = 'Senha'
+        self.fields['password1'].widget.attrs.update({
+            'autocomplete': 'new-password',
+            'placeholder': 'Crie uma senha',
+        })
+        self.fields['password2'].label = 'Confirmar senha'
+        self.fields['password2'].help_text = PASSWORD_CONFIRM_HELP_TEXT
+        self.fields['password2'].widget.attrs.update({
+            'autocomplete': 'new-password',
+            'placeholder': 'Repita a senha',
+        })
 
 
 class EmailAuthenticationForm(AuthenticationForm):
@@ -71,6 +94,7 @@ class StyledSetPasswordForm(SetPasswordForm):
             'placeholder': 'Digite a nova senha',
         })
         self.fields['new_password2'].label = 'Confirmar nova senha'
+        self.fields['new_password2'].help_text = PASSWORD_CONFIRM_HELP_TEXT
         self.fields['new_password2'].widget.attrs.update({
             'class': INPUT_CLASS,
             'autocomplete': 'new-password',

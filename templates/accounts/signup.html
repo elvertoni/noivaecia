@@ -21,7 +21,7 @@
           <label class="field-label">{{ field.label }}</label>
           {{ field }}
           {% if field.help_text %}
-            <p class="field-help">{{ field.help_text|safe }}</p>
+            <div class="field-help password-help">{{ field.help_text|safe }}</div>
           {% endif %}
           {% if field.errors %}
             <p class="field-error">{{ field.errors|striptags }}</p>
