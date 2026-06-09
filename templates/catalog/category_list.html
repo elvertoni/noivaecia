@@ -18,19 +18,19 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="px-4 py-3 text-left">Prefixo</th>
-          <th class="px-4 py-3 text-left">Nome</th>
-          <th class="px-4 py-3 text-right">Ações</th>
+          <th class="text-left">Prefixo</th>
+          <th class="text-left">Nome</th>
+          <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for category in categories %}
           <tr>
-            <td class="px-4 py-3 font-medium text-slate-800">{{ category.prefix }}</td>
-            <td class="px-4 py-3">{{ category.name }}</td>
-            <td class="px-4 py-3 text-right">
+            <td class="font-medium text-slate-800">{{ category.prefix }}</td>
+            <td>{{ category.name }}</td>
+            <td class="text-right">
               <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>
-              <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 font-medium text-red-700 hover:underline">Excluir</a>
+              <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}

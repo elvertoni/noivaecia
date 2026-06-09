@@ -30,25 +30,25 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="px-4 py-3 text-left">Vencimento</th>
-          <th class="px-4 py-3 text-right">Valor</th>
-          <th class="px-4 py-3 text-right">Pago</th>
-          <th class="px-4 py-3 text-right">Saldo</th>
-          <th class="px-4 py-3 text-right">Total c/ juros</th>
-          <th class="px-4 py-3 text-left">Último pgto.</th>
-          <th class="px-4 py-3 text-right">Ações</th>
+          <th class="text-left">Vencimento</th>
+          <th class="text-right">Valor</th>
+          <th class="text-right">Pago</th>
+          <th class="text-right">Saldo</th>
+          <th class="text-right">Total c/ juros</th>
+          <th class="text-left">Último pgto.</th>
+          <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
           <tr>
-            <td class="px-4 py-3">{{ row.obj.due_date|date:'d/m/Y' }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ row.obj.amount }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ row.obj.paid_amount }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ row.obj.balance }}</td>
-            <td class="px-4 py-3 text-right font-medium text-slate-800">R$ {{ row.total_with_interest }}</td>
-            <td class="px-4 py-3">{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
-            <td class="px-4 py-3 text-right">
+            <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
+            <td class="text-right">R$ {{ row.obj.amount }}</td>
+            <td class="text-right">R$ {{ row.obj.paid_amount }}</td>
+            <td class="text-right">R$ {{ row.obj.balance }}</td>
+            <td class="text-right font-medium text-slate-800">R$ {{ row.total_with_interest }}</td>
+            <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
+            <td class="text-right">
               {% if not row.obj.is_paid %}
                 <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Pagar</a>
               {% else %}

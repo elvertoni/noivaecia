@@ -18,7 +18,7 @@
           {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="flex items-center gap-3 pt-2">
+      <div class="form-actions">
         <button type="submit" class="btn btn-primary">Registrar</button>
         <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Cancelar</a>
       </div>

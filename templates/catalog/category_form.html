@@ -21,7 +21,7 @@
           {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
         </div>
       {% endfor %}
-      <div class="flex items-center gap-3 pt-2">
+      <div class="form-actions">
         <button type="submit" class="btn btn-primary">Salvar</button>
         <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Cancelar</a>
       </div>

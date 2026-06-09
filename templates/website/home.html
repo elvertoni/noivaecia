@@ -7,13 +7,14 @@
 {% block main_padding %}p-4 sm:p-6{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-5xl py-10">
+<div class="flex min-h-[85vh] items-center justify-center">
+<div class="mx-auto w-full max-w-5xl py-10">
   <section class="mx-auto max-w-3xl text-center">
     <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia - Trajes de Festas" class="mx-auto h-32 w-auto sm:h-40">
     <h1 class="mt-6 text-2xl font-semibold leading-tight text-app-ink sm:text-3xl">
       Sistema de gestão comercial e locação
     </h1>
-    <p class="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-700">
+    <p class="mx-auto mt-4 max-w-2xl text-base leading-7 text-app-muted">
       Controle clientes, acervo, contratos, retiradas, devoluções e financeiro
       com uma interface direta para a rotina da loja.
     </p>
@@ -42,6 +43,7 @@
       </div>
     </div>
   </section>
+</div>
 </div>
 {% endblock %}
 

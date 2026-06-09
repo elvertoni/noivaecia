@@ -9,7 +9,7 @@
     <p class="mt-2 text-sm text-slate-600">
       Tem certeza que deseja excluir <strong>{{ object }}</strong>? Esta ação não pode ser desfeita.
     </p>
-    <form method="post" class="mt-6 flex items-center gap-3">
+    <form method="post" class="mt-6 form-actions">
       {% csrf_token %}
       <button type="submit" class="btn btn-danger">Excluir</button>
       <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Cancelar</a>

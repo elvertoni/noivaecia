@@ -28,25 +28,25 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="px-4 py-3 text-left">Código</th>
-          <th class="px-4 py-3 text-left">Descrição</th>
-          <th class="px-4 py-3 text-left">Cor</th>
-          <th class="px-4 py-3 text-left">Tamanho</th>
-          <th class="px-4 py-3 text-right">Valor</th>
-          <th class="px-4 py-3 text-right">Ações</th>
+          <th class="text-left">Código</th>
+          <th class="text-left">Descrição</th>
+          <th class="text-left">Cor</th>
+          <th class="text-left">Tamanho</th>
+          <th class="text-right">Valor</th>
+          <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for product in products %}
           <tr>
-            <td class="px-4 py-3 font-medium text-slate-800">{{ product.category.prefix }}{{ product.code }}</td>
-            <td class="px-4 py-3">{{ product.description }}</td>
-            <td class="px-4 py-3">{{ product.color|default:'—' }}</td>
-            <td class="px-4 py-3">{{ product.size|default:'—' }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ product.value }}</td>
-            <td class="px-4 py-3 text-right">
+            <td class="font-medium text-slate-800">{{ product.category.prefix }}{{ product.code }}</td>
+            <td>{{ product.description }}</td>
+            <td>{{ product.color|default:'—' }}</td>
+            <td>{{ product.size|default:'—' }}</td>
+            <td class="text-right">R$ {{ product.value }}</td>
+            <td class="text-right">
               <a href="{% url 'catalog:product_update' product.pk %}" class="text-link">Editar</a>
-              <a href="{% url 'catalog:product_delete' product.pk %}" class="ml-3 font-medium text-red-700 hover:underline">Excluir</a>
+              <a href="{% url 'catalog:product_delete' product.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}

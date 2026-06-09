@@ -47,21 +47,21 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th class="px-4 py-3 text-left">Número</th>
-            <th class="px-4 py-3 text-left">Cliente</th>
-            <th class="px-4 py-3 text-left">Retirada</th>
-            <th class="px-4 py-3 text-left">Retorno</th>
-            <th class="px-4 py-3 text-left">Situação</th>
+            <th class="text-left">Número</th>
+            <th class="text-left">Cliente</th>
+            <th class="text-left">Retirada</th>
+            <th class="text-left">Retorno</th>
+            <th class="text-left">Situação</th>
           </tr>
         </thead>
         <tbody>
           {% for rental in rentals %}
             <tr>
-              <td class="px-4 py-3 font-medium text-slate-800">#{{ rental.number }}</td>
-              <td class="px-4 py-3">{{ rental.customer.name }}</td>
-              <td class="px-4 py-3">{{ rental.pickup_date|date:'d/m/Y' }}</td>
-              <td class="px-4 py-3">{{ rental.return_date|date:'d/m/Y' }}</td>
-              <td class="px-4 py-3">{{ rental.get_status_display }}</td>
+              <td class="font-medium text-slate-800">#{{ rental.number }}</td>
+              <td>{{ rental.customer.name }}</td>
+              <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
+              <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+              <td>{{ rental.get_status_display }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="5" class="table-empty">Nenhum resultado para os filtros.</td></tr>

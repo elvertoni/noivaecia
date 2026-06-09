@@ -1,9 +1,21 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse
 from django.views.generic import TemplateView
 
 from billing.models import Receivable
 from core.modules import MODULES
 from rentals.models import Rental
+
+MODULE_URL_NAMES = {
+    'customers': 'customers:list',
+    'catalog': 'catalog:product_list',
+    'company': 'company:edit',
+    'rentals': 'rentals:list',
+    'movements': 'rentals:list',
+    'billing': 'rentals:list',
+    'reports': 'reports:report',
+    'maintenance': 'maintenance:index',
+}
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -13,7 +25,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['modules'] = [{'key': key, 'label': label} for key, label in MODULES]
+        context['modules'] = [
+            {
+                'key': key,
+                'label': label,
+                'url': reverse(MODULE_URL_NAMES.get(key, 'dashboard')),
+            }
+            for key, label in MODULES
+        ]
 
         to_pick_up = Rental.objects.filter(status=Rental.Status.PENDING).count()
         to_return = Rental.objects.filter(status=Rental.Status.PICKED_UP).count()

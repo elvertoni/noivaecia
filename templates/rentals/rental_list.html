@@ -18,25 +18,25 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th class="px-4 py-3 text-left">Número</th>
-          <th class="px-4 py-3 text-left">Cliente</th>
-          <th class="px-4 py-3 text-left">Retirada</th>
-          <th class="px-4 py-3 text-left">Retorno</th>
-          <th class="px-4 py-3 text-right">Total</th>
-          <th class="px-4 py-3 text-left">Situação</th>
-          <th class="px-4 py-3 text-right">Ações</th>
+          <th class="text-left">Número</th>
+          <th class="text-left">Cliente</th>
+          <th class="text-left">Retirada</th>
+          <th class="text-left">Retorno</th>
+          <th class="text-right">Total</th>
+          <th class="text-left">Situação</th>
+          <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for rental in rentals %}
           <tr>
-            <td class="px-4 py-3 font-medium text-slate-800">#{{ rental.number }}</td>
-            <td class="px-4 py-3">{{ rental.customer.name }}</td>
-            <td class="px-4 py-3">{{ rental.pickup_date|date:'d/m/Y' }}</td>
-            <td class="px-4 py-3">{{ rental.return_date|date:'d/m/Y' }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ rental.total_value }}</td>
-            <td class="px-4 py-3">{{ rental.get_status_display }}</td>
-            <td class="px-4 py-3 text-right">
+            <td class="font-medium text-slate-800">#{{ rental.number }}</td>
+            <td>{{ rental.customer.name }}</td>
+            <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
+            <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+            <td class="text-right">R$ {{ rental.total_value }}</td>
+            <td>{{ rental.get_status_display }}</td>
+            <td class="text-right">
               <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>
             </td>
           </tr>
