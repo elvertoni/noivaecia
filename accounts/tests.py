@@ -1,5 +1,8 @@
+import re
+
+from django.core import mail
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from accounts.models import ModulePermission
 
@@ -57,6 +60,45 @@ class AuthFlowTests(TestCase):
         User.objects.create_user(email='log@b.com', password='Senha12345')
         ok = self.client.login(email='log@b.com', password='Senha12345')
         self.assertTrue(ok)
+
+    def test_login_page_links_to_password_reset(self):
+        response = self.client.get('/login/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Esqueci minha senha')
+        self.assertContains(response, '/senha/redefinir/')
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        DEFAULT_FROM_EMAIL='Noivas & Cia <no-reply@example.com>',
+    )
+    def test_password_reset_email_allows_password_change(self):
+        user = User.objects.create_user(email='reset@b.com', password='Senha12345')
+
+        response = self.client.post('/senha/redefinir/', {'email': 'reset@b.com'})
+
+        self.assertRedirects(response, '/senha/redefinir/enviada/')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Redefinição de senha', mail.outbox[0].subject)
+
+        match = re.search(
+            r'http://testserver(?P<path>/senha/redefinir/confirmar/\S+)',
+            mail.outbox[0].body,
+        )
+        self.assertIsNotNone(match)
+
+        response = self.client.get(match.group('path'))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(response.url)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(response.request['PATH_INFO'], {
+            'new_password1': 'NovaSenha!2345',
+            'new_password2': 'NovaSenha!2345',
+        })
+
+        self.assertRedirects(response, '/senha/redefinir/concluida/')
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NovaSenha!2345'))
 
     def test_dashboard_requires_login(self):
         response = self.client.get('/dashboard/')

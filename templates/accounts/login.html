@@ -1,45 +1,54 @@
-{% extends 'base.html' %}
-{% load static %}
+{% extends 'accounts/auth_base.html' %}
 
 {% block title %}Login · Noivas &amp; Cia{% endblock %}
 
-{% block sidebar %}{% endblock %}
-{% block main_padding %}p-4 sm:p-6{% endblock %}
-
-{% block content %}
-<div class="flex min-h-[80vh] items-center justify-center">
-<div class="w-full max-w-md">
-  <div class="panel-spacious text-center">
-    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" class="mx-auto mb-6 h-20 w-auto">
-    <h1 class="page-title">Entrar</h1>
-    <p class="page-description">Acesse com seu e-mail e senha.</p>
-
-    <form method="post" class="mt-6 space-y-4">
-      {% csrf_token %}
-      {% if form.non_field_errors %}
-        <div class="alert alert-error">
-          {{ form.non_field_errors }}
-        </div>
-      {% endif %}
-      {% for field in form %}
-        <div class="field-group">
-          <label class="field-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}
-            <p class="field-error">{{ field.errors|striptags }}</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-      <button type="submit" class="btn btn-primary w-full">
-        Entrar
-      </button>
-    </form>
-
-    <p class="mt-4 text-center text-sm text-slate-500">
-      Não tem conta?
-      <a href="{% url 'signup' %}" class="text-link">Cadastre-se</a>
-    </p>
-  </div>
+{% block auth_content %}
+<div>
+  <p class="text-sm font-semibold text-brand-700">Noivas &amp; Cia</p>
+  <h1 class="mt-2 text-2xl font-semibold leading-tight text-app-ink">Entrar no sistema</h1>
+  <p class="mt-2 text-sm leading-6 text-app-muted">
+    Use o e-mail cadastrado para acessar o painel.
+  </p>
 </div>
+
+<form method="post" class="mt-6 space-y-5" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-error" role="alert">
+      <span>{{ form.non_field_errors|striptags }}</span>
+    </div>
+  {% endif %}
+
+  <div class="field-group">
+    <label for="{{ form.username.id_for_label }}" class="field-label">{{ form.username.label }}</label>
+    {{ form.username }}
+    {% if form.username.errors %}
+      <p class="field-error">{{ form.username.errors|striptags }}</p>
+    {% endif %}
+  </div>
+
+  <div class="field-group">
+    <div class="flex items-center justify-between gap-3">
+      <label for="{{ form.password.id_for_label }}" class="field-label">{{ form.password.label }}</label>
+      <a href="{% url 'password_reset' %}" class="text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline">
+        Esqueci minha senha
+      </a>
+    </div>
+    {{ form.password }}
+    {% if form.password.errors %}
+      <p class="field-error">{{ form.password.errors|striptags }}</p>
+    {% endif %}
+  </div>
+
+  <button type="submit" class="btn btn-primary w-full">
+    Entrar
+  </button>
+</form>
+
+<div class="mt-6 border-t border-slate-200 pt-5">
+  <p class="text-center text-sm leading-6 text-slate-600">
+    Não tem conta?
+    <a href="{% url 'signup' %}" class="text-link">Cadastre-se</a>
+  </p>
 </div>
 {% endblock %}
