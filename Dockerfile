@@ -23,9 +23,11 @@ COPY . .
 
 RUN npm run build:css
 RUN python manage.py collectstatic --noinput 2>/dev/null || true
+RUN mkdir -p /app/data /app/staticfiles \
+    && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
 
 STOPSIGNAL SIGTERM
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["./docker-entrypoint.sh"]
