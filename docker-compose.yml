@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - sqlite_data:/app/data
+      - static_data:/app/staticfiles
+    env_file:
+      - .env
+    environment:
+      - DATABASE_NAME=/app/data/db.sqlite3
+      - STATIC_ROOT=/app/staticfiles
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+  static_data:

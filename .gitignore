@@ -20,6 +20,9 @@ node_modules/
 # Root logo (copy lives in static/assets/)
 /logo-noivas-e-cia.svg
 
+# Docker
+docker-compose.override.yml
+
 # OS / editor
 .DS_Store
 .vscode/

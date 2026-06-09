@@ -702,10 +702,10 @@ Todos os componentes acima vivem em `static/src/input.css` dentro de `@layer com
   - [x] 12.2.4 Testes de permissões por módulo
 
 ### Sprint 13 (final) — Docker e deploy
-- [ ] 13.1 Containerização
-  - [ ] 13.1.1 Criar `Dockerfile` do app
-  - [ ] 13.1.2 Criar `docker-compose.yml` (app + volume SQLite)
-  - [ ] 13.1.3 Configurar coleta de estáticos para produção
-- [ ] 13.2 Preparo de deploy
-  - [ ] 13.2.1 Variáveis de ambiente e `DEBUG=False`
-  - [ ] 13.2.2 Documentar execução local e em container no README
+- [x] 13.1 Containerização
+  - [x] 13.1.1 Criar `Dockerfile` do app
+  - [x] 13.1.2 Criar `docker-compose.yml` (app + volume SQLite)
+  - [x] 13.1.3 Configurar coleta de estáticos para produção
+- [x] 13.2 Preparo de deploy
+  - [x] 13.2.1 Variáveis de ambiente e `DEBUG=False`
+  - [x] 13.2.2 Documentar execução local e em container no README
