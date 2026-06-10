@@ -64,6 +64,7 @@
           <tr>
             <th>Produto</th>
             <th>Descrição</th>
+            <th>Foto</th>
             <th class="text-right">Valor</th>
           </tr>
         </thead>
@@ -72,10 +73,22 @@
             <tr>
               <td>{{ item.product }}</td>
               <td>{{ item.description|default:'—' }}</td>
+              <td>
+                {% if item.has_proof_photo %}
+                  <a href="{% url 'rentals:item_photo' item.pk %}" target="_blank" rel="noopener" class="inline-flex items-center gap-3 text-link">
+                    <img src="{% url 'rentals:item_photo' item.pk %}"
+                         alt="Foto de comprovação de {{ item.product }}"
+                         class="h-16 w-16 rounded-lg border border-slate-200 object-cover">
+                    <span class="text-xs text-slate-600">{{ item.proof_photo_width }}x{{ item.proof_photo_height }} px</span>
+                  </a>
+                {% else %}
+                  <span class="text-sm text-slate-500">Sem foto</span>
+                {% endif %}
+              </td>
               <td class="text-right">R$ {{ item.value }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="3" class="table-empty">Sem itens.</td></tr>
+            <tr><td colspan="4" class="table-empty">Sem itens.</td></tr>
           {% endfor %}
         </tbody>
       </table>

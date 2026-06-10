@@ -1,43 +1,124 @@
 {% extends 'base.html' %}
-{% load static %}
 
-{% block title %}Cadastre-se · Noivas &amp; Cia{% endblock %}
-
-{% block sidebar %}{% endblock %}
-{% block main_padding %}p-4 sm:p-6{% endblock %}
+{% block title %}Novo usuário · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
-<div class="flex min-h-[80vh] items-center justify-center">
-<div class="w-full max-w-md">
-  <div class="panel text-center">
-    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" class="brand-logo-signup mx-auto mb-6">
-    <h1 class="page-title">Criar conta</h1>
-    <p class="page-description">Cadastre-se com seu e-mail.</p>
+<div class="mx-auto max-w-3xl">
+  <div class="panel">
+    <h1 class="page-title">Novo usuário</h1>
+    <p class="page-description">Crie o acesso e marque somente os módulos necessários para a rotina da pessoa.</p>
 
-    <form method="post" class="mt-6 space-y-4">
+    <form method="post" class="mt-6 space-y-6" novalidate>
       {% csrf_token %}
-      {% for field in form %}
-        <div class="field-group">
-          <label class="field-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.help_text %}
-            <div class="field-help password-help">{{ field.help_text|safe }}</div>
-          {% endif %}
-          {% if field.errors %}
-            <p class="field-error">{{ field.errors|striptags }}</p>
-          {% endif %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error" role="alert">
+          <span>{{ form.non_field_errors|striptags }}</span>
         </div>
-      {% endfor %}
-      <button type="submit" class="btn btn-primary w-full">
-        Cadastrar
-      </button>
-    </form>
+      {% endif %}
 
-    <p class="mt-4 text-center text-sm text-slate-500">
-      Já tem conta?
-      <a href="{% url 'login' %}" class="text-link">Entrar</a>
-    </p>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="field-group">
+          <label for="{{ form.email.id_for_label }}" class="field-label">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}<p class="field-error">{{ form.email.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label for="{{ form.first_name.id_for_label }}" class="field-label">{{ form.first_name.label }}</label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}<p class="field-error">{{ form.first_name.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="field-group">
+          <label for="{{ form.password1.id_for_label }}" class="field-label">{{ form.password1.label }}</label>
+          <div class="relative">
+            {{ form.password1 }}
+            <button type="button"
+                    class="password-toggle"
+                    data-password-toggle
+                    aria-label="Mostrar senha"
+                    aria-pressed="false"
+                    aria-controls="{{ form.password1.id_for_label }}">
+              <svg data-eye-open class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+              </svg>
+              <svg data-eye-closed class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.88 5.36A9.7 9.7 0 0 1 12 5.13c6 0 9.75 6.87 9.75 6.87a18.3 18.3 0 0 1-2.82 3.56"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.53 6.53C3.82 8.36 2.25 12 2.25 12S6 18.87 12 18.87c1.3 0 2.5-.32 3.56-.85"/>
+              </svg>
+            </button>
+          </div>
+          {% if form.password1.help_text %}<div class="field-help password-help">{{ form.password1.help_text|safe }}</div>{% endif %}
+          {% if form.password1.errors %}<p class="field-error">{{ form.password1.errors|striptags }}</p>{% endif %}
+        </div>
+
+        <div class="field-group">
+          <label for="{{ form.password2.id_for_label }}" class="field-label">{{ form.password2.label }}</label>
+          <div class="relative">
+            {{ form.password2 }}
+            <button type="button"
+                    class="password-toggle"
+                    data-password-toggle
+                    aria-label="Mostrar senha"
+                    aria-pressed="false"
+                    aria-controls="{{ form.password2.id_for_label }}">
+              <svg data-eye-open class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+              </svg>
+              <svg data-eye-closed class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.88 5.36A9.7 9.7 0 0 1 12 5.13c6 0 9.75 6.87 9.75 6.87a18.3 18.3 0 0 1-2.82 3.56"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.53 6.53C3.82 8.36 2.25 12 2.25 12S6 18.87 12 18.87c1.3 0 2.5-.32 3.56-.85"/>
+              </svg>
+            </button>
+          </div>
+          {% if form.password2.help_text %}<div class="field-help password-help">{{ form.password2.help_text|safe }}</div>{% endif %}
+          {% if form.password2.errors %}<p class="field-error">{{ form.password2.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="field-group">
+        <span class="field-label">{{ form.module_permissions.label }}</span>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {% for checkbox in form.module_permissions %}
+            <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+              {{ checkbox.tag }}
+              {{ checkbox.choice_label }}
+            </label>
+          {% endfor %}
+        </div>
+        {% if form.module_permissions.help_text %}<p class="field-help">{{ form.module_permissions.help_text }}</p>{% endif %}
+        {% if form.module_permissions.errors %}<p class="field-error">{{ form.module_permissions.errors|striptags }}</p>{% endif %}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Criar usuário</button>
+        <a href="{% url 'user_list' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
   </div>
 </div>
-</div>
+
+<script>
+  (function () {
+    document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+      const input = document.getElementById(button.getAttribute('aria-controls'));
+      if (!input) return;
+      button.addEventListener('click', function () {
+        const isVisible = input.type === 'text';
+        input.type = isVisible ? 'password' : 'text';
+        button.setAttribute('aria-pressed', String(!isVisible));
+        button.setAttribute('aria-label', isVisible ? 'Mostrar senha' : 'Ocultar senha');
+        button.querySelector('[data-eye-open]').classList.toggle('hidden', !isVisible);
+        button.querySelector('[data-eye-closed]').classList.toggle('hidden', isVisible);
+      });
+    });
+  })();
+</script>
 {% endblock %}

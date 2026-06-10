@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
@@ -73,6 +74,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         return self.module_permissions.filter(
             module_key=module_key, allowed=True
         ).exists()
+
+    def can_manage_users(self):
+        """Return whether this user can create users and change module access."""
+        if self.is_superuser:
+            return True
+        creator_emails = set(getattr(settings, 'USER_CREATOR_EMAILS', []))
+        return self.email.lower() in creator_emails
 
 
 class ModulePermission(TimeStampedModel):

@@ -12,27 +12,29 @@ from .forms import EmailUserCreationForm
 from .models import ModulePermission, User
 
 
-class SignupView(CreateView):
-    """Public email signup (RF-06). Redirects to login on success."""
-
-    form_class = EmailUserCreationForm
-    template_name = 'accounts/signup.html'
-    success_url = reverse_lazy('login')
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Conta criada com sucesso. Faça login.')
-        return super().form_valid(form)
-
-
-class StaffRequiredMixin(UserPassesTestMixin):
-    """Restrict a view to staff/admin users."""
+class UserManagementRequiredMixin(UserPassesTestMixin):
+    """Restrict user administration to the configured account owner."""
 
     def test_func(self):
         user = self.request.user
-        return user.is_authenticated and user.is_staff
+        return user.is_authenticated and user.can_manage_users()
 
 
-class UserListView(StaffRequiredMixin, ListView):
+class SignupView(UserManagementRequiredMixin, CreateView):
+    """Create users from the internal administration flow."""
+
+    form_class = EmailUserCreationForm
+    template_name = 'accounts/signup.html'
+    success_url = reverse_lazy('user_list')
+
+    def form_valid(self, form):
+        self.object = form.save()
+        form.save_module_permissions(self.object)
+        messages.success(self.request, 'Usuário criado com sucesso.')
+        return redirect(self.get_success_url())
+
+
+class UserListView(UserManagementRequiredMixin, ListView):
     """Admin listing of users with their granted module count (RF-08)."""
 
     model = User
@@ -49,7 +51,7 @@ class UserListView(StaffRequiredMixin, ListView):
         )
 
 
-class UserPermissionsView(StaffRequiredMixin, SingleObjectMixin, ListView):
+class UserPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListView):
     """Manage per-module access for a single user (RF-08, RF-09)."""
 
     template_name = 'accounts/user_permissions.html'

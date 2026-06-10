@@ -7,8 +7,9 @@ from django.contrib.auth.forms import (
 )
 
 from core.ui import INPUT_CLASS
+from core.modules import MODULES
 
-from .models import User
+from .models import ModulePermission, User
 
 PASSWORD_CONFIRM_HELP_TEXT = 'Repita a senha para confirmar.'
 
@@ -16,13 +17,23 @@ PASSWORD_CONFIRM_HELP_TEXT = 'Repita a senha para confirmar.'
 class EmailUserCreationForm(UserCreationForm):
     """Signup form keyed on a unique email (RF-06)."""
 
+    module_permissions = forms.MultipleChoiceField(
+        label='Módulos liberados',
+        choices=MODULES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text='Marque apenas as áreas que este usuário poderá acessar.',
+    )
+
     class Meta:
         model = User
         fields = ('email', 'first_name')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for name, field in self.fields.items():
+            if name == 'module_permissions':
+                continue
             field.widget.attrs['class'] = INPUT_CLASS
         self.fields['email'].label = 'E-mail'
         self.fields['email'].widget.attrs.update({
@@ -36,15 +47,29 @@ class EmailUserCreationForm(UserCreationForm):
         })
         self.fields['password1'].label = 'Senha'
         self.fields['password1'].widget.attrs.update({
+            'class': f'{INPUT_CLASS} pr-10',
             'autocomplete': 'new-password',
             'placeholder': 'Crie uma senha',
         })
         self.fields['password2'].label = 'Confirmar senha'
         self.fields['password2'].help_text = PASSWORD_CONFIRM_HELP_TEXT
         self.fields['password2'].widget.attrs.update({
+            'class': f'{INPUT_CLASS} pr-10',
             'autocomplete': 'new-password',
             'placeholder': 'Repita a senha',
         })
+        self.fields['module_permissions'].widget.attrs.update({
+            'class': 'h-4 w-4 rounded border-slate-300 accent-brand-700 focus:ring-brand-300',
+        })
+
+    def save_module_permissions(self, user):
+        selected = set(self.cleaned_data.get('module_permissions') or [])
+        for key, _ in MODULES:
+            ModulePermission.objects.update_or_create(
+                user=user,
+                module_key=key,
+                defaults={'allowed': key in selected},
+            )
 
 
 class EmailAuthenticationForm(AuthenticationForm):
@@ -62,7 +87,7 @@ class EmailAuthenticationForm(AuthenticationForm):
             }
         )
         self.fields['password'].label = 'Senha'
-        self.fields['password'].widget.attrs['class'] = INPUT_CLASS
+        self.fields['password'].widget.attrs['class'] = f'{INPUT_CLASS} pr-10'
         self.fields['password'].widget.attrs['autocomplete'] = 'current-password'
         self.fields['password'].widget.attrs['placeholder'] = 'Sua senha'
 

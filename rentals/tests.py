@@ -1,8 +1,11 @@
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from PIL import Image
 
 from accounts.models import ModulePermission
 from catalog.models import Category, Product
@@ -10,6 +13,17 @@ from customers.models import Customer
 from rentals.models import Rental, RentalItem
 
 User = get_user_model()
+
+
+def make_uploaded_image(name='comprovante.png', size=(2200, 1000), image_format='PNG'):
+    buffer = BytesIO()
+    Image.new('RGB', size, color=(240, 240, 240)).save(buffer, format=image_format)
+    buffer.seek(0)
+    return SimpleUploadedFile(
+        name,
+        buffer.getvalue(),
+        content_type=f'image/{image_format.lower()}',
+    )
 
 
 class RentalModelTests(TestCase):
@@ -68,6 +82,7 @@ class RentalCreateFlowTests(TestCase):
             'items-0-product': self.product.pk,
             'items-0-description': 'Branco M',
             'items-0-value': '300',
+            'items-0-proof_photo_upload': make_uploaded_image(),
             'items-0-DELETE': '',
         }
         response = self.client.post('/locacoes/nova/', data)
@@ -76,6 +91,15 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(rental.number, 1)
         self.assertEqual(rental.items.count(), 1)
         self.assertEqual(rental.total_value, Decimal('300'))
+        item = rental.items.get()
+        self.assertTrue(item.has_proof_photo)
+        self.assertEqual(item.proof_photo_content_type, 'image/jpeg')
+        self.assertLessEqual(max(item.proof_photo_width, item.proof_photo_height), 1600)
+
+        response = self.client.get(f'/locacoes/itens/{item.pk}/foto/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
+        self.assertGreater(len(response.content), 0)
 
     def test_rental_requires_module_permission(self):
         other = User.objects.create_user(email='no@b.com', password='Senha12345')

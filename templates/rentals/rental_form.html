@@ -7,7 +7,7 @@
   <div class="panel">
     <h1 class="page-title">Nova locação</h1>
 
-    <form method="post" class="mt-6 space-y-6">
+    <form method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
       {% if form.non_field_errors %}
         <div class="alert alert-error">{{ form.non_field_errors }}</div>
@@ -38,12 +38,13 @@
           {% for item_form in items %}
             <div class="item-form rounded-xl border border-slate-200 p-4">
               {{ item_form.id }}
-              <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
                 {% for field in item_form.visible_fields %}
                   {% if field.name != 'DELETE' %}
-                    <div class="field-group">
+                    <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
                       <label class="field-label">{{ field.label }}</label>
                       {{ field }}
+                      {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
                       {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
                     </div>
                   {% endif %}
@@ -67,12 +68,13 @@
 
 <template id="empty-form">
   <div class="item-form rounded-xl border border-slate-200 p-4">
-    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
       {% for field in items.empty_form.visible_fields %}
         {% if field.name != 'DELETE' %}
-          <div class="field-group">
+          <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
             <label class="field-label">{{ field.label }}</label>
             {{ field }}
+            {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
           </div>
         {% endif %}
       {% endfor %}

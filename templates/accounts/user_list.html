@@ -4,8 +4,13 @@
 
 {% block content %}
 <div class="panel">
-  <h1 class="page-title">Usuários</h1>
-  <p class="page-description">Gerencie o acesso por módulo de cada usuário.</p>
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Usuários</h1>
+      <p class="page-description">Gerencie o acesso por módulo de cada usuário.</p>
+    </div>
+    <a href="{% url 'user_create' %}" class="btn btn-primary">Novo usuário</a>
+  </div>
 
   <div class="mt-4 table-shell">
     <table class="data-table">

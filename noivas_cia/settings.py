@@ -51,6 +51,12 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
 
+USER_CREATOR_EMAILS = [
+    email.strip().lower()
+    for email in os.environ.get('USER_CREATOR_EMAILS', 'admin@noivas.com').split(',')
+    if email.strip()
+]
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

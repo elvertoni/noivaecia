@@ -66,6 +66,25 @@ class RentalItem(TimeStampedModel):
     )
     description = models.CharField('descrição', max_length=200, blank=True)
     value = models.DecimalField('valor', max_digits=10, decimal_places=2, default=0)
+    proof_photo = models.BinaryField(
+        'foto de comprovação',
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    proof_photo_content_type = models.CharField(
+        'tipo da foto',
+        max_length=50,
+        blank=True,
+    )
+    proof_photo_filename = models.CharField(
+        'nome da foto',
+        max_length=150,
+        blank=True,
+    )
+    proof_photo_size = models.PositiveIntegerField('tamanho da foto', default=0)
+    proof_photo_width = models.PositiveIntegerField('largura da foto', default=0)
+    proof_photo_height = models.PositiveIntegerField('altura da foto', default=0)
 
     class Meta:
         verbose_name = 'item da locação'
@@ -73,3 +92,7 @@ class RentalItem(TimeStampedModel):
 
     def __str__(self):
         return f'{self.product} · {self.value}'
+
+    @property
+    def has_proof_photo(self):
+        return self.proof_photo_size > 0

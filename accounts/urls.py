@@ -16,6 +16,7 @@ from .forms import (
 from .views import SignupView, UserListView, UserPermissionsView
 
 urlpatterns = [
+    path('users/new/', SignupView.as_view(), name='user_create'),
     path('signup/', SignupView.as_view(), name='signup'),
     path(
         'login/',

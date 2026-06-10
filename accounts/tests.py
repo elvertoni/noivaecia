@@ -46,15 +46,34 @@ class UserModelTests(TestCase):
 
 
 class AuthFlowTests(TestCase):
-    def test_signup_creates_user_and_redirects_to_login(self):
-        response = self.client.post('/signup/', {
+    def test_signup_requires_user_manager(self):
+        response = self.client.get('/signup/')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+
+    def test_user_manager_creates_user_with_modules(self):
+        admin = User.objects.create_superuser(email='adm@b.com', password='Senha12345')
+        self.client.force_login(admin)
+
+        response = self.client.post('/users/new/', {
             'email': 'novo@b.com',
             'first_name': 'Ana',
             'password1': 'Abcd!2345x',
             'password2': 'Abcd!2345x',
+            'module_permissions': ['customers', 'rentals'],
         })
-        self.assertRedirects(response, '/login/')
-        self.assertTrue(User.objects.filter(email='novo@b.com').exists())
+
+        self.assertRedirects(response, '/users/')
+        user = User.objects.get(email='novo@b.com')
+        self.assertTrue(user.has_module('customers'))
+        self.assertTrue(user.has_module('rentals'))
+        self.assertFalse(user.has_module('maintenance'))
+
+    @override_settings(USER_CREATOR_EMAILS=['ana@noivas.com'])
+    def test_configured_creator_email_can_manage_users(self):
+        ana = User.objects.create_user(email='ana@noivas.com', password='Senha12345')
+        self.client.force_login(ana)
+        self.assertEqual(self.client.get('/users/').status_code, 200)
 
     def test_login_by_email(self):
         User.objects.create_user(email='log@b.com', password='Senha12345')
@@ -66,6 +85,8 @@ class AuthFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Esqueci minha senha')
         self.assertContains(response, '/senha/redefinir/')
+        self.assertContains(response, 'data-password-toggle')
+        self.assertContains(response, 'Peça para Ana criar seu usuário')
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -108,6 +129,13 @@ class AuthFlowTests(TestCase):
     def test_user_list_requires_staff(self):
         User.objects.create_user(email='plain@b.com', password='Senha12345')
         self.client.login(email='plain@b.com', password='Senha12345')
+        self.assertEqual(self.client.get('/users/').status_code, 403)
+        staff = User.objects.create_user(
+            email='staff@b.com',
+            password='Senha12345',
+            is_staff=True,
+        )
+        self.client.force_login(staff)
         self.assertEqual(self.client.get('/users/').status_code, 403)
         admin = User.objects.create_superuser(email='adm@b.com', password='Senha12345')
         self.client.force_login(admin)
