@@ -237,6 +237,30 @@
     @apply border-sky-200 bg-sky-50 text-sky-800;
   }
 
+  .brand-logo-footer {
+    @apply h-6 w-auto;
+  }
+
+  .brand-logo-nav-mobile {
+    @apply h-10 w-auto;
+  }
+
+  .brand-logo-sidebar {
+    @apply h-14 w-auto;
+  }
+
+  .brand-logo-auth {
+    @apply h-20 w-auto;
+  }
+
+  .brand-logo-signup {
+    @apply h-24 w-auto;
+  }
+
+  .brand-logo-home {
+    @apply h-36 w-auto sm:h-44;
+  }
+
   .nav-section {
     @apply px-3 pt-4 text-xs font-semibold text-slate-400;
   }
