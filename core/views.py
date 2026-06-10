@@ -32,6 +32,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'url': reverse(MODULE_URL_NAMES.get(key, 'dashboard')),
             }
             for key, label in MODULES
+            if self.request.user.has_module(key)
         ]
 
         to_pick_up = Rental.objects.filter(status=Rental.Status.PENDING).count()

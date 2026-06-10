@@ -53,9 +53,13 @@
       {% endif %}
     {% endif %}
 
-    {% if request.user.is_staff %}
+    {% if request.user.is_staff or request.user|has_module:'maintenance' %}
       <p class="nav-section">Administração</p>
+    {% endif %}
+    {% if request.user.is_staff %}
       <a href="{% url 'user_list' %}" class="nav-link{% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %}aria-current="page"{% endif %}>Usuários</a>
+    {% endif %}
+    {% if request.user|has_module:'maintenance' %}
       <a href="{% url 'maintenance:index' %}" class="nav-link{% if request.resolver_match.app_name == 'maintenance' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'maintenance' %}aria-current="page"{% endif %}>Manutenção</a>
     {% endif %}
   </nav>

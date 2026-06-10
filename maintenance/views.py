@@ -3,15 +3,19 @@ from django.shortcuts import redirect
 from django.views.generic import TemplateView, View
 
 from billing.models import Receivable
-from core.mixins import StaffRequiredMixin
+from core.mixins import ModuleAccessMixin
 from customers.models import Customer
 from rentals.models import Rental
 
 from catalog.models import Category, Product
 
 
-class MaintenanceView(StaffRequiredMixin, TemplateView):
-    """Admin-only maintenance area with controlled DB routines (RF-25)."""
+class MaintenanceAccessMixin(ModuleAccessMixin):
+    module_key = 'maintenance'
+
+
+class MaintenanceView(MaintenanceAccessMixin, TemplateView):
+    """Restricted maintenance area with controlled DB routines (RF-25)."""
 
     template_name = 'maintenance/maintenance.html'
 
@@ -27,7 +31,7 @@ class MaintenanceView(StaffRequiredMixin, TemplateView):
         return context
 
 
-class RecalculateRentalTotalsView(StaffRequiredMixin, View):
+class RecalculateRentalTotalsView(MaintenanceAccessMixin, View):
     """Recompute every rental's total from its items (controlled routine)."""
 
     def post(self, request, *args, **kwargs):
@@ -39,7 +43,7 @@ class RecalculateRentalTotalsView(StaffRequiredMixin, View):
         return redirect('maintenance:index')
 
 
-class RecalculateBalancesView(StaffRequiredMixin, View):
+class RecalculateBalancesView(MaintenanceAccessMixin, View):
     """Re-save receivables to recompute their balance (controlled routine)."""
 
     def post(self, request, *args, **kwargs):
