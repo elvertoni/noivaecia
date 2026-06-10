@@ -42,7 +42,9 @@ class Product(TimeStampedModel):
         verbose_name = 'produto'
         verbose_name_plural = 'produtos'
         ordering = ('category__prefix', 'code')
-        unique_together = ('category', 'code')
+        indexes = [
+            models.Index(fields=('category', 'code'), name='catalog_product_lookup_idx'),
+        ]
 
     def __str__(self):
         return f'{self.category.prefix}{self.code} · {self.description}'

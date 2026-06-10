@@ -17,11 +17,11 @@ class CatalogModelTests(TestCase):
         category = Category.objects.create(prefix='VN', name='Vestidos')
         self.assertEqual(str(category), 'VN · Vestidos')
 
-    def test_product_unique_per_category_code(self):
+    def test_product_allows_legacy_duplicate_codes(self):
         category = Category.objects.create(prefix='VN', name='Vestidos')
         Product.objects.create(category=category, code=1, description='A', value=10)
-        with self.assertRaises(Exception):
-            Product.objects.create(category=category, code=1, description='B', value=20)
+        Product.objects.create(category=category, code=1, description='B', value=20)
+        self.assertEqual(Product.objects.filter(category=category, code=1).count(), 2)
 
 
 class AvailabilityTests(TestCase):
