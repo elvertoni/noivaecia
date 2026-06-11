@@ -53,7 +53,10 @@ LOGOUT_REDIRECT_URL = 'home'
 
 USER_CREATOR_EMAILS = [
     email.strip().lower()
-    for email in os.environ.get('USER_CREATOR_EMAILS', 'admin@noivas.com').split(',')
+    for email in os.environ.get(
+        'USER_CREATOR_EMAILS',
+        'elvertoni@gmail.com,celsotavaresia@gmail.com',
+    ).split(',')
     if email.strip()
 ]
 

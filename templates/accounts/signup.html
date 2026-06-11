@@ -84,6 +84,17 @@
       </div>
 
       <div class="field-group">
+        <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+          {{ form.is_superuser }}
+          <span>
+            {{ form.is_superuser.label }}
+            <span class="block text-xs font-normal text-slate-500">{{ form.is_superuser.help_text }}</span>
+          </span>
+        </label>
+        {% if form.is_superuser.errors %}<p class="field-error">{{ form.is_superuser.errors|striptags }}</p>{% endif %}
+      </div>
+
+      <div class="field-group">
         <span class="field-label">{{ form.module_permissions.label }}</span>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {% for checkbox in form.module_permissions %}

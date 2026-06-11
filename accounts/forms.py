@@ -17,6 +17,12 @@ PASSWORD_CONFIRM_HELP_TEXT = 'Repita a senha para confirmar.'
 class EmailUserCreationForm(UserCreationForm):
     """Signup form keyed on a unique email (RF-06)."""
 
+    is_superuser = forms.BooleanField(
+        label='Superusuário',
+        required=False,
+        help_text='Acesso irrestrito a todos os módulos e administração do sistema.',
+    )
+
     module_permissions = forms.MultipleChoiceField(
         label='Módulos liberados',
         choices=MODULES,
@@ -61,6 +67,18 @@ class EmailUserCreationForm(UserCreationForm):
         self.fields['module_permissions'].widget.attrs.update({
             'class': 'h-4 w-4 rounded border-slate-300 accent-brand-700 focus:ring-brand-300',
         })
+        self.fields['is_superuser'].widget.attrs.update({
+            'class': 'h-4 w-4 rounded border-slate-300 accent-brand-700 focus:ring-brand-300',
+        })
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if self.cleaned_data.get('is_superuser'):
+            user.is_superuser = True
+            user.is_staff = True
+        if commit:
+            user.save()
+        return user
 
     def save_module_permissions(self, user):
         selected = set(self.cleaned_data.get('module_permissions') or [])

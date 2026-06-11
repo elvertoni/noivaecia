@@ -92,6 +92,7 @@ docker compose exec app python manage.py collectstatic --noinput
 | `DJANGO_ALLOWED_HOSTS` | (vazio) | Hosts permitidos, separados por virgula |
 | `DATABASE_NAME` | `db.sqlite3` | Caminho do banco SQLite |
 | `STATIC_ROOT` | `staticfiles/` | Destino da coleta de estaticos |
+| `USER_CREATOR_EMAILS` | `elvertoni@gmail.com,celsotavaresia@gmail.com` | E-mails com permissao para criar e gerenciar usuarios (separados por virgula) |
 
 ## Estrutura do projeto
 
