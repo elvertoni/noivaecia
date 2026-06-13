@@ -46,7 +46,6 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.city.id_for_label }}">Cidade</label>
           {{ form.city }}
-          <datalist id="lista-cidades"></datalist>
           {% if form.city.errors %}<p class="field-error">{{ form.city.errors|striptags }}</p>{% endif %}
         </div>
       </div>
@@ -105,26 +104,31 @@
   'use strict';
 
   const selectEstado = document.getElementById('{{ form.state.id_for_label }}');
-  const inputCidade = document.getElementById('{{ form.city.id_for_label }}');
-  const datalistCidades = document.getElementById('lista-cidades');
+  const selectCidade = document.getElementById('{{ form.city.id_for_label }}');
 
-  function popularCidades(uf) {
-    datalistCidades.innerHTML = '';
+  function popularCidades(uf, valorAtual) {
     const lista = (typeof CIDADES_BR !== 'undefined' && CIDADES_BR[uf]) || [];
+    selectCidade.innerHTML = '';
+    const vazio = document.createElement('option');
+    vazio.value = '';
+    vazio.textContent = 'Selecione a cidade';
+    selectCidade.appendChild(vazio);
     lista.forEach(function (cidade) {
       const opt = document.createElement('option');
       opt.value = cidade;
-      datalistCidades.appendChild(opt);
+      opt.textContent = cidade;
+      selectCidade.appendChild(opt);
     });
+    if (valorAtual) selectCidade.value = valorAtual;
   }
 
-  if (selectEstado && inputCidade && datalistCidades) {
-    popularCidades(selectEstado.value || 'PR');
+  if (selectEstado && selectCidade) {
+    const cidadeInicial = '{{ form.city.value|default:"Bandeirantes" }}';
+    popularCidades(selectEstado.value || 'PR', cidadeInicial);
 
     selectEstado.addEventListener('change', function () {
-      popularCidades(this.value);
-      inputCidade.value = '';
-      inputCidade.focus();
+      popularCidades(this.value, '');
+      selectCidade.focus();
     });
   }
 

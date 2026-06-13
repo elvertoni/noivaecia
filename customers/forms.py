@@ -71,6 +71,12 @@ class CustomerForm(forms.ModelForm):
         required=False,
         widget=forms.Select(),
     )
+    # CharField + Select widget: Django não valida as choices (JS as popula dinamicamente)
+    city = forms.CharField(
+        label='Cidade',
+        required=False,
+        widget=forms.Select(choices=[('', 'Selecione a cidade')]),
+    )
 
     class Meta:
         model = Customer
@@ -98,11 +104,7 @@ class CustomerForm(forms.ModelForm):
         })
         self.fields['address'].widget.attrs['placeholder'] = 'Ex.: Rua das Flores, 123, Ap. 5'
         self.fields['district'].widget.attrs['placeholder'] = 'Ex.: Centro'
-        self.fields['city'].widget.attrs.update({
-            'placeholder': 'Ex.: Bandeirantes',
-            'list': 'lista-cidades',
-            'autocomplete': 'off',
-        })
+        self.fields['city'].widget.attrs['id'] = 'id_city'
         self.fields['rg'].widget.attrs.update({
             'placeholder': 'Ex.: 12.345.678-9',
             'maxlength': '15',
