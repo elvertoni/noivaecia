@@ -26,8 +26,8 @@ class CustomerCrudTests(TestCase):
 
     def test_create_customer(self):
         response = self.client.post('/clientes/novo/', {
-            'name': 'Maria', 'address': '', 'district': '', 'city': 'Recife',
-            'rg': '', 'cpf': '123', 'phone_home': '', 'phone_mobile': '', 'phone_work': '', 'notes': '',
+            'name': 'Maria', 'address': '', 'district': '', 'state': 'PR', 'city': 'Recife',
+            'rg': '', 'cpf': '', 'phone_home': '', 'phone_mobile': '', 'phone_work': '', 'notes': '',
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Customer.objects.filter(name='Maria').exists())

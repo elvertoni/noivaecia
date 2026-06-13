@@ -9,20 +9,85 @@
       {% if form.instance.pk %}Editar cliente{% else %}Novo cliente{% endif %}
     </h1>
 
-    <form method="post" class="mt-6 space-y-4">
+    <form method="post" class="mt-6 space-y-5" novalidate>
       {% csrf_token %}
+
       {% if form.non_field_errors %}
         <div class="alert alert-error">{{ form.non_field_errors }}</div>
       {% endif %}
 
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {% for field in form %}
-          <div class="field-group {% if field.name == 'notes' or field.name == 'address' %}md:col-span-2{% endif %}">
-            <label class="field-label">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-          </div>
-        {% endfor %}
+      {# Nome #}
+      <div class="field-group">
+        <label class="field-label" for="{{ form.name.id_for_label }}">Nome <span class="text-red-500">*</span></label>
+        {{ form.name }}
+        {% if form.name.errors %}<p class="field-error">{{ form.name.errors|striptags }}</p>{% endif %}
+      </div>
+
+      {# Endereço #}
+      <div class="field-group">
+        <label class="field-label" for="{{ form.address.id_for_label }}">Endereço</label>
+        {{ form.address }}
+        {% if form.address.errors %}<p class="field-error">{{ form.address.errors|striptags }}</p>{% endif %}
+      </div>
+
+      {# Bairro + Estado + Cidade #}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="field-group">
+          <label class="field-label" for="{{ form.district.id_for_label }}">Bairro</label>
+          {{ form.district }}
+          {% if form.district.errors %}<p class="field-error">{{ form.district.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.state.id_for_label }}">Estado</label>
+          {{ form.state }}
+          {% if form.state.errors %}<p class="field-error">{{ form.state.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.city.id_for_label }}">Cidade</label>
+          {{ form.city }}
+          <datalist id="lista-cidades"></datalist>
+          {% if form.city.errors %}<p class="field-error">{{ form.city.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+
+      {# RG + CPF #}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="field-group">
+          <label class="field-label" for="{{ form.rg.id_for_label }}">RG</label>
+          {{ form.rg }}
+          {% if form.rg.errors %}<p class="field-error">{{ form.rg.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.cpf.id_for_label }}">CPF</label>
+          {{ form.cpf }}
+          {% if form.cpf.errors %}<p class="field-error">{{ form.cpf.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+
+      {# Telefones #}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="field-group">
+          <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone residencial</label>
+          {{ form.phone_home }}
+          {% if form.phone_home.errors %}<p class="field-error">{{ form.phone_home.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.phone_mobile.id_for_label }}">Celular</label>
+          {{ form.phone_mobile }}
+          {% if form.phone_mobile.errors %}<p class="field-error">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.phone_work.id_for_label }}">Telefone comercial</label>
+          {{ form.phone_work }}
+          {% if form.phone_work.errors %}<p class="field-error">{{ form.phone_work.errors|striptags }}</p>{% endif %}
+        </div>
+      </div>
+
+      {# Observações #}
+      <div class="field-group">
+        <label class="field-label" for="{{ form.notes.id_for_label }}">Observações</label>
+        {{ form.notes }}
+        {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
       </div>
 
       <div class="form-actions">
@@ -32,4 +97,119 @@
     </form>
   </div>
 </div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Cidades por UF ── */
+  const CIDADES = {
+    AC: ['Acrelândia','Assis Brasil','Brasiléia','Bujari','Capixaba','Cruzeiro do Sul','Epitaciolândia','Feijó','Jordão','Mâncio Lima','Manoel Urbano','Marechal Thaumaturgo','Plácido de Castro','Porto Acre','Porto Walter','Rio Branco','Rodrigues Alves','Santa Rosa do Purus','Sena Madureira','Senador Guiomard','Tarauacá','Xapuri'],
+    AL: ['Arapiraca','Maceió','Marechal Deodoro','Palmeira dos Índios','Penedo','Rio Largo','Santana do Ipanema','São Miguel dos Campos','União dos Palmares'],
+    AP: ['Amapá','Calçoene','Cutias','Ferreira Gomes','Itaubal','Laranjal do Jari','Macapá','Mazagão','Oiapoque','Pedra Branca do Amapari','Porto Grande','Pracuúba','Santana','Serra do Navio','Tartarugalzinho','Vitória do Jari'],
+    AM: ['Barcelos','Coari','Eirunepé','Humaitá','Itacoatiara','Lábrea','Manacapuru','Manaus','Maués','Parintins','São Gabriel da Cachoeira','Tefé'],
+    BA: ['Barreiras','Camaçari','Feira de Santana','Ilhéus','Itabuna','Jequié','Juazeiro','Lauro de Freitas','Porto Seguro','Salvador','Santo Antônio de Jesus','Teixeira de Freitas','Vitória da Conquista'],
+    CE: ['Caucaia','Crato','Fortaleza','Itapipoca','Juazeiro do Norte','Maracanaú','Quixadá','Sobral'],
+    DF: ['Brasília','Ceilândia','Gama','Planaltina','Samambaia','Santa Maria','Taguatinga'],
+    ES: ['Cachoeiro de Itapemirim','Cariacica','Colatina','Guarapari','Linhares','São Mateus','Serra','Vitória','Vila Velha'],
+    GO: ['Águas Lindas de Goiás','Anápolis','Aparecida de Goiânia','Catalão','Goiânia','Itumbiara','Luziânia','Rio Verde','Senador Canedo','Trindade'],
+    MA: ['Açailândia','Balsas','Caxias','Codó','Imperatriz','Paço do Lumiar','São José de Ribamar','São Luís','Timon'],
+    MT: ['Barra do Garças','Cuiabá','Lucas do Rio Verde','Primavera do Leste','Rondonópolis','Sinop','Sorriso','Tangará da Serra','Várzea Grande'],
+    MS: ['Aquidauana','Campo Grande','Corumbá','Dourados','Ponta Porã','Três Lagoas'],
+    MG: ['Belo Horizonte','Betim','Contagem','Governador Valadares','Ipatinga','Juiz de Fora','Montes Claros','Ribeirão das Neves','Santa Luzia','Uberaba','Uberlândia','Vespasiano'],
+    PA: ['Altamira','Ananindeua','Barcarena','Belém','Castanhal','Marabá','Parauapebas','Santarém','Tucuruí'],
+    PB: ['Bayeux','Cabedelo','Campina Grande','João Pessoa','Santa Rita','Sousa'],
+    PR: ['Almirante Tamandaré','Andirá','Antonina','Apucarana','Arapongas','Arapoti','Araucária','Assaí','Astorga','Bandeirantes','Cambará','Cambé','Campo Largo','Campo Mourão','Cascavel','Castro','Cianorte','Colombo','Colorado','Cornélio Procópio','Curitiba','Dois Vizinhos','Fazenda Rio Grande','Foz do Iguaçu','Francisco Beltrão','Goioerê','Guarapuava','Guaraqueçaba','Guaratuba','Ibaiti','Ibiporã','Irati','Ivaiporã','Jacarezinho','Jaguariaíva','Jandaia do Sul','Lapa','Laranjeiras do Sul','Loanda','Londrina','Mandaguari','Maringá','Medianeira','Nova Esperança','Palmas','Palotina','Paranaguá','Paranavaí','Pato Branco','Pinhais','Piraquara','Pitanga','Ponta Grossa','Pontal do Paraná','Primeiro de Maio','Rolândia','Santa Helena','Santa Terezinha de Itaipu','Santo Antônio da Platina','Santo Antônio do Sudoeste','São João','São José dos Pinhais','São Mateus do Sul','São Miguel do Iguaçu','Sarandi','Sertanópolis','Telêmaco Borba','Terra Boa','Terra Rica','Terra Roxa','Toledo','Umuarama','União da Vitória','Wenceslau Braz'],
+    PE: ['Caruaru','Jaboatão dos Guararapes','Olinda','Petrolina','Recife','Ribeirão','Santa Cruz do Capibaribe'],
+    PI: ['Floriano','Parnaíba','Picos','Teresina'],
+    RJ: ['Belford Roxo','Campos dos Goytacazes','Duque de Caxias','Macaé','Niterói','Nova Friburgo','Nova Iguaçu','Petrópolis','Rio de Janeiro','São Gonçalo','São João de Meriti','Volta Redonda'],
+    RN: ['Caicó','Mossoró','Natal','Parnamirim','São Gonçalo do Amarante'],
+    RS: ['Alvorada','Bagé','Canoas','Caxias do Sul','Gravataí','Novo Hamburgo','Passo Fundo','Pelotas','Porto Alegre','Santa Maria','São Leopoldo','Viamão'],
+    RO: ['Ariquemes','Ji-Paraná','Jaru','Porto Velho','Vilhena'],
+    RR: ['Boa Vista','Caracaraí','Rorainópolis'],
+    SC: ['Balneário Camboriú','Blumenau','Chapecó','Criciúma','Florianópolis','Itajaí','Jaraguá do Sul','Joinville','Lages','São José'],
+    SP: ['Bauru','Campinas','Diadema','Guarulhos','Mauá','Mogi das Cruzes','Osasco','Ribeirão Preto','Santo André','Santos','São Bernardo do Campo','São José dos Campos','São Paulo','Sorocaba'],
+    SE: ['Aracaju','Itabaiana','Lagarto','Nossa Senhora do Socorro'],
+    TO: ['Araguaína','Gurupi','Palmas','Porto Nacional'],
+  };
+
+  const selectEstado = document.getElementById('{{ form.state.id_for_label }}');
+  const inputCidade = document.getElementById('{{ form.city.id_for_label }}');
+  const datalistCidades = document.getElementById('lista-cidades');
+
+  function popularCidades(uf) {
+    datalistCidades.innerHTML = '';
+    const lista = CIDADES[uf] || [];
+    lista.forEach(function (cidade) {
+      const opt = document.createElement('option');
+      opt.value = cidade;
+      datalistCidades.appendChild(opt);
+    });
+  }
+
+  if (selectEstado && inputCidade && datalistCidades) {
+    popularCidades(selectEstado.value || 'PR');
+
+    selectEstado.addEventListener('change', function () {
+      popularCidades(this.value);
+      inputCidade.value = '';
+      inputCidade.focus();
+    });
+  }
+
+  /* ── Máscaras ── */
+  function onlyDigits(v) { return v.replace(/\D/g, ''); }
+
+  function maskCPF(v) {
+    const d = onlyDigits(v).slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return d.slice(0,3) + '.' + d.slice(3);
+    if (d.length <= 9) return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6);
+    return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
+  }
+
+  function maskRG(v) {
+    const d = onlyDigits(v).slice(0, 9);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return d.slice(0,2) + '.' + d.slice(2);
+    if (d.length <= 8) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5);
+    return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '-' + d.slice(8);
+  }
+
+  function maskPhone(v) {
+    const d = onlyDigits(v).slice(0, 11);
+    if (d.length <= 2) return d.length ? '(' + d : '';
+    if (d.length <= 6) return '(' + d.slice(0,2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);
+    return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);
+  }
+
+  const MASKS = { cpf: maskCPF, rg: maskRG, phone: maskPhone };
+
+  document.querySelectorAll('[data-mask]').forEach(function (el) {
+    const fn = MASKS[el.dataset.mask];
+    if (!fn) return;
+
+    el.addEventListener('input', function () {
+      const pos = this.selectionStart;
+      const raw = this.value;
+      const masked = fn(raw);
+      this.value = masked;
+      /* mantém cursor aproximado após formatação */
+      try { this.setSelectionRange(pos, pos); } catch (_) {}
+    });
+
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace') {
+        /* remove último caractere não-dígito ao deletar */
+        const v = this.value;
+        if (v && /\D$/.test(v)) {
+          e.preventDefault();
+          this.value = v.slice(0, -2);
+        }
+      }
+    });
+  });
+}());
+</script>
 {% endblock %}

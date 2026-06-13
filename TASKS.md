@@ -1,4 +1,4 @@
-# TASKS - Refatoracao e Migracao do Legado BRcom
+haja# TASKS - Refatoracao e Migracao do Legado BRcom
 
 > Fonte principal: `PRD_REFATORACAO.md`.
 > Complementos: `PRD.md`, `docs/roadmap.md`, analise do snapshot legado `brcom/`.

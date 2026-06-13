@@ -1,3 +1,5 @@
+import re
+
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Q
@@ -13,6 +15,11 @@ from .forms import CustomerForm
 from .models import Customer
 
 
+def _fmt_cpf(digits):
+    """Formata 11 dígitos no padrão 000.000.000-00."""
+    return f'{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}'
+
+
 class CustomerListView(ModuleAccessMixin, ListView):
     """Paginated, searchable customer listing (RF-11)."""
 
@@ -20,34 +27,56 @@ class CustomerListView(ModuleAccessMixin, ListView):
     model = Customer
     template_name = 'customers/customer_list.html'
     context_object_name = 'customers'
-    paginate_by = 20
+    paginate_by = 25
+
+    # Colunas necessárias na lista — evita carregar text blobs de 18k linhas
+    _LIST_FIELDS = ('pk', 'name', 'city', 'state', 'cpf', 'phone_mobile',
+                    'phone_home', 'is_active', 'legacy_id')
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = Customer.objects.only(*self._LIST_FIELDS).order_by('name')
+
         search = self.request.GET.get('q', '').strip()
+        cpf_q = self.request.GET.get('cpf', '').strip()
+        active = self.request.GET.get('active', '').strip()
+
         if search:
+            digits = re.sub(r'\D', '', search)
             q_filter = (
                 Q(name__icontains=search)
-                | Q(cpf__icontains=search)
-                | Q(rg__icontains=search)
                 | Q(phone_home__icontains=search)
                 | Q(phone_mobile__icontains=search)
                 | Q(phone_work__icontains=search)
+                | Q(rg__icontains=search)
+                | Q(cpf__icontains=search)
             )
-            if search.isdigit():
-                q_filter |= Q(legacy_id=int(search))
+            # Aceita CPF digitado sem formatação (11 dígitos)
+            if len(digits) == 11:
+                q_filter |= Q(cpf=_fmt_cpf(digits))
+            elif digits.isdigit() and len(digits) <= 10:
+                q_filter |= Q(legacy_id=int(digits)) if digits.isdigit() else q_filter
             queryset = queryset.filter(q_filter)
-        active = self.request.GET.get('active', '').strip()
+
+        if cpf_q:
+            cpf_digits = re.sub(r'\D', '', cpf_q)
+            if len(cpf_digits) == 11:
+                queryset = queryset.filter(cpf=_fmt_cpf(cpf_digits))
+            elif cpf_digits:
+                queryset = queryset.filter(cpf__icontains=cpf_q)
+
         if active == '1':
             queryset = queryset.filter(is_active=True)
         elif active == '0':
             queryset = queryset.filter(is_active=False)
+
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search'] = self.request.GET.get('q', '')
+        context['cpf_search'] = self.request.GET.get('cpf', '')
         context['active_filter'] = self.request.GET.get('active', '')
+        context['total_count'] = context['paginator'].count
         return context
 
 

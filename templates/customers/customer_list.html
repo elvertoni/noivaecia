@@ -4,48 +4,79 @@
 
 {% block content %}
 <div class="space-y-6">
+
+  {# Cabeçalho #}
   <div class="page-header">
     <div>
       <h1 class="page-title">Clientes</h1>
-      <p class="page-description">Cadastro de clientes da loja.</p>
+      <p class="page-description">
+        {% if total_count %}
+          {{ total_count }} cliente{{ total_count|pluralize }} encontrado{{ total_count|pluralize }}
+        {% else %}
+          Cadastro de clientes da loja
+        {% endif %}
+      </p>
     </div>
-    <a href="{% url 'customers:create' %}" class="btn btn-primary">
-      Novo cliente
-    </a>
+    <a href="{% url 'customers:create' %}" class="btn btn-primary">+ Novo cliente</a>
   </div>
 
-  <div class="space-y-3">
-    <form method="get" class="flex gap-2">
+  {# Filtros #}
+  <div class="panel space-y-3">
+    {# Linha 1 — busca geral #}
+    <form method="get" class="flex gap-2" id="form-busca-geral">
       {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
-      <input type="text" name="q" value="{{ search }}" placeholder="Buscar por nome, CPF, RG, telefone ou ID legado"
-             class="field-input">
-      <button type="submit" class="btn btn-secondary">Buscar</button>
+      {% if cpf_search %}<input type="hidden" name="cpf" value="{{ cpf_search }}">{% endif %}
+      <input type="search" name="q" id="q" value="{{ search }}"
+             placeholder="Buscar por nome, RG, telefone ou ID legado…"
+             class="field-input flex-1"
+             autocomplete="off">
+      <button type="submit" class="btn btn-primary">Buscar</button>
+      {% if search or cpf_search %}
+        <a href="?{% if active_filter %}active={{ active_filter }}{% endif %}" class="btn btn-secondary">Limpar</a>
+      {% endif %}
     </form>
 
-    <div class="flex gap-2 text-sm">
-      <a href="?{% if active_filter != '' %}active={{ active_filter }}&{% endif %}q={{ search }}"
-         class="{% if active_filter == '' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+    {# Linha 2 — busca por CPF #}
+    <form method="get" class="flex gap-2" id="form-busca-cpf">
+      {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
+      {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
+      <input type="search" name="cpf" id="cpf_q" value="{{ cpf_search }}"
+             placeholder="Buscar por CPF (com ou sem pontuação)"
+             class="field-input flex-1"
+             maxlength="14"
+             autocomplete="off"
+             data-mask="cpf">
+      <button type="submit" class="btn btn-secondary">Buscar CPF</button>
+    </form>
+
+    {# Linha 3 — filtros de status #}
+    <div class="flex items-center gap-4 text-sm">
+      <span class="text-slate-500">Mostrar:</span>
+      <a href="?q={{ search }}&cpf={{ cpf_search }}"
+         class="{% if active_filter == '' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Todos
       </a>
-      <a href="?active=1&q={{ search }}"
-         class="{% if active_filter == '1' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+      <a href="?active=1&q={{ search }}&cpf={{ cpf_search }}"
+         class="{% if active_filter == '1' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Ativos
       </a>
-      <a href="?active=0&q={{ search }}"
-         class="{% if active_filter == '0' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+      <a href="?active=0&q={{ search }}&cpf={{ cpf_search }}"
+         class="{% if active_filter == '0' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Inativos
       </a>
     </div>
   </div>
 
+  {# Tabela #}
   <div class="table-shell">
     <table class="data-table">
       <thead>
         <tr>
           <th>Nome</th>
-          <th>Cidade</th>
+          <th>Cidade / UF</th>
           <th>CPF</th>
           <th>Celular</th>
+          <th>Tel. Residencial</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
@@ -53,37 +84,100 @@
         {% for customer in customers %}
           <tr>
             <td class="font-medium text-app-ink">
-              {{ customer.name }}
-              {% if not customer.is_active %}<span class="badge badge-warning ml-1">inativo</span>{% endif %}
+              <a href="{% url 'customers:detail' customer.pk %}" class="hover:text-brand-600 hover:underline">
+                {{ customer.name }}
+              </a>
+              {% if not customer.is_active %}
+                <span class="badge badge-warning ml-1">inativo</span>
+              {% endif %}
             </td>
-            <td>{{ customer.city|default:'—' }}</td>
-            <td>{{ customer.cpf|default:'—' }}</td>
+            <td class="text-slate-600">
+              {% if customer.city %}
+                {{ customer.city }}{% if customer.state %} · <span class="font-medium">{{ customer.state }}</span>{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="font-mono text-sm">{{ customer.cpf|default:'—' }}</td>
             <td>{{ customer.phone_mobile|default:'—' }}</td>
-            <td class="text-right">
+            <td>{{ customer.phone_home|default:'—' }}</td>
+            <td class="text-right whitespace-nowrap">
               <a href="{% url 'customers:detail' customer.pk %}" class="text-link">Histórico</a>
               <a href="{% url 'customers:update' customer.pk %}" class="ml-3 text-link">Editar</a>
               <a href="{% url 'customers:delete' customer.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="5" class="table-empty">Nenhum cliente encontrado. <a href="{% url 'customers:create' %}" class="text-link">Novo cliente</a></td></tr>
+          <tr>
+            <td colspan="6" class="table-empty">
+              {% if search or cpf_search %}
+                Nenhum cliente encontrado para os filtros informados.
+                <a href="{% url 'customers:list' %}" class="text-link">Limpar busca</a>
+              {% else %}
+                Nenhum cliente cadastrado.
+                <a href="{% url 'customers:create' %}" class="text-link">Cadastrar cliente</a>
+              {% endif %}
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
+  {# Paginação #}
   {% if is_paginated %}
     <div class="pagination">
-      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-      <div class="flex gap-2">
+      <span class="text-sm text-slate-500">
+        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        &nbsp;·&nbsp; {{ total_count }} registro{{ total_count|pluralize }}
+      </span>
+      <div class="flex items-center gap-1">
         {% if page_obj.has_previous %}
-          <a href="?active={{ active_filter }}&q={{ search }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page=1"
+             class="pagination-page">«</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.previous_page_number }}"
+             class="pagination-page">Anterior</a>
         {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+          {% if num == page_obj.number %}
+            <span class="pagination-page bg-brand-600 text-white">{{ num }}</span>
+          {% elif num >= page_obj.number|add:"-3" and num <= page_obj.number|add:"3" %}
+            <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ num }}"
+               class="pagination-page">{{ num }}</a>
+          {% endif %}
+        {% endfor %}
+
         {% if page_obj.has_next %}
-          <a href="?active={{ active_filter }}&q={{ search }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.next_page_number }}"
+             class="pagination-page">Próxima</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.paginator.num_pages }}"
+             class="pagination-page">»</a>
         {% endif %}
       </div>
     </div>
   {% endif %}
+
 </div>
+
+<script>
+(function () {
+  function onlyDigits(v) { return v.replace(/\D/g, ''); }
+  function maskCPF(v) {
+    const d = onlyDigits(v).slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return d.slice(0,3) + '.' + d.slice(3);
+    if (d.length <= 9) return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6);
+    return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
+  }
+  const cpfInput = document.getElementById('cpf_q');
+  if (cpfInput) {
+    cpfInput.addEventListener('input', function () {
+      const pos = this.selectionStart;
+      this.value = maskCPF(this.value);
+      try { this.setSelectionRange(pos, pos); } catch (_) {}
+    });
+  }
+}());
+</script>
 {% endblock %}
