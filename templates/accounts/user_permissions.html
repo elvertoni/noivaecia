@@ -24,6 +24,7 @@
       <button type="submit" class="btn btn-primary">
         Salvar
       </button>
+      <a href="{% url 'user_action_permissions' target_user.pk %}" class="btn btn-secondary">Permissões de ação</a>
       <a href="{% url 'user_list' %}" class="btn btn-secondary">Voltar</a>
     </div>
   </form>

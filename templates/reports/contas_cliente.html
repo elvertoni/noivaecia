@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Contas a Receber por Cliente · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header print:hidden">
+    <div>
+      <h1 class="page-title">Contas a Receber por Cliente</h1>
+      <p class="page-description">Títulos agrupados por cliente. Equivalente ao receberc.rpt.</p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <a href="?customer={{ customer }}&status={{ status }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
+      <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+  {% include 'reports/_print_header.html' %}
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 print:hidden">
+    <div class="field-group">
+      <label class="field-label">Cliente</label>
+      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome do cliente">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Status</label>
+      <select name="status" class="field-input">
+        <option value="" {% if not status %}selected{% endif %}>Todos</option>
+        <option value="open" {% if status == 'open' %}selected{% endif %}>Em aberto</option>
+        <option value="paid" {% if status == 'paid' %}selected{% endif %}>Quitados</option>
+      </select>
+    </div>
+    <div class="flex items-end gap-2 print:hidden">
+      <button type="submit" class="btn btn-secondary">Filtrar</button>
+      <a href="{% url 'reports:contas_cliente' %}" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
+
+  {% for group in groups %}
+    <div class="panel-spacious space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="section-title">{{ group.customer.name }}</h2>
+        <div class="flex gap-4 text-sm">
+          <span><span class="text-app-muted">Cobrado:</span> <strong>R$ {{ group.total_amount|floatformat:2 }}</strong></span>
+          <span><span class="text-app-muted">Pago:</span> <strong class="text-green-600">R$ {{ group.total_paid|floatformat:2 }}</strong></span>
+          <span><span class="text-app-muted">Saldo:</span> <strong class="text-red-600">R$ {{ group.total_balance|floatformat:2 }}</strong></span>
+        </div>
+      </div>
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Locação</th>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Pago</th>
+              <th class="text-right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in group.receivables %}
+              <tr>
+                <td><a href="{% url 'rentals:detail' rec.rental.pk %}" class="text-link">#{{ rec.rental.number }}</a></td>
+                <td>{{ rec.due_date|date:'d/m/Y'|default:'—' }}</td>
+                <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ rec.paid_amount|floatformat:2 }}</td>
+                <td class="text-right {% if rec.balance > 0 %}text-red-600 font-medium{% endif %}">R$ {{ rec.balance|floatformat:2 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% empty %}
+    <div class="panel-spacious text-center text-app-muted">Nenhum cliente encontrado para os filtros.</div>
+  {% endfor %}
+
+</div>
+{% endblock %}

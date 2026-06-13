@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Baixar título · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+  <div class="panel-spacious space-y-5">
+
+    <div>
+      <h1 class="page-title">Baixar título</h1>
+      <p class="page-description">
+        Locação #{{ receivable.rental.number }} · {{ receivable.rental.customer.name }}
+      </p>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-2 gap-3 rounded-lg bg-app-panel p-4 text-sm sm:grid-cols-4">
+      <div>
+        <p class="text-app-muted">Vencimento</p>
+        <p class="font-medium text-app-ink">{{ receivable.due_date|date:'d/m/Y' }}</p>
+      </div>
+      <div>
+        <p class="text-app-muted">Saldo</p>
+        <p class="font-semibold text-app-ink">R$ {{ receivable.balance|floatformat:2 }}</p>
+      </div>
+      <div>
+        <p class="text-app-muted">Juros ({{ days_overdue }}d)</p>
+        <p class="font-medium {% if days_overdue > 0 %}text-red-700{% else %}text-app-muted{% endif %}">R$ {{ interest|floatformat:2 }}</p>
+      </div>
+      <div>
+        <p class="text-app-muted">Total c/ juros</p>
+        <p class="font-bold text-brand-700">R$ {{ total_with_interest|floatformat:2 }}</p>
+      </div>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% if request.GET.next %}
+        <input type="hidden" name="next" value="{{ request.GET.next }}">
+      {% endif %}
+
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Registrar pagamento</button>
+        <a href="{% url 'billing:customer_receivables' receivable.rental.customer_id %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

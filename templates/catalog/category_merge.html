@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Mesclar categorias · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+
+  <div>
+    <h1 class="page-title">Mesclar categorias</h1>
+    <p class="page-description">Move todos os produtos de uma categoria para outra de forma transacional e auditada.</p>
+  </div>
+
+  {% if preview %}
+  {# Step 2 — confirm (R8.06) #}
+  <div class="panel-spacious space-y-4">
+    <h2 class="section-title">Pré-visualização da mesclagem</h2>
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      <strong>Atenção:</strong> Esta operação não pode ser desfeita automaticamente.
+    </div>
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div class="panel p-3">
+        <p class="text-app-muted text-xs">Origem (será esvaziada)</p>
+        <p class="font-semibold text-app-ink mt-1">{{ preview.source.prefix }} · {{ preview.source.name }}</p>
+      </div>
+      <div class="panel p-3">
+        <p class="text-app-muted text-xs">Destino (receberá os produtos)</p>
+        <p class="font-semibold text-app-ink mt-1">{{ preview.target.prefix }} · {{ preview.target.name }}</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div class="panel-spacious text-center">
+        <p class="stat-label">Produtos afetados</p>
+        <p class="stat-value text-brand-700">{{ preview.product_count }}</p>
+      </div>
+      <div class="panel-spacious text-center">
+        <p class="stat-label">Itens de locação afetados</p>
+        <p class="stat-value text-brand-700">{{ preview.item_count }}</p>
+      </div>
+    </div>
+    <form method="post" class="flex gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="source" value="{{ preview.source.pk }}">
+      <input type="hidden" name="target" value="{{ preview.target.pk }}">
+      <input type="hidden" name="confirmed" value="1">
+      <button type="submit" class="btn btn-danger">Confirmar mesclagem</button>
+      <a href="{% url 'catalog:category_merge' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+
+  {% else %}
+  {# Step 1 — form #}
+  <div class="panel-spacious space-y-4">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Pré-visualizar</button>
+        <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -33,3 +33,22 @@ class ModuleAccessMixin(LoginRequiredMixin):
         if not self.has_module_permission():
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
+
+
+class ActionRequiredMixin:
+    """Gate POST/PUT/PATCH/DELETE mutations behind a fine-grained action permission.
+
+    Set ``action_key`` (e.g. 'customers.delete') on the view. GET requests pass
+    through so the page renders normally; templates hide buttons via ``has_action``.
+    Unauthenticated users are handled upstream by ModuleAccessMixin. Authenticated
+    users without the permission get 403 on mutating requests.
+    Superusers always pass.
+    """
+
+    action_key = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method not in ('GET', 'HEAD', 'OPTIONS') and self.action_key:
+            if not request.user.is_authenticated or not request.user.has_action(self.action_key):
+                raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)

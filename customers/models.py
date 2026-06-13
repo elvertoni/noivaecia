@@ -17,6 +17,12 @@ class Customer(TimeStampedModel):
     phone_mobile = models.CharField('celular', max_length=20, blank=True)
     phone_work = models.CharField('telefone comercial', max_length=20, blank=True)
     notes = models.TextField('observações', blank=True)
+    # R3.01 / R3.02 — legacy migration metadata
+    legacy_id = models.PositiveIntegerField('ID legado', null=True, blank=True, db_index=True)
+    legacy_source = models.CharField('origem legada', max_length=50, blank=True)
+    legacy_notes = models.TextField('notas de importação', blank=True)
+    is_placeholder = models.BooleanField('é placeholder', default=False, db_index=True)
+    is_active = models.BooleanField('ativo', default=True, db_index=True)
 
     class Meta:
         verbose_name = 'cliente'

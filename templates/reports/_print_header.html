@@ -1,0 +1,5 @@
+<div class="print:block hidden mb-4 text-xs text-gray-600 border-b border-gray-300 pb-2">
+  <p class="font-semibold text-base text-gray-900">{{ company_name|default:'Noivas &amp; Cia' }}</p>
+  <p>Relatório emitido em {% now "d/m/Y H:i" %}</p>
+  {% if filter_summary %}<p>Filtros: {{ filter_summary }}</p>{% endif %}
+</div>

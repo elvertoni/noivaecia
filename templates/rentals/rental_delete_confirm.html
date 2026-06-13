@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Excluir locação #{{ rental.number }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious space-y-5">
+
+    <div>
+      <h1 class="page-title">Excluir locação #{{ rental.number }}</h1>
+      <p class="page-description">{{ rental.customer.name }}</p>
+    </div>
+
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <strong>Atenção:</strong> A exclusão é permanente e irreversível.
+      Só é permitida para locações canceladas sem retirada, devolução ou pagamentos.
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div class="form-actions">
+        <button type="submit" class="btn btn-danger">Excluir permanentemente</button>
+        <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

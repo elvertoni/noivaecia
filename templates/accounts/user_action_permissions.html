@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Permissões de Ação · {{ target_user.email }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl space-y-6">
+  <div>
+    <h1 class="page-title">Permissões de ação</h1>
+    <p class="page-description">{{ target_user.email }}</p>
+  </div>
+
+  {% if target_user.is_superuser %}
+    <div class="panel-spacious">
+      <p class="text-sm text-app-muted">Este usuário é superusuário e tem todas as ações liberadas automaticamente.</p>
+    </div>
+  {% else %}
+    <form method="post" class="panel-spacious space-y-4">
+      {% csrf_token %}
+      <h2 class="section-title">Ações disponíveis</h2>
+      <div class="space-y-3">
+        {% for action in actions %}
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="actions" value="{{ action.key }}"
+                   {% if action.allowed %}checked{% endif %}
+                   class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+            <span class="text-sm text-app-ink">{{ action.label }}</span>
+            <span class="text-xs text-app-muted font-mono ml-auto">{{ action.key }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Salvar permissões</button>
+        <a href="{% url 'user_permissions' target_user.pk %}" class="btn btn-secondary">Voltar</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

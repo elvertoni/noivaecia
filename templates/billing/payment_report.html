@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Recebimentos por Período · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Recebimentos por período</h1>
+      <p class="page-description">Emitido em {{ today|date:'d/m/Y' }}</p>
+    </div>
+    <a href="?{{ request.GET.urlencode }}&print=1" class="btn btn-secondary" onclick="window.print();return false;">Imprimir</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="panel-spacious print:hidden">
+    <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="field-group">
+        <label class="field-label">De</label>
+        <input type="date" name="date_from" value="{{ filters.date_from }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Até</label>
+        <input type="date" name="date_to" value="{{ filters.date_to }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Forma de pagamento</label>
+        <select name="method" class="field-input">
+          <option value="">Todas</option>
+          {% for code, label in methods %}
+            <option value="{{ code }}" {% if filters.method == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Cliente</label>
+        <input type="text" name="q" value="{{ filters.q }}" class="field-input" placeholder="Nome do cliente">
+      </div>
+      <div class="field-group self-end">
+        <button type="submit" class="btn btn-primary w-full">Filtrar</button>
+      </div>
+      <div class="field-group self-end">
+        <a href="{% url 'billing:payment_report' %}" class="btn btn-secondary w-full">Limpar</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Total -->
+  <div class="panel-spacious text-center max-w-xs">
+    <p class="stat-label">Total recebido</p>
+    <p class="stat-value text-emerald-700">R$ {{ total_received|floatformat:2 }}</p>
+  </div>
+
+  <!-- Table -->
+  {% if payments %}
+    <div class="table-shell">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Cliente</th>
+            <th>Locação</th>
+            <th>Forma</th>
+            <th>Observações</th>
+            <th class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>{{ p.payment_date|date:'d/m/Y' }}</td>
+            <td>{{ p.customer.name|default:p.receivable.rental.customer.name|default:'—' }}</td>
+            <td>{% if p.receivable %}#{{ p.receivable.rental.number }}{% else %}—{% endif %}</td>
+            <td>{{ p.get_method_display }}</td>
+            <td class="max-w-xs truncate text-app-muted text-xs">{{ p.notes|default:'—' }}</td>
+            <td class="text-right font-medium text-emerald-700">R$ {{ p.amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="font-semibold">
+            <td colspan="5" class="text-right">Total:</td>
+            <td class="text-right text-emerald-700">R$ {{ total_received|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+      <div class="flex items-center justify-between print:hidden">
+        <p class="text-sm text-app-muted">Página {{ page_obj.number }} de {{ paginator.num_pages }}</p>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}
+            <a href="?{% for k, v in filters.items %}{{ k }}={{ v }}&{% endfor %}page={{ page_obj.previous_page_number }}" class="btn btn-secondary">Anterior</a>
+          {% endif %}
+          {% if page_obj.has_next %}
+            <a href="?{% for k, v in filters.items %}{{ k }}={{ v }}&{% endfor %}page={{ page_obj.next_page_number }}" class="btn btn-secondary">Próxima</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div class="panel-spacious text-center text-app-muted">
+      <p>Nenhum recebimento encontrado para os filtros selecionados.</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

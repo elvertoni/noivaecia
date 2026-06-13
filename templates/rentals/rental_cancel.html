@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Cancelar locação #{{ rental.number }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious space-y-5">
+
+    <div>
+      <h1 class="page-title">Cancelar locação #{{ rental.number }}</h1>
+      <p class="page-description">{{ rental.customer.name }}</p>
+    </div>
+
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <strong>Atenção:</strong> Esta ação não pode ser desfeita. A locação ficará com status Cancelada.
+      Os itens reservados serão liberados para nova locação.
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div class="field-group">
+        <label class="field-label">{{ form.reason.label }}</label>
+        {{ form.reason }}
+        {% if form.reason.errors %}<p class="field-error">{{ form.reason.errors|striptags }}</p>{% endif %}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-danger">Confirmar cancelamento</button>
+        <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

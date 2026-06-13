@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Recebimentos por cliente · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Recebimentos por cliente</h1>
+      {% if customer %}
+        <p class="page-description">{{ customer.name }}</p>
+      {% endif %}
+    </div>
+    <a href="{% url 'billing:dashboard' %}" class="btn btn-secondary">Financeiro</a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" action="{% url 'billing:customer_receivables_search' %}" class="panel p-4">
+    <div class="flex gap-3">
+      <div class="field-group flex-1">
+        <label class="field-label">Buscar cliente</label>
+        <input type="text" name="q" value="{{ q }}" class="field-input" placeholder="Nome do cliente" autofocus>
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Search results -->
+  {% if customer_results %}
+    <div class="table-shell">
+      <table class="data-table">
+        <thead><tr><th>Cliente</th><th>Cidade</th><th class="text-right">Ações</th></tr></thead>
+        <tbody>
+          {% for c in customer_results %}
+            <tr>
+              <td>{{ c.name }}</td>
+              <td>{{ c.city|default:'—' }}</td>
+              <td class="text-right">
+                <a href="{% url 'billing:customer_receivables' c.pk %}" class="text-link">Ver títulos</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif q and not customer %}
+    <p class="text-app-muted text-sm">Nenhum cliente encontrado para "{{ q }}".</p>
+  {% endif %}
+
+  <!-- Customer receivables -->
+  {% if customer %}
+    {% if receivable_rows %}
+      <!-- Totals -->
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Saldo em aberto</p>
+          <p class="stat-value text-brand-700">R$ {{ total_balance|floatformat:2 }}</p>
+        </div>
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Total c/ juros</p>
+          <p class="stat-value text-red-700">R$ {{ total_with_interest|floatformat:2 }}</p>
+        </div>
+        <div class="panel-spacious text-center sm:col-span-1 col-span-2">
+          <p class="stat-label">Títulos abertos</p>
+          <p class="stat-value">{{ receivable_rows|length }}</p>
+        </div>
+      </div>
+
+      <!-- Multi-pay form -->
+      <div class="panel p-4">
+        <h2 class="section-title mb-3">Baixa múltipla</h2>
+        <form method="post" action="{% url 'billing:multi_pay' customer.pk %}">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            {% for field in multi_pay_form %}
+              <div class="field-group">
+                <label class="field-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <!-- Checkbox list for receivable selection -->
+          <div class="mt-3">
+            <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer mb-2">
+              <input type="checkbox" id="select-all-receivables">
+              Selecionar todos
+            </label>
+            <div class="space-y-1 max-h-40 overflow-y-auto border border-app-border rounded p-2">
+              {% for row in receivable_rows %}
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" name="receivable_ids" value="{{ row.obj.pk }}" class="receivable-check">
+                  <span>
+                    Vence {{ row.obj.due_date|date:'d/m/Y' }} · Locação #{{ row.obj.rental.number }} ·
+                    <strong>R$ {{ row.obj.balance|floatformat:2 }}</strong>
+                    {% if row.days_overdue > 0 %}
+                      <span class="badge badge-danger">{{ row.days_overdue }}d atraso</span>
+                    {% endif %}
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Baixar selecionados</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Individual receivables table -->
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Vencimento</th>
+              <th>Locação</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Saldo</th>
+              <th class="text-right">Juros</th>
+              <th class="text-right">Total</th>
+              <th class="text-right">Atraso</th>
+              <th class="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in receivable_rows %}
+              <tr class="{% if row.days_overdue > 0 %}bg-red-50{% endif %}">
+                <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
+                <td><a href="{% url 'rentals:detail' row.obj.rental_id %}" class="text-link">#{{ row.obj.rental.number }}</a></td>
+                <td class="text-right">R$ {{ row.obj.amount|floatformat:2 }}</td>
+                <td class="text-right font-medium">R$ {{ row.obj.balance|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.obj.balance|floatformat:2 }}</td>
+                <td class="text-right font-semibold">R$ {{ row.total_with_interest|floatformat:2 }}</td>
+                <td class="text-right">
+                  {% if row.days_overdue > 0 %}
+                    <span class="badge badge-danger">{{ row.days_overdue }}d</span>
+                  {% else %}—{% endif %}
+                </td>
+                <td class="text-right">
+                  <a href="{% url 'billing:pay_receivable' row.obj.pk %}?next={{ request.path }}" class="text-link">Baixar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">
+        <p>Nenhum título em aberto para {{ customer.name }}.</p>
+        <a href="{% url 'billing:receivables' %}?q={{ customer.name }}&status=paid" class="text-link text-sm mt-2 inline-block">Ver títulos quitados</a>
+      </div>
+    {% endif %}
+  {% endif %}
+
+</div>
+
+<script>
+(function () {
+  const selectAll = document.getElementById('select-all-receivables');
+  if (!selectAll) return;
+  selectAll.addEventListener('change', function () {
+    document.querySelectorAll('.receivable-check').forEach(function (cb) {
+      cb.checked = selectAll.checked;
+    });
+  });
+})();
+</script>
+{% endblock %}

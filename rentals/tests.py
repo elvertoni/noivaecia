@@ -105,3 +105,62 @@ class RentalCreateFlowTests(TestCase):
         other = User.objects.create_user(email='no@b.com', password='Senha12345')
         self.client.force_login(other)
         self.assertEqual(self.client.get('/locacoes/').status_code, 403)
+
+
+class RentalCancelledStatusTests(TestCase):
+    """R3.07, R3.08, R3.09 — cancelled status, use_for and cancellation fields."""
+
+    def setUp(self):
+        self.customer = Customer.objects.create(name='Maria')
+        self.user = User.objects.create_user(email='op@b.com', password='Senha12345')
+
+    def test_cancelled_is_valid_status(self):
+        rental = Rental.objects.create(
+            number=10, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            status=Rental.Status.CANCELLED,
+        )
+        self.assertEqual(rental.status, 'cancelled')
+
+    def test_use_for_field_stores_event(self):
+        rental = Rental.objects.create(
+            number=11, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            use_for='Formatura UFMG',
+        )
+        rental.refresh_from_db()
+        self.assertEqual(rental.use_for, 'Formatura UFMG')
+
+    def test_cancellation_fields_nullable_by_default(self):
+        rental = Rental.objects.create(
+            number=12, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        )
+        self.assertIsNone(rental.cancelled_at)
+        self.assertIsNone(rental.cancelled_by)
+        self.assertEqual(rental.cancelled_reason, '')
+
+    def test_cancel_stores_reason_and_user(self):
+        from django.utils import timezone
+        rental = Rental.objects.create(
+            number=13, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        )
+        now = timezone.now()
+        rental.status = Rental.Status.CANCELLED
+        rental.cancelled_reason = 'Cliente desistiu'
+        rental.cancelled_at = now
+        rental.cancelled_by = self.user
+        rental.save()
+        rental.refresh_from_db()
+        self.assertEqual(rental.cancelled_reason, 'Cliente desistiu')
+        self.assertEqual(rental.cancelled_by, self.user)
+
+    def test_legacy_notes_stored(self):
+        rental = Rental.objects.create(
+            number=14, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            legacy_notes='locado.obs: usar em debutante',
+        )
+        rental.refresh_from_db()
+        self.assertIn('debutante', rental.legacy_notes)

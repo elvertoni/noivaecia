@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Lançamento Manual · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious space-y-5">
+
+    <div>
+      <h1 class="page-title">Lançamento manual de caixa</h1>
+      <p class="page-description">Registra uma entrada ou saída avulsa no caixa.</p>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% for field in form %}
+          <div class="field-group {% if field.name == 'description' %}sm:col-span-2{% endif %}">
+            <label class="field-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Registrar movimento</button>
+        <a href="{% url 'billing:cash_movements' %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

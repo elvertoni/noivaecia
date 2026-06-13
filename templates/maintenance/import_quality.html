@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Qualidade da Importação · Manutenção · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Qualidade da Importação</h1>
+      <p class="page-description">Métricas de placeholders, duplicados, datas suspeitas e lacunas de dados.</p>
+    </div>
+    <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Voltar</a>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Categorias placeholder</p>
+      <p class="stat-value {% if placeholder_categories > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ placeholder_categories }}</p>
+      {% if placeholder_categories > 0 %}
+        <a href="{% url 'catalog:placeholder_review' %}" class="text-link text-xs mt-1 block">Revisar</a>
+      {% endif %}
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Produtos placeholder</p>
+      <p class="stat-value {% if placeholder_products > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ placeholder_products }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Clientes placeholder</p>
+      <p class="stat-value {% if placeholder_customers > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ placeholder_customers }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Pares de produtos duplicados</p>
+      <p class="stat-value {% if duplicate_product_pairs > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ duplicate_product_pairs }}</p>
+      {% if duplicate_product_pairs > 0 %}
+        <a href="{% url 'catalog:product_list' %}?duplicate=1" class="text-link text-xs mt-1 block">Ver duplicados</a>
+      {% endif %}
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Locações com datas suspeitas</p>
+      <p class="stat-value {% if suspicious_date_rentals > 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ suspicious_date_rentals }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Locações sem itens (financeiras)</p>
+      <p class="stat-value {% if rentals_no_items > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ rentals_no_items }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Movimentos sem título vinculado</p>
+      <p class="stat-value {% if orphan_movements > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ orphan_movements }}</p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

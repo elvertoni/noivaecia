@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Auditoria Legado · Manutenção · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Referência Legada</h1>
+      <p class="page-description">Programas e permissões do sistema BRcom. Apenas consulta — nenhum dado migra operacionalmente.</p>
+    </div>
+    <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Voltar</a>
+  </div>
+
+  <div>
+    <h2 class="section-title mb-3">Programas ({{ programas|length }})</h2>
+    {% if programas %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              {% for key in programas.0.keys %}
+                <th>{{ key }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in programas %}
+              <tr>
+                {% for val in row.values %}
+                  <td class="text-sm">{{ val|default:'—' }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Tabela legacy_programas não disponível ou vazia.</p>
+    {% endif %}
+  </div>
+
+  <div>
+    <h2 class="section-title mb-3">Libera — permissões por usuário ({{ libera|length }})</h2>
+    {% if libera %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              {% for key in libera.0.keys %}
+                <th>{{ key }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in libera %}
+              <tr>
+                {% for val in row.values %}
+                  <td class="text-sm">{{ val|default:'—' }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Tabela legacy_libera não disponível ou vazia.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

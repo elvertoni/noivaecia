@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+
+{% block title %}Histórico · {{ customer.name }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# Header #}
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+        {{ customer.name }}
+        {% if not customer.is_active %}<span class="badge badge-warning ml-2">inativo</span>{% endif %}
+        {% if customer.is_placeholder %}<span class="badge badge-danger ml-2">placeholder</span>{% endif %}
+      </h1>
+      <p class="page-description">
+        {% if customer.city %}{{ customer.city }}{% endif %}
+        {% if customer.cpf %} · CPF {{ customer.cpf }}{% endif %}
+        {% if customer.phone_mobile %} · {{ customer.phone_mobile }}{% endif %}
+        {% if customer.phone_home %} · {{ customer.phone_home }}{% endif %}
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'customers:update' customer.pk %}" class="btn btn-secondary">Editar</a>
+      <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary">
+          {% if customer.is_active %}Inativar{% else %}Ativar{% endif %}
+        </button>
+      </form>
+      <a href="{% url 'customers:list' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+
+  {# Financial summary (R9.04) #}
+  <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total locado</p>
+      <p class="stat-value text-brand-700">R$ {{ total_rented|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total cobrado</p>
+      <p class="stat-value">R$ {{ total_amount|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total recebido</p>
+      <p class="stat-value text-green-600">R$ {{ total_paid|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Saldo em aberto</p>
+      <p class="stat-value {% if total_balance > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+        R$ {{ total_balance|floatformat:2 }}
+      </p>
+    </div>
+  </div>
+
+  {# Filters (R9.03) #}
+  <div class="panel-spacious">
+    <form method="get" class="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div class="field-group">
+        <label class="field-label">De</label>
+        <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Até</label>
+        <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Status locação</label>
+        <select name="rental_status" class="field-input">
+          <option value="">Todos</option>
+          {% for val, label in rental_status_choices %}
+            <option value="{{ val }}" {% if rental_status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Financeiro</label>
+        <select name="financial_status" class="field-input">
+          <option value="">Todos</option>
+          <option value="open" {% if financial_status == 'open' %}selected{% endif %}>Em aberto</option>
+          <option value="paid" {% if financial_status == 'paid' %}selected{% endif %}>Quitados</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Produto</label>
+        <input type="text" name="product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
+      </div>
+      <div class="flex items-end gap-2 md:col-span-5">
+        <button type="submit" class="btn btn-secondary">Filtrar</button>
+        <a href="{% url 'customers:detail' customer.pk %}" class="btn btn-secondary">Limpar</a>
+      </div>
+    </form>
+  </div>
+
+  {# Rentals (R9.02) #}
+  <div>
+    <h2 class="section-title mb-3">Locações <span class="text-xs font-normal text-app-muted">({{ rentals|length }})</span></h2>
+    {% if rentals %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nº</th>
+              <th>Retirada</th>
+              <th>Retorno</th>
+              <th>Situação</th>
+              <th>Itens</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rental in rentals %}
+              <tr>
+                <td class="font-medium">
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a>
+                </td>
+                <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
+                <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+                <td>
+                  {% if rental.status == 'pending' %}<span class="badge badge-warning">Pendente</span>
+                  {% elif rental.status == 'picked_up' %}<span class="badge badge-info">Retirado</span>
+                  {% elif rental.status == 'returned' %}<span class="badge badge-success">Devolvido</span>
+                  {% elif rental.status == 'cancelled' %}<span class="badge badge-danger">Cancelado</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% for item in rental.items.all %}
+                    <span class="text-xs text-app-muted">{{ item.product.category.prefix }}{{ item.product.code }}</span>{% if not forloop.last %}, {% endif %}
+                  {% empty %}—{% endfor %}
+                </td>
+                <td class="text-right font-medium">R$ {{ rental.total_value|floatformat:2 }}</td>
+                <td class="text-right">
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">Nenhuma locação encontrada com os filtros aplicados.</div>
+    {% endif %}
+  </div>
+
+  {# Receivables #}
+  <div>
+    <h2 class="section-title mb-3">Recebimentos <span class="text-xs font-normal text-app-muted">({{ receivables|length }})</span></h2>
+    {% if receivables %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Vencimento</th>
+              <th>Locação</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Pago</th>
+              <th class="text-right">Saldo</th>
+              <th>Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in receivables %}
+              <tr>
+                <td>{{ rec.due_date|date:'d/m/Y' }}</td>
+                <td><a href="{% url 'rentals:detail' rec.rental.pk %}" class="text-link">#{{ rec.rental.number }}</a></td>
+                <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ rec.paid_amount|floatformat:2 }}</td>
+                <td class="text-right {% if rec.balance > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                  R$ {{ rec.balance|floatformat:2 }}
+                </td>
+                <td>
+                  {% if rec.is_paid %}
+                    <span class="badge badge-success">Quitado</span>
+                  {% else %}
+                    <span class="badge badge-warning">Aberto</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">Nenhum recebimento encontrado.</div>
+    {% endif %}
+  </div>
+
+  {# Recent payments #}
+  <div>
+    <h2 class="section-title mb-3">Pagamentos recentes <span class="text-xs font-normal text-app-muted">(últimos 50)</span></h2>
+    {% if payments %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Locação</th>
+              <th>Forma</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Juros</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pmt in payments %}
+              <tr>
+                <td>{{ pmt.payment_date|date:'d/m/Y' }}</td>
+                <td>
+                  {% if pmt.rental %}
+                    <a href="{% url 'rentals:detail' pmt.rental.pk %}" class="text-link">#{{ pmt.rental.number }}</a>
+                  {% else %}—{% endif %}
+                </td>
+                <td>{{ pmt.get_method_display }}</td>
+                <td class="text-right font-medium">R$ {{ pmt.amount|floatformat:2 }}</td>
+                <td class="text-right">{% if pmt.interest_amount %}R$ {{ pmt.interest_amount|floatformat:2 }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">Nenhum pagamento registrado.</div>
+    {% endif %}
+  </div>
+
+  {% if customer.notes %}
+  <div class="panel-spacious">
+    <h2 class="section-title">Observações</h2>
+    <p class="mt-2 text-sm text-app-muted">{{ customer.notes }}</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

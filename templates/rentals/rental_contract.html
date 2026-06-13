@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Contrato de Locação #{{ rental.number }} · {{ company.name }}</title>
+  <style>
+    @page { size: A4; margin: 18mm 15mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #111; }
+    .copy { page-break-after: always; padding-bottom: 12px; }
+    .copy:last-child { page-break-after: auto; }
+    .header { border-bottom: 2px solid #9f1239; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .header-left h1 { font-size: 14pt; font-weight: 700; color: #9f1239; }
+    .header-left p { font-size: 8.5pt; color: #555; }
+    .header-right { text-align: right; font-size: 8.5pt; color: #555; }
+    .contract-title { text-align: center; font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    .section { margin-bottom: 10px; }
+    .section-title { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #9f1239; border-bottom: 1px solid #f9a8d4; padding-bottom: 2px; margin-bottom: 6px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .field { flex: 1; min-width: 120px; }
+    .field label { font-size: 7.5pt; color: #555; display: block; }
+    .field span { font-size: 9.5pt; font-weight: 600; border-bottom: 1px solid #ccc; display: block; min-height: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    table thead th { background: #fdf2f8; color: #9f1239; font-size: 8pt; text-align: left; padding: 4px 6px; border: 1px solid #f9a8d4; }
+    table tbody td { padding: 4px 6px; border: 1px solid #e5e7eb; vertical-align: top; }
+    table tfoot td { padding: 4px 6px; border: 1px solid #f9a8d4; font-weight: 700; background: #fdf2f8; }
+    .text-right { text-align: right; }
+    .clauses { font-size: 8pt; color: #333; line-height: 1.5; }
+    .clauses p { margin-bottom: 4px; }
+    .signatures { display: flex; justify-content: space-between; margin-top: 16px; gap: 24px; }
+    .sig-line { flex: 1; border-top: 1px solid #333; text-align: center; padding-top: 4px; font-size: 8pt; color: #555; }
+    .copy-label { text-align: center; font-size: 7.5pt; color: #777; margin-top: 8px; font-style: italic; }
+    .no-print { display: block; text-align: center; margin-bottom: 16px; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()" style="padding:8px 20px;background:#9f1239;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11pt;">Imprimir contrato</button>
+  <a href="{% url 'rentals:detail' rental.pk %}" style="margin-left:12px;font-size:10pt;color:#9f1239;">Voltar</a>
+  <p style="margin-top:6px;font-size:9pt;color:#555;">Contrato {{ contract_version }} — gerado em {% now "d/m/Y H:i" %}</p>
+</div>
+
+{% with items=rental.items.all %}
+{% for copy_label in copy_labels %}
+<div class="copy">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>{{ company.name }}</h1>
+      <p>{{ company.address }}{% if company.city %} · {{ company.city }}{% endif %}</p>
+      <p>{% if company.cnpj %}CNPJ: {{ company.cnpj }}{% endif %}{% if company.phones %} · Tel: {{ company.phones }}{% endif %}</p>
+    </div>
+    <div class="header-right">
+      <strong>Locação nº {{ rental.number }}</strong><br>
+      Versão {{ contract_version }}<br>
+      {% now "d/m/Y" %}
+    </div>
+  </div>
+
+  <div class="contract-title">Contrato de Locação de Traje</div>
+
+  <!-- Cliente -->
+  <div class="section">
+    <div class="section-title">Locatário</div>
+    <div class="row">
+      <div class="field" style="flex:3">
+        <label>Nome</label>
+        <span>{{ rental.customer.name }}</span>
+      </div>
+      <div class="field">
+        <label>CPF</label>
+        <span>{{ rental.customer.cpf|default:'—' }}</span>
+      </div>
+      <div class="field">
+        <label>RG</label>
+        <span>{{ rental.customer.rg|default:'—' }}</span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:3">
+        <label>Endereço</label>
+        <span>{{ rental.customer.address|default:'—' }}{% if rental.customer.city %} · {{ rental.customer.city }}{% endif %}</span>
+      </div>
+      <div class="field">
+        <label>Telefone</label>
+        <span>{{ rental.customer.phone_mobile|default:rental.customer.phone_home|default:'—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Locação -->
+  <div class="section">
+    <div class="section-title">Dados da locação</div>
+    <div class="row">
+      <div class="field">
+        <label>Uso / Evento</label>
+        <span>{{ rental.use_for|default:'—' }}</span>
+      </div>
+      <div class="field">
+        <label>Data de retirada</label>
+        <span>{{ rental.pickup_date|date:"d/m/Y" }}</span>
+      </div>
+      <div class="field">
+        <label>Data de retorno</label>
+        <span>{{ rental.return_date|date:"d/m/Y" }}</span>
+      </div>
+      <div class="field">
+        <label>Total do contrato</label>
+        <span>R$ {{ rental.total_value|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Itens -->
+  <div class="section">
+    <div class="section-title">Itens locados</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:18%">Código</th>
+          <th>Descrição</th>
+          <th style="width:18%">Cor / Tamanho</th>
+          <th class="text-right" style="width:14%">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.product.category.prefix }}{{ item.product.code }}</td>
+          <td>{{ item.product.description }}{% if item.description %} — {{ item.description }}{% endif %}</td>
+          <td>{{ item.product.color|default:'—' }} / {{ item.product.size|default:'—' }}</td>
+          <td class="text-right">R$ {{ item.value|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="text-align:center;color:#888;">Sem itens.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" class="text-right">Total</td>
+          <td class="text-right">R$ {{ rental.total_value|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Parcelas -->
+  {% if receivables %}
+  <div class="section">
+    <div class="section-title">Condições de pagamento</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:12%">Parcela</th>
+          <th style="width:28%">Vencimento</th>
+          <th class="text-right" style="width:28%">Valor</th>
+          <th>Situação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in receivables %}
+        <tr>
+          <td style="text-align:center">{{ forloop.counter }}</td>
+          <td>{{ rec.due_date|date:"d/m/Y" }}</td>
+          <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+          <td>{% if rec.is_paid %}Quitada{% else %}Em aberto{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Cláusulas -->
+  <div class="section">
+    <div class="section-title">Termos e condições</div>
+    <div class="clauses">
+      <p>1. O locatário recebe os itens em perfeito estado e se compromete a devolvê-los nas mesmas condições na data estipulada.</p>
+      <p>2. Em caso de dano, o locatário responde pelo custo de conserto ou pelo valor de reposição do item.</p>
+      <p>3. O atraso na devolução sujeita o locatário a multa moratória de {{ company.late_fee_rate|floatformat:2 }}% sobre o valor do título e juros de mora de {{ company.monthly_interest_rate|floatformat:2 }}% ao mês.</p>
+      <p>4. A não devolução do item implica cobrança de {{ company.loss_penalty_rate|floatformat:2 }}% do valor do item a título de ressarcimento.</p>
+      {% if company.footer_message %}<p>{{ company.footer_message }}</p>{% endif %}
+    </div>
+  </div>
+
+  <!-- Assinaturas -->
+  <div class="signatures">
+    <div class="sig-line">
+      Locatário: {{ rental.customer.name }}<br>
+      CPF: {{ rental.customer.cpf|default:'____________________' }}
+    </div>
+    <div class="sig-line">
+      {{ company.name }}<br>
+      CNPJ: {{ company.cnpj|default:'____________________' }}
+    </div>
+  </div>
+
+  <div class="copy-label">{{ copy_label }}</div>
+
+</div>
+{% endfor %}
+{% endwith %}
+
+</body>
+</html>

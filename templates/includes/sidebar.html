@@ -36,11 +36,23 @@
       {% endif %}
     {% endif %}
 
-    {% if request.user|has_module:'rentals' or request.user|has_module:'billing' %}
-      <p class="nav-section">Movimentação</p>
+    {% if request.user|has_module:'rentals' or request.user|has_module:'movements' %}
+      <p class="nav-section">Operações</p>
       {% if request.user|has_module:'rentals' %}
         <a href="{% url 'rentals:list' %}" class="nav-link{% if request.resolver_match.app_name == 'rentals' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'rentals' %}aria-current="page"{% endif %}>Locações</a>
       {% endif %}
+      {% if request.user|has_module:'movements' %}
+        <a href="{% url 'movements:pickup_list' %}" class="nav-link{% if request.resolver_match.url_name == 'pickup_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'pickup_list' %}aria-current="page"{% endif %}>A Retirar</a>
+        <a href="{% url 'movements:return_list' %}" class="nav-link{% if request.resolver_match.url_name == 'return_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'return_list' %}aria-current="page"{% endif %}>Retirados</a>
+        <a href="{% url 'movements:overdue_list' %}" class="nav-link{% if request.resolver_match.url_name == 'overdue_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'overdue_list' %}aria-current="page"{% endif %}>Atrasados</a>
+      {% endif %}
+    {% endif %}
+
+    {% if request.user|has_module:'billing' %}
+      <p class="nav-section">Financeiro</p>
+      <a href="{% url 'billing:dashboard' %}" class="nav-link{% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %}aria-current="page"{% endif %}>Painel</a>
+      <a href="{% url 'billing:receivables' %}" class="nav-link{% if request.resolver_match.url_name == 'receivables' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'receivables' %}aria-current="page"{% endif %}>Recebíveis</a>
+      <a href="{% url 'billing:cash_movements' %}" class="nav-link{% if request.resolver_match.url_name == 'cash_movements' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'cash_movements' %}aria-current="page"{% endif %}>Caixa</a>
     {% endif %}
 
     {% if request.user|has_module:'catalog' or request.user|has_module:'reports' %}
@@ -49,7 +61,7 @@
         <a href="{% url 'catalog:availability' %}" class="nav-link{% if request.resolver_match.url_name == 'availability' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'availability' %}aria-current="page"{% endif %}>Disponibilidade</a>
       {% endif %}
       {% if request.user|has_module:'reports' %}
-        <a href="{% url 'reports:report' %}" class="nav-link{% if request.resolver_match.app_name == 'reports' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'reports' %}aria-current="page"{% endif %}>Relatórios</a>
+        <a href="{% url 'reports:index' %}" class="nav-link{% if request.resolver_match.app_name == 'reports' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'reports' %}aria-current="page"{% endif %}>Relatórios</a>
       {% endif %}
     {% endif %}
 

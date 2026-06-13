@@ -43,6 +43,34 @@
           <button type="submit" class="btn btn-secondary">Executar</button>
         </form>
       </div>
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-app-ink">Acerto de devoluções</p>
+          <p class="field-help">Verifica inconsistências entre status das locações e registros de retirada/devolução.</p>
+        </div>
+        <a href="{% url 'maintenance:settle_returns' %}" class="btn btn-secondary">Verificar</a>
+      </div>
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-app-ink">Qualidade da Importação</p>
+          <p class="field-help">Métricas de placeholders, duplicados, datas suspeitas e lacunas de dados.</p>
+        </div>
+        <a href="{% url 'maintenance:import_quality' %}" class="btn btn-secondary">Verificar</a>
+      </div>
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-app-ink">Referência Legada (Legado)</p>
+          <p class="field-help">Programas e permissões do sistema BRcom. Apenas consulta.</p>
+        </div>
+        <a href="{% url 'maintenance:legacy_audit' %}" class="btn btn-secondary">Consultar</a>
+      </div>
+      <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+        <div>
+          <p class="text-sm font-medium text-app-ink">Reconciliação Financeira</p>
+          <p class="field-help">Compara recebíveis, pagamentos, saldos e movimentos de caixa.</p>
+        </div>
+        <a href="{% url 'maintenance:reconcile' %}" class="btn btn-secondary">Verificar</a>
+      </div>
     </div>
   </div>
 </div>

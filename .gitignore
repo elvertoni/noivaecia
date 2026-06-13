@@ -28,3 +28,9 @@ docker-compose.override.yml
 .DS_Store
 .vscode/
 .idea/
+
+# Claude Code local settings (credentials)
+.claude/settings.local.json
+
+# Legacy application snapshot
+/brcom/

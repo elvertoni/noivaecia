@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Placeholders · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Revisão de placeholders</h1>
+      <p class="page-description">Categorias e produtos criados automaticamente na importação que precisam de revisão.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'catalog:category_merge' %}" class="btn btn-secondary">Mesclar categorias</a>
+    </div>
+  </div>
+
+  {# Placeholder categories (R8.05) #}
+  <div>
+    <h2 class="section-title mb-3">
+      Categorias placeholder
+      <span class="ml-2 badge badge-warning">{{ placeholder_categories|length }}</span>
+    </h2>
+    {% if placeholder_categories %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Prefixo</th>
+              <th>Nome</th>
+              <th class="text-right">Produtos</th>
+              <th class="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cat in placeholder_categories %}
+              <tr>
+                <td class="font-medium">{{ cat.prefix }} <span class="badge badge-warning ml-1">placeholder</span></td>
+                <td>{{ cat.name }}</td>
+                <td class="text-right">{{ cat.product_count }}</td>
+                <td class="text-right whitespace-nowrap">
+                  <a href="{% url 'catalog:category_merge' %}?source={{ cat.pk }}" class="text-link">Mesclar</a>
+                  <a href="{% url 'catalog:category_update' cat.pk %}" class="text-link ml-3">Editar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">Nenhuma categoria placeholder.</div>
+    {% endif %}
+  </div>
+
+  {# Placeholder products #}
+  <div>
+    <h2 class="section-title mb-3">
+      Produtos placeholder
+      <span class="ml-2 badge badge-warning">{{ placeholder_products|length }}</span>
+    </h2>
+    {% if placeholder_products %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th class="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in placeholder_products %}
+              <tr>
+                <td class="font-medium">{{ p.category.prefix }}{{ p.code }}</td>
+                <td>{{ p.description }}</td>
+                <td>{{ p.category.prefix }} · {{ p.category.name }}</td>
+                <td class="text-right whitespace-nowrap">
+                  <a href="{% url 'catalog:product_history' p.pk %}" class="text-link">Histórico</a>
+                  <a href="{% url 'catalog:product_update' p.pk %}" class="text-link ml-3">Editar</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">Nenhum produto placeholder.</div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

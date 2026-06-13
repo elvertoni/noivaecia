@@ -1,9 +1,10 @@
 param(
-    [string]$SourceMdb = 'C:\Users\coimb\Desktop\brcom\brcom\brcom.mdb',
+    [string]$SourceMdb = 'brcom\brcom.mdb',
     [string]$OutputDir = 'var\legacy_export'
 )
 
 $ErrorActionPreference = 'Stop'
+$ExporterVersion = '2026.06.12-r1'
 
 if ([Environment]::Is64BitProcess) {
     $ps32 = "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
@@ -37,17 +38,42 @@ function Write-JsonFile($path, $object) {
     [IO.File]::WriteAllText($path, $json, $utf8NoBom)
 }
 
+function Reset-ExportSubdir($rootPath, $subdirName) {
+    $rootFullPath = [IO.Path]::GetFullPath($rootPath)
+    $targetPath = [IO.Path]::GetFullPath((Join-Path $rootFullPath $subdirName))
+    $expectedPrefix = $rootFullPath.TrimEnd('\') + '\'
+
+    if (-not $targetPath.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to reset export path outside output directory: $targetPath"
+    }
+
+    if (Test-Path -LiteralPath $targetPath) {
+        Remove-Item -LiteralPath $targetPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $targetPath | Out-Null
+    return $targetPath
+}
+
+if (-not (Test-Path -LiteralPath $SourceMdb)) {
+    throw "Source MDB not found: $SourceMdb"
+}
+
 $sourcePath = (Resolve-Path $SourceMdb).Path
+$sourceItem = Get-Item -LiteralPath $sourcePath
+$sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash
 $outputPath = Join-Path (Get-Location) $OutputDir
 $schemaDir = Join-Path $outputPath 'schema'
 $dataDir = Join-Path $outputPath 'data'
-New-Item -ItemType Directory -Force -Path $schemaDir, $dataDir | Out-Null
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $connection = New-Object -ComObject ADODB.Connection
 $connection.Open("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=$sourcePath;")
 
 try {
+    New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
+    $schemaDir = Reset-ExportSubdir $outputPath 'schema'
+    $dataDir = Reset-ExportSubdir $outputPath 'data'
+
     $tables = @()
     $tablesRs = $connection.OpenSchema(20)
     while (-not $tablesRs.EOF) {
@@ -113,12 +139,19 @@ try {
             row_count = $rowCount
             data_file = "data/$tableName.jsonl"
             schema_file = "schema/$tableName.json"
+            columns = $columns
         }
     }
 
     Write-JsonFile (Join-Path $outputPath 'manifest.json') ([ordered]@{
+        exporter_version = $ExporterVersion
         source_mdb = $sourcePath
+        source_mdb_sha256 = $sourceHash
+        source_mdb_size = $sourceItem.Length
+        source_mdb_last_write_time = $sourceItem.LastWriteTime.ToString('o')
         exported_at = (Get-Date).ToString('o')
+        powershell_version = $PSVersionTable.PSVersion.ToString()
+        is_64_bit_process = [Environment]::Is64BitProcess
         tables = $manifestTables
     })
 }

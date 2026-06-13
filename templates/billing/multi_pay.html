@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Baixa múltipla · {{ customer.name }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <div class="space-y-6">
+
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Baixa múltipla</h1>
+        <p class="page-description">{{ customer.name }}</p>
+      </div>
+      <a href="{% url 'billing:customer_receivables' customer.pk %}" class="btn btn-secondary">Voltar</a>
+    </div>
+
+    {% if receivable_rows %}
+      <div class="panel-spacious">
+        <form method="post">
+          {% csrf_token %}
+
+          <!-- Payment fields -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {% for field in form %}
+              <div class="field-group">
+                <label class="field-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- Receivable selection -->
+          <div class="mt-5">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="section-title">Selecionar títulos</h3>
+              <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer">
+                <input type="checkbox" id="select-all">
+                Todos
+              </label>
+            </div>
+            <div class="table-shell">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="w-8"></th>
+                    <th>Vencimento</th>
+                    <th>Locação</th>
+                    <th class="text-right">Saldo</th>
+                    <th class="text-right">Total c/ juros</th>
+                    <th class="text-right">Atraso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in receivable_rows %}
+                    <tr>
+                      <td>
+                        <input type="checkbox" name="receivable_ids" value="{{ row.obj.pk }}" class="receivable-check">
+                      </td>
+                      <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
+                      <td>#{{ row.obj.rental.number }}</td>
+                      <td class="text-right font-medium">R$ {{ row.obj.balance|floatformat:2 }}</td>
+                      <td class="text-right">R$ {{ row.total_with_interest|floatformat:2 }}</td>
+                      <td class="text-right">
+                        {% if row.days_overdue > 0 %}
+                          <span class="badge badge-danger">{{ row.days_overdue }}d</span>
+                        {% else %}—{% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <p class="mt-2 text-xs text-app-muted">
+              Saldo total em aberto: <strong>R$ {{ total_balance|floatformat:2 }}</strong>
+            </p>
+          </div>
+
+          <div class="mt-4 form-actions">
+            <button type="submit" class="btn btn-primary">Confirmar baixa</button>
+            <a href="{% url 'billing:customer_receivables' customer.pk %}" class="btn btn-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">
+        <p>Nenhum título em aberto para {{ customer.name }}.</p>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const selectAll = document.getElementById('select-all');
+  if (!selectAll) return;
+  selectAll.addEventListener('change', function () {
+    document.querySelectorAll('.receivable-check').forEach(function (cb) {
+      cb.checked = selectAll.checked;
+    });
+  });
+})();
+</script>
+{% endblock %}

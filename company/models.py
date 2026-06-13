@@ -19,6 +19,23 @@ class Company(TimeStampedModel):
     daily_interest_rate = models.DecimalField(
         'juros ao dia (%)', max_digits=5, decimal_places=2, default=0
     )
+    # R6.08 — separate financial rules (RF-FI-09)
+    late_fee_rate = models.DecimalField(
+        'multa moratória (%)', max_digits=5, decimal_places=2, default=2,
+        help_text='Percentual de multa moratória aplicado sobre o valor do título.',
+    )
+    monthly_interest_rate = models.DecimalField(
+        'juros ao mês (%)', max_digits=5, decimal_places=2, default=1,
+        help_text='Juros de mora mensais; dividido por 30 para cálculo diário.',
+    )
+    damage_penalty_rate = models.DecimalField(
+        'penalidade por dano (%)', max_digits=5, decimal_places=2, default=50,
+        help_text='Percentual do valor do item cobrado em caso de dano.',
+    )
+    loss_penalty_rate = models.DecimalField(
+        'penalidade por perda/não devolução (%)', max_digits=5, decimal_places=2, default=100,
+        help_text='Percentual do valor do item cobrado em caso de perda ou não devolução.',
+    )
     footer_message = models.CharField('mensagem de rodapé', max_length=255, blank=True)
 
     class Meta:

@@ -14,11 +14,29 @@
     </a>
   </div>
 
-  <form method="get" class="flex gap-2">
-    <input type="text" name="q" value="{{ search }}" placeholder="Buscar por nome ou CPF"
-           class="field-input">
-    <button type="submit" class="btn btn-secondary">Buscar</button>
-  </form>
+  <div class="space-y-3">
+    <form method="get" class="flex gap-2">
+      {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
+      <input type="text" name="q" value="{{ search }}" placeholder="Buscar por nome, CPF, RG, telefone ou ID legado"
+             class="field-input">
+      <button type="submit" class="btn btn-secondary">Buscar</button>
+    </form>
+
+    <div class="flex gap-2 text-sm">
+      <a href="?{% if active_filter != '' %}active={{ active_filter }}&{% endif %}q={{ search }}"
+         class="{% if active_filter == '' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+        Todos
+      </a>
+      <a href="?active=1&q={{ search }}"
+         class="{% if active_filter == '1' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+        Ativos
+      </a>
+      <a href="?active=0&q={{ search }}"
+         class="{% if active_filter == '0' %}text-brand-600 font-medium{% else %}text-link{% endif %}">
+        Inativos
+      </a>
+    </div>
+  </div>
 
   <div class="table-shell">
     <table class="data-table">
@@ -34,17 +52,21 @@
       <tbody>
         {% for customer in customers %}
           <tr>
-            <td class="font-medium text-app-ink">{{ customer.name }}</td>
+            <td class="font-medium text-app-ink">
+              {{ customer.name }}
+              {% if not customer.is_active %}<span class="badge badge-warning ml-1">inativo</span>{% endif %}
+            </td>
             <td>{{ customer.city|default:'—' }}</td>
             <td>{{ customer.cpf|default:'—' }}</td>
             <td>{{ customer.phone_mobile|default:'—' }}</td>
             <td class="text-right">
-              <a href="{% url 'customers:update' customer.pk %}" class="text-link">Editar</a>
+              <a href="{% url 'customers:detail' customer.pk %}" class="text-link">Histórico</a>
+              <a href="{% url 'customers:update' customer.pk %}" class="ml-3 text-link">Editar</a>
               <a href="{% url 'customers:delete' customer.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="5" class="table-empty">Nenhum cliente encontrado.</td></tr>
+          <tr><td colspan="5" class="table-empty">Nenhum cliente encontrado. <a href="{% url 'customers:create' %}" class="text-link">Novo cliente</a></td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -55,10 +77,10 @@
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}
-          <a href="?q={{ search }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a href="?q={{ search }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+          <a href="?active={{ active_filter }}&q={{ search }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
         {% endif %}
       </div>
     </div>

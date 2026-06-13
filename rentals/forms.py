@@ -74,9 +74,40 @@ def process_proof_photo(uploaded_file):
 class RentalForm(forms.ModelForm):
     """Rental header form. Number, total and status are managed by the view."""
 
+    # Extra: installment generation (R7.05)
+    installment_count = forms.IntegerField(
+        label='Número de parcelas', min_value=1, max_value=9, initial=1,
+        required=False,
+        help_text='Deixe em branco para não gerar cobranças automaticamente.',
+    )
+    first_due_date = forms.DateField(
+        label='1ª data de vencimento', required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        help_text='Padrão: data de retorno.',
+    )
+
+    # Extra: down payment (R7.06)
+    down_payment_amount = forms.DecimalField(
+        label='Valor da entrada', max_digits=10, decimal_places=2,
+        min_value=0, required=False,
+    )
+    down_payment_method = forms.ChoiceField(
+        label='Forma de recebimento da entrada',
+        choices=[('', '—')] + [
+            ('cash', 'Dinheiro'), ('pix', 'PIX'), ('card_debit', 'Cartão débito'),
+            ('card_credit', 'Cartão crédito'), ('bank_transfer', 'Transferência'),
+            ('check', 'Cheque'),
+        ],
+        required=False,
+    )
+    down_payment_date = forms.DateField(
+        label='Data da entrada', required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+
     class Meta:
         model = Rental
-        fields = ('customer', 'pickup_date', 'return_date', 'penalty_value', 'notes')
+        fields = ('customer', 'use_for', 'pickup_date', 'return_date', 'penalty_value', 'notes')
         widgets = {
             'pickup_date': forms.DateInput(attrs={'type': 'date'}),
             'return_date': forms.DateInput(attrs={'type': 'date'}),
@@ -85,6 +116,22 @@ class RentalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _style(self)
+
+    def clean(self):
+        cleaned = super().clean()
+        pickup = cleaned.get('pickup_date')
+        return_d = cleaned.get('return_date')
+        if pickup and return_d and return_d <= pickup:
+            self.add_error('return_date', 'Data de retorno deve ser posterior à data de retirada.')
+        dp_amount = cleaned.get('down_payment_amount')
+        dp_method = cleaned.get('down_payment_method')
+        dp_date = cleaned.get('down_payment_date')
+        if dp_amount and dp_amount > 0:
+            if not dp_method:
+                self.add_error('down_payment_method', 'Informe a forma de recebimento da entrada.')
+            if not dp_date:
+                self.add_error('down_payment_date', 'Informe a data da entrada.')
+        return cleaned
 
 
 class RentalItemForm(forms.ModelForm):
@@ -134,3 +181,16 @@ RentalItemFormSet = forms.inlineformset_factory(
     extra=3,
     can_delete=True,
 )
+
+
+class RentalCancelForm(forms.Form):
+    reason = forms.CharField(
+        label='Motivo do cancelamento',
+        widget=forms.Textarea(attrs={'rows': 3}),
+        min_length=5,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = INPUT_CLASS

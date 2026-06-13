@@ -3,26 +3,98 @@
 {% block title %}Registrar devolução · Locação #{{ rental.number }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-lg">
-  <div class="panel">
+<div class="mx-auto max-w-2xl space-y-6">
+
+  <div>
     <h1 class="page-title">Registrar devolução</h1>
     <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
-    <p class="mt-1 text-xs text-slate-600">Retorno previsto: {{ rental.return_date|date:'d/m/Y' }}. Dias de atraso e multa são calculados automaticamente.</p>
+    <p class="mt-1 text-xs text-app-muted">Retorno previsto: {{ rental.return_date|date:'d/m/Y' }}. Dias de atraso e multa são calculados automaticamente.</p>
+  </div>
 
-    <form method="post" class="mt-6 space-y-4">
+  {# Financial balance (R10.05) #}
+  {% if open_receivables %}
+    <div class="panel-spacious space-y-3">
+      <h2 class="section-title">Saldo financeiro desta locação</h2>
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Pago</th>
+              <th class="text-right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in open_receivables %}
+              <tr>
+                <td>{{ rec.due_date|date:'d/m/Y' }}</td>
+                <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ rec.paid_amount|floatformat:2 }}</td>
+                <td class="text-right font-medium text-red-600">R$ {{ rec.balance|floatformat:2 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="font-semibold">
+              <td colspan="3" class="text-right">Total em aberto:</td>
+              <td class="text-right text-red-600">R$ {{ total_open_balance|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="panel-spacious">
+      <p class="text-sm text-green-600 font-medium">Locação sem saldo em aberto.</p>
+    </div>
+  {% endif %}
+
+  {# Return form #}
+  <div class="panel-spacious">
+    <form method="post" class="space-y-4">
       {% csrf_token %}
-      {% for field in form %}
-        <div class="field-group">
-          <label class="field-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      {# Return date #}
+      <div class="field-group">
+        <label class="field-label">{{ form.return_date.label }}</label>
+        {{ form.return_date }}
+        {% if form.return_date.errors %}<p class="field-error">{{ form.return_date.errors|striptags }}</p>{% endif %}
+      </div>
+
+      {# Optional payment section (R10.05) #}
+      {% if open_receivables %}
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <h3 class="text-sm font-semibold text-app-ink">Registrar pagamento agora <span class="text-app-muted font-normal">(opcional)</span></h3>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div class="field-group">
+              <label class="field-label">{{ form.payment_amount.label }}</label>
+              {{ form.payment_amount }}
+              {% if form.payment_amount.errors %}<p class="field-error">{{ form.payment_amount.errors|striptags }}</p>{% endif %}
+            </div>
+            <div class="field-group">
+              <label class="field-label">{{ form.payment_method.label }}</label>
+              {{ form.payment_method }}
+              {% if form.payment_method.errors %}<p class="field-error">{{ form.payment_method.errors|striptags }}</p>{% endif %}
+            </div>
+            <div class="field-group">
+              <label class="field-label">{{ form.payment_date.label }}</label>
+              {{ form.payment_date }}
+              {% if form.payment_date.errors %}<p class="field-error">{{ form.payment_date.errors|striptags }}</p>{% endif %}
+            </div>
+          </div>
         </div>
-      {% endfor %}
+      {% endif %}
+
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Registrar</button>
+        <button type="submit" class="btn btn-primary">Registrar devolução</button>
         <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Cancelar</a>
       </div>
     </form>
   </div>
+
 </div>
 {% endblock %}

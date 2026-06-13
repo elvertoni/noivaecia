@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Contas a Receber por Vencimento · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header print:hidden">
+    <div>
+      <h1 class="page-title">Contas a Receber por Vencimento</h1>
+      <p class="page-description">Títulos em aberto ordenados por vencimento. Equivalente ao receber.rpt.</p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer }}&overdue={{ overdue }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
+      <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+  {% include 'reports/_print_header.html' %}
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 md:grid-cols-4 print:hidden">
+    <div class="field-group">
+      <label class="field-label">Vencimento de</label>
+      <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Vencimento até</label>
+      <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Cliente</label>
+      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome">
+    </div>
+    <div class="field-group flex items-end">
+      <label class="flex items-center gap-2 text-sm text-app-ink cursor-pointer">
+        <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} class="rounded border-slate-300">
+        Apenas vencidos
+      </label>
+    </div>
+    <div class="flex items-end gap-2 md:col-span-4 print:hidden">
+      <button type="submit" class="btn btn-secondary">Filtrar</button>
+      <a href="{% url 'reports:contas_vencimento' %}" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
+
+  {% if totals.t_balance %}
+  <div class="grid grid-cols-3 gap-4 print:grid print:grid-cols-3">
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total em aberto</p>
+      <p class="stat-value text-brand-700">R$ {{ totals.t_balance|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total cobrado</p>
+      <p class="stat-value">R$ {{ totals.t_amount|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total pago</p>
+      <p class="stat-value text-green-600">R$ {{ totals.t_paid|floatformat:2 }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Vencimento</th>
+          <th>Locação</th>
+          <th>Cliente</th>
+          <th class="text-right">Valor</th>
+          <th class="text-right">Pago</th>
+          <th class="text-right">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in receivables %}
+          <tr>
+            <td class="{% if rec.due_date < today %}text-red-600 font-medium{% endif %}">
+              {{ rec.due_date|date:'d/m/Y'|default:'—' }}
+              {% if rec.due_date < today %}<span class="badge badge-danger ml-1 text-xs">vencido</span>{% endif %}
+            </td>
+            <td><a href="{% url 'rentals:detail' rec.rental.pk %}" class="text-link">#{{ rec.rental.number }}</a></td>
+            <td>{{ rec.rental.customer.name }}</td>
+            <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ rec.paid_amount|floatformat:2 }}</td>
+            <td class="text-right font-medium text-red-600">R$ {{ rec.balance|floatformat:2 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="table-empty">Nenhum título em aberto encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

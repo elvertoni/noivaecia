@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Financeiro · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Financeiro</h1>
+      <p class="page-description">Resumo financeiro em {{ today|date:'d/m/Y' }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'billing:receivables' %}" class="btn btn-secondary">Títulos</a>
+      <a href="{% url 'billing:customer_receivables_search' %}" class="btn btn-primary">Receber por cliente</a>
+    </div>
+  </div>
+
+  <!-- KPI grid -->
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Em aberto</p>
+      <p class="stat-value text-brand-700">R$ {{ open_balance|floatformat:2 }}</p>
+      <p class="text-xs text-app-muted mt-1">{{ open_count }} título{{ open_count|pluralize }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Vencidos</p>
+      <p class="stat-value text-red-700">R$ {{ overdue_balance|floatformat:2 }}</p>
+      <p class="text-xs text-app-muted mt-1">{{ overdue_count }} título{{ overdue_count|pluralize }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Vence hoje</p>
+      <p class="stat-value text-amber-700">R$ {{ due_today_balance|floatformat:2 }}</p>
+      <p class="text-xs text-app-muted mt-1">{{ due_today_count }} título{{ due_today_count|pluralize }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Próx. 7 dias</p>
+      <p class="stat-value text-sky-700">R$ {{ due_week_balance|floatformat:2 }}</p>
+      <p class="text-xs text-app-muted mt-1">{{ due_week_count }} título{{ due_week_count|pluralize }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Recebido hoje</p>
+      <p class="stat-value text-emerald-700">R$ {{ received_today|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Recebido no mês</p>
+      <p class="stat-value text-emerald-700">R$ {{ received_month|floatformat:2 }}</p>
+    </div>
+
+  </div>
+
+  <!-- Quick links -->
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <a href="{% url 'billing:receivables' %}?status=open" class="module-tile">
+      <span class="module-tile-label">Títulos em aberto</span>
+    </a>
+    <a href="{% url 'billing:receivables' %}?overdue=1" class="module-tile">
+      <span class="module-tile-label">Vencidos</span>
+    </a>
+    <a href="{% url 'billing:receivables' %}?date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}&status=open" class="module-tile">
+      <span class="module-tile-label">Vencem hoje</span>
+    </a>
+    <a href="{% url 'billing:customer_receivables_search' %}" class="module-tile">
+      <span class="module-tile-label">Receber por cliente</span>
+    </a>
+    <a href="{% url 'billing:cash_movements' %}" class="module-tile">
+      <span class="module-tile-label">Caixa</span>
+    </a>
+    <a href="{% url 'billing:new_movement' %}" class="module-tile">
+      <span class="module-tile-label">Lançamento manual</span>
+    </a>
+    <a href="{% url 'billing:cash_report' %}" class="module-tile">
+      <span class="module-tile-label">Relatório de caixa</span>
+    </a>
+    <a href="{% url 'billing:reconciliation' %}" class="module-tile">
+      <span class="module-tile-label">Reconciliação</span>
+    </a>
+  </div>
+
+  <!-- Recent movements -->
+  {% if recent_movements %}
+  <div>
+    <h2 class="section-title mb-3">Movimentos recentes</h2>
+    <div class="table-shell">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Conta</th>
+            <th>Histórico</th>
+            <th>Cliente</th>
+            <th>Direção</th>
+            <th class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mv in recent_movements %}
+          <tr>
+            <td>{{ mv.date|date:'d/m/Y' }}</td>
+            <td>{{ mv.account.name }}</td>
+            <td class="max-w-xs truncate">{{ mv.description|default:'—' }}</td>
+            <td>{{ mv.customer.name|default:'—' }}</td>
+            <td>
+              {% if mv.direction == 'inflow' %}
+                <span class="badge badge-success">Entrada</span>
+              {% else %}
+                <span class="badge badge-danger">Saída</span>
+              {% endif %}
+            </td>
+            <td class="text-right font-medium">R$ {{ mv.amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

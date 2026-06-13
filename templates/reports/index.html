@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="page-title">Relatórios</h1>
+    <p class="page-description">Selecione o relatório desejado.</p>
+  </div>
+  <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+    <a href="{% url 'reports:a_retirar' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Produtos a Retirar</h2>
+      <p class="text-sm text-app-muted">Locações pendentes de retirada. Equivalente ao locados.rpt.</p>
+    </a>
+
+    <a href="{% url 'reports:retirados' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Produtos Retirados</h2>
+      <p class="text-sm text-app-muted">Locações com retirada registrada. Equivalente ao locados12.rpt.</p>
+    </a>
+
+    <a href="{% url 'reports:devolvidos' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Devolvidos</h2>
+      <p class="text-sm text-app-muted">Locações com devolução efetiva registrada.</p>
+    </a>
+
+    <a href="{% url 'reports:atrasados' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Atrasados / Não Devolvidos</h2>
+      <p class="text-sm text-app-muted">Produtos retirados com retorno vencido e dias de atraso.</p>
+    </a>
+
+    <a href="{% url 'reports:locacoes' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Locações Realizadas</h2>
+      <p class="text-sm text-app-muted">Histórico de locações por período e status. Equivalente ao vendas.rpt.</p>
+    </a>
+
+    <a href="{% url 'reports:contas_vencimento' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Contas a Receber por Vencimento</h2>
+      <p class="text-sm text-app-muted">Títulos em aberto ordenados por vencimento. Equivalente ao receber.rpt.</p>
+    </a>
+
+    <a href="{% url 'reports:contas_cliente' %}" class="panel-spacious hover:shadow-md transition-shadow block">
+      <h2 class="section-title mb-1">Contas a Receber por Cliente</h2>
+      <p class="text-sm text-app-muted">Títulos agrupados por cliente. Equivalente ao receberc.rpt.</p>
+    </a>
+
+  </div>
+</div>
+{% endblock %}

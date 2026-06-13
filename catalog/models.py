@@ -9,6 +9,11 @@ class Category(TimeStampedModel):
 
     prefix = models.CharField('prefixo', max_length=10, unique=True)
     name = models.CharField('nome', max_length=100)
+    # R3.01 / R3.02
+    legacy_id = models.PositiveIntegerField('ID legado', null=True, blank=True, db_index=True)
+    legacy_source = models.CharField('origem legada', max_length=50, blank=True)
+    legacy_notes = models.TextField('notas de importação', blank=True)
+    is_placeholder = models.BooleanField('é placeholder', default=False, db_index=True)
 
     class Meta:
         verbose_name = 'categoria'
@@ -37,6 +42,11 @@ class Product(TimeStampedModel):
     size = models.CharField('tamanho', max_length=50, blank=True)
     value = models.DecimalField('valor', max_digits=10, decimal_places=2, default=0)
     notes = models.TextField('observações', blank=True)
+    # R3.01 / R3.02
+    legacy_id = models.PositiveIntegerField('ID legado', null=True, blank=True, db_index=True)
+    legacy_source = models.CharField('origem legada', max_length=50, blank=True)
+    legacy_notes = models.TextField('notas de importação', blank=True)
+    is_placeholder = models.BooleanField('é placeholder', default=False, db_index=True)
 
     class Meta:
         verbose_name = 'produto'

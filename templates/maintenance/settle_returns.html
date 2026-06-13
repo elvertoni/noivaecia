@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Acerto de Devoluções · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Acerto de Devoluções</h1>
+      <p class="page-description">Inconsistências em registros de retirada e devolução.</p>
+    </div>
+    <div>
+      {% if total_issues == 0 %}
+        <span class="badge badge-success">Sem inconsistências</span>
+      {% else %}
+        <span class="badge badge-danger">{{ total_issues }} inconsistência{{ total_issues|pluralize }}</span>
+      {% endif %}
+    </div>
+    <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Voltar</a>
+  </div>
+
+  {# 1 — Returned without Return record #}
+  <div>
+    <h2 class="section-title mb-3">
+      Locações "Devolvida" sem registro de devolução
+      <span class="badge {% if returned_no_record %}badge-danger{% else %}badge-success{% endif %} ml-2">{{ returned_no_record|length }}</span>
+    </h2>
+    {% if returned_no_record %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead><tr><th>Locação</th><th>Cliente</th><th>Retorno previsto</th></tr></thead>
+          <tbody>
+            {% for rental in returned_no_record %}
+              <tr>
+                <td><a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a></td>
+                <td>{{ rental.customer.name }}</td>
+                <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Nenhuma inconsistência.</p>
+    {% endif %}
+  </div>
+
+  {# 2 — Return record but wrong status #}
+  <div>
+    <h2 class="section-title mb-3">
+      Registros de devolução com status incorreto
+      <span class="badge {% if return_wrong_status %}badge-danger{% else %}badge-success{% endif %} ml-2">{{ return_wrong_status|length }}</span>
+    </h2>
+    {% if return_wrong_status %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead><tr><th>Locação</th><th>Cliente</th><th>Status atual</th><th>Data devolução</th></tr></thead>
+          <tbody>
+            {% for ret in return_wrong_status %}
+              <tr>
+                <td><a href="{% url 'rentals:detail' ret.rental.pk %}" class="text-link">#{{ ret.rental.number }}</a></td>
+                <td>{{ ret.rental.customer.name }}</td>
+                <td><span class="badge badge-warning">{{ ret.rental.get_status_display }}</span></td>
+                <td>{{ ret.return_date|date:'d/m/Y' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Nenhuma inconsistência.</p>
+    {% endif %}
+  </div>
+
+  {# 3 — Picked up/returned without Pickup record #}
+  <div>
+    <h2 class="section-title mb-3">
+      Locações retiradas/devolvidas sem registro de retirada
+      <span class="badge {% if picked_no_pickup %}badge-danger{% else %}badge-success{% endif %} ml-2">{{ picked_no_pickup|length }}</span>
+    </h2>
+    {% if picked_no_pickup %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead><tr><th>Locação</th><th>Cliente</th><th>Status</th><th>Retirada prevista</th></tr></thead>
+          <tbody>
+            {% for rental in picked_no_pickup %}
+              <tr>
+                <td><a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a></td>
+                <td>{{ rental.customer.name }}</td>
+                <td><span class="badge badge-warning">{{ rental.get_status_display }}</span></td>
+                <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Nenhuma inconsistência.</p>
+    {% endif %}
+  </div>
+
+  {# 4 — Impossible dates #}
+  <div>
+    <h2 class="section-title mb-3">
+      Devoluções com data anterior à retirada
+      <span class="badge {% if impossible_dates %}badge-danger{% else %}badge-success{% endif %} ml-2">{{ impossible_dates|length }}</span>
+    </h2>
+    {% if impossible_dates %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead><tr><th>Locação</th><th>Cliente</th><th>Retirada</th><th>Devolução</th></tr></thead>
+          <tbody>
+            {% for ret in impossible_dates %}
+              <tr>
+                <td><a href="{% url 'rentals:detail' ret.rental.pk %}" class="text-link">#{{ ret.rental.number }}</a></td>
+                <td>{{ ret.rental.customer.name }}</td>
+                <td>{{ ret.rental.pickup.pickup_date|date:'d/m/Y' }}</td>
+                <td class="text-red-600">{{ ret.return_date|date:'d/m/Y' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Nenhuma inconsistência.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

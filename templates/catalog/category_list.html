@@ -9,10 +9,28 @@
       <h1 class="page-title">Categorias</h1>
       <p class="page-description">Prefixos e nomes das categorias do acervo.</p>
     </div>
-    <a href="{% url 'catalog:category_create' %}" class="btn btn-primary">
-      Nova categoria
-    </a>
+    <div class="flex gap-2">
+      <a href="{% url 'catalog:category_merge' %}" class="btn btn-secondary">Mesclar</a>
+      <a href="{% url 'catalog:category_create' %}" class="btn btn-primary">Nova categoria</a>
+    </div>
   </div>
+
+  <!-- Filters -->
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div class="field-group flex-1 min-w-[160px]">
+      <label class="field-label">Busca</label>
+      <input type="text" name="q" value="{{ q }}" class="field-input" placeholder="Prefixo ou nome">
+    </div>
+    <div class="field-group flex items-end">
+      <label class="inline-flex items-center gap-2 text-sm text-app-muted">
+        <input type="checkbox" name="placeholder" value="1" {% if only_placeholders %}checked{% endif %} class="rounded border-slate-300">
+        Apenas placeholders
+        {% if placeholder_count %}<span class="badge badge-warning">{{ placeholder_count }}</span>{% endif %}
+      </label>
+    </div>
+    <button type="submit" class="btn btn-secondary">Filtrar</button>
+    <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Limpar</a>
+  </form>
 
   <div class="table-shell">
     <table class="data-table">
@@ -20,24 +38,45 @@
         <tr>
           <th>Prefixo</th>
           <th>Nome</th>
+          <th class="text-right">Produtos</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for category in categories %}
           <tr>
-            <td class="font-medium text-app-ink">{{ category.prefix }}</td>
+            <td class="font-medium text-app-ink">
+              {{ category.prefix }}
+              {% if category.is_placeholder %}
+                <span class="badge badge-warning ml-1">placeholder</span>
+              {% endif %}
+            </td>
             <td>{{ category.name }}</td>
-            <td class="text-right">
+            <td class="text-right">{{ category.product_count }}</td>
+            <td class="text-right whitespace-nowrap">
               <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>
               <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="3" class="table-empty">Nenhuma categoria cadastrada.</td></tr>
+          <tr><td colspan="4" class="table-empty">Nenhuma categoria cadastrada. <a href="{% url 'catalog:category_create' %}" class="text-link">Nova categoria</a></td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% if is_paginated %}
+    <div class="pagination">
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?q={{ q }}{% if only_placeholders %}&placeholder=1{% endif %}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?q={{ q }}{% if only_placeholders %}&placeholder=1{% endif %}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

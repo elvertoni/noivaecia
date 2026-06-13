@@ -13,7 +13,7 @@ from .forms import (
     EmailPasswordResetForm,
     StyledSetPasswordForm,
 )
-from .views import SignupView, UserListView, UserPermissionsView
+from .views import SignupView, UserActionPermissionsView, UserListView, UserPermissionsView
 
 urlpatterns = [
     path('users/new/', SignupView.as_view(), name='user_create'),
@@ -62,4 +62,5 @@ urlpatterns = [
     ),
     path('users/', UserListView.as_view(), name='user_list'),
     path('users/<int:pk>/permissions/', UserPermissionsView.as_view(), name='user_permissions'),
+    path('users/<int:pk>/action-permissions/', UserActionPermissionsView.as_view(), name='user_action_permissions'),
 ]

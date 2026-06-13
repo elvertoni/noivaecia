@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Reconciliação Financeira · Manutenção · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Reconciliação Financeira</h1>
+      <p class="page-description">Comparação entre recebíveis, pagamentos, saldos e movimentos de caixa.</p>
+    </div>
+    <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Voltar</a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-info{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if total_divergences is not None %}
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+      {% if total_divergences is not None %}
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Total de divergências</p>
+          <p class="stat-value {% if total_divergences > 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ total_divergences }}</p>
+        </div>
+      {% endif %}
+      {% if total_receivables is not None %}
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Recebíveis</p>
+          <p class="stat-value">{{ total_receivables }}</p>
+        </div>
+      {% endif %}
+      {% if total_payments is not None %}
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Pagamentos</p>
+          <p class="stat-value">{{ total_payments }}</p>
+        </div>
+      {% endif %}
+      {% if total_movements is not None %}
+        <div class="panel-spacious text-center">
+          <p class="stat-label">Movimentos</p>
+          <p class="stat-value">{{ total_movements }}</p>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if divergences %}
+    <div class="table-shell">
+      <h2 class="section-title p-4">Divergências encontradas</h2>
+      <table class="data-table">
+        <thead><tr><th>Tipo</th><th>Referência</th><th>Detalhe</th></tr></thead>
+        <tbody>
+          {% for d in divergences %}
+            <tr>
+              <td>{{ d.type|default:'—' }}</td>
+              <td>{{ d.reference|default:'—' }}</td>
+              <td>{{ d.detail|default:'—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

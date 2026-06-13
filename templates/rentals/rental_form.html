@@ -1,11 +1,16 @@
 {% extends 'base.html' %}
 
-{% block title %}Nova locação · Noivas &amp; Cia{% endblock %}
+{% block title %}{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %} · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-4xl">
+<div class="mx-auto max-w-5xl">
   <div class="panel">
-    <h1 class="page-title">Nova locação</h1>
+    <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
+    {% if has_payments %}
+      <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Esta locação possui pagamentos registrados. Apenas observações podem ser editadas.
+      </div>
+    {% endif %}
 
     <form method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
@@ -13,16 +18,56 @@
         <div class="alert alert-error">{{ form.non_field_errors }}</div>
       {% endif %}
 
+      <!-- Customer search (R7.02) -->
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {% for field in form %}
-          <div class="field-group {% if field.name == 'notes' %}md:col-span-2{% endif %}">
-            <label class="field-label">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        <div class="field-group md:col-span-2">
+          <label class="field-label">Cliente</label>
+          <!-- Hidden select for form submission -->
+          <div class="relative">
+            {{ form.customer }}
           </div>
-        {% endfor %}
+          <div class="mt-1 flex gap-2">
+            <input type="text" id="customer-search-input"
+                   class="field-input flex-1"
+                   placeholder="Digite para buscar cliente por nome, CPF ou telefone…"
+                   autocomplete="off">
+          </div>
+          <div id="customer-search-results" class="hidden absolute z-20 mt-1 max-h-60 w-full max-w-lg overflow-auto rounded-lg border border-app-border bg-white shadow-lg"></div>
+          {% if form.customer.errors %}<p class="field-error">{{ form.customer.errors|striptags }}</p>{% endif %}
+        </div>
+
+        <!-- use_for -->
+        <div class="field-group">
+          <label class="field-label">{{ form.use_for.label }}</label>
+          {{ form.use_for }}
+          {% if form.use_for.errors %}<p class="field-error">{{ form.use_for.errors|striptags }}</p>{% endif %}
+        </div>
+
+        <!-- Dates -->
+        <div class="field-group">
+          <label class="field-label">{{ form.pickup_date.label }}</label>
+          {{ form.pickup_date }}
+          {% if form.pickup_date.errors %}<p class="field-error">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label">{{ form.return_date.label }}</label>
+          {{ form.return_date }}
+          {% if form.return_date.errors %}<p class="field-error">{{ form.return_date.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group">
+          <label class="field-label">{{ form.penalty_value.label }}</label>
+          {{ form.penalty_value }}
+          {% if form.penalty_value.errors %}<p class="field-error">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="field-group md:col-span-2">
+          <label class="field-label">{{ form.notes.label }}</label>
+          {{ form.notes }}
+          {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
+        </div>
       </div>
 
+      <!-- Items -->
+      {% if not has_payments %}
       <div>
         <div class="flex items-center justify-between">
           <h2 class="section-title">Itens</h2>
@@ -39,8 +84,19 @@
             <div class="item-form rounded-xl border border-slate-200 p-4">
               {{ item_form.id }}
               <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <!-- Product field with search widget (R7.03/R7.04) -->
+                <div class="field-group md:col-span-2">
+                  <label class="field-label">Produto</label>
+                  {{ item_form.product }}
+                  <input type="text" class="product-search-input field-input mt-1"
+                         placeholder="Buscar produto por código ou descrição…"
+                         autocomplete="off" data-field-id="{{ item_form.product.id_for_label }}">
+                  <div class="product-search-results hidden absolute z-20 mt-1 max-h-52 w-full max-w-sm overflow-auto rounded-lg border border-app-border bg-white shadow-lg text-sm"></div>
+                  <span class="availability-badge hidden text-xs mt-1"></span>
+                  {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                </div>
                 {% for field in item_form.visible_fields %}
-                  {% if field.name != 'DELETE' %}
+                  {% if field.name != 'DELETE' and field.name != 'product' %}
                     <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
                       <label class="field-label">{{ field.label }}</label>
                       {{ field }}
@@ -57,20 +113,79 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
+
+      {% if not form.instance.pk %}
+      <!-- Installments (R7.05) -->
+      <div class="rounded-xl border border-slate-200 p-4 space-y-4">
+        <h2 class="section-title">Parcelas</h2>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="field-group">
+            <label class="field-label">{{ form.installment_count.label }}</label>
+            {{ form.installment_count }}
+            {% if form.installment_count.help_text %}<p class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
+            {% if form.installment_count.errors %}<p class="field-error">{{ form.installment_count.errors|striptags }}</p>{% endif %}
+          </div>
+          <div class="field-group">
+            <label class="field-label">{{ form.first_due_date.label }}</label>
+            {{ form.first_due_date }}
+            {% if form.first_due_date.help_text %}<p class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
+            {% if form.first_due_date.errors %}<p class="field-error">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Down payment (R7.06) -->
+      <div class="rounded-xl border border-slate-200 p-4 space-y-4">
+        <h2 class="section-title">Pagamento de entrada <span class="text-sm font-normal text-app-muted">(opcional)</span></h2>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div class="field-group">
+            <label class="field-label">{{ form.down_payment_amount.label }}</label>
+            {{ form.down_payment_amount }}
+            {% if form.down_payment_amount.errors %}<p class="field-error">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
+          </div>
+          <div class="field-group">
+            <label class="field-label">{{ form.down_payment_method.label }}</label>
+            {{ form.down_payment_method }}
+            {% if form.down_payment_method.errors %}<p class="field-error">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
+          </div>
+          <div class="field-group">
+            <label class="field-label">{{ form.down_payment_date.label }}</label>
+            {{ form.down_payment_date }}
+            {% if form.down_payment_date.errors %}<p class="field-error">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Salvar</button>
-        <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+        {% if form.instance.pk %}
+          <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
+        {% else %}
+          <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+        {% endif %}
       </div>
     </form>
   </div>
 </div>
 
+{% if not has_payments %}
 <template id="empty-form">
   <div class="item-form rounded-xl border border-slate-200 p-4">
     <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <!-- product placeholder, injected by JS -->
+      <div class="field-group md:col-span-2">
+        <label class="field-label">Produto</label>
+        {% with f=items.empty_form %}{{ f.product }}{% endwith %}
+        <input type="text" class="product-search-input field-input mt-1"
+               placeholder="Buscar produto por código ou descrição…"
+               autocomplete="off">
+        <div class="product-search-results hidden absolute z-20 mt-1 max-h-52 w-full max-w-sm overflow-auto rounded-lg border border-app-border bg-white shadow-lg text-sm"></div>
+        <span class="availability-badge hidden text-xs mt-1"></span>
+      </div>
       {% for field in items.empty_form.visible_fields %}
-        {% if field.name != 'DELETE' %}
+        {% if field.name != 'DELETE' and field.name != 'product' %}
           <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
             <label class="field-label">{{ field.label }}</label>
             {{ field }}
@@ -84,17 +199,135 @@
     </label>
   </div>
 </template>
+{% endif %}
 
 <script>
-  (function () {
-    const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
-    const container = document.getElementById('item-forms');
-    const tpl = document.getElementById('empty-form').innerHTML;
+(function () {
+  // ── Item formset clone ────────────────────────────────────────────────────
+  const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
+  const container = document.getElementById('item-forms');
+  const tpl = document.getElementById('empty-form');
+  if (tpl && totalForms && container) {
     document.getElementById('add-item').addEventListener('click', function () {
       const index = parseInt(totalForms.value, 10);
-      container.insertAdjacentHTML('beforeend', tpl.replace(/__prefix__/g, index));
+      const html = tpl.innerHTML.replace(/__prefix__/g, index);
+      container.insertAdjacentHTML('beforeend', html);
       totalForms.value = index + 1;
+      attachProductSearch(container.lastElementChild);
     });
-  })();
+  }
+
+  // ── Customer search (R7.02) ───────────────────────────────────────────────
+  const custInput = document.getElementById('customer-search-input');
+  const custSelect = document.getElementById('id_customer');
+  const custResults = document.getElementById('customer-search-results');
+
+  if (custInput && custSelect) {
+    let custTimer;
+    custInput.addEventListener('input', function () {
+      clearTimeout(custTimer);
+      const q = this.value.trim();
+      if (q.length < 2) { custResults.classList.add('hidden'); return; }
+      custTimer = setTimeout(() => {
+        fetch(`{% url 'customers:search' %}?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(data => {
+            custResults.innerHTML = '';
+            if (!data.results.length) { custResults.classList.add('hidden'); return; }
+            data.results.forEach(c => {
+              const div = document.createElement('div');
+              div.className = 'cursor-pointer px-4 py-2 hover:bg-slate-100';
+              div.innerHTML = `<span class="font-medium">${c.text}</span> <span class="text-app-muted text-xs">${c.sub}</span>`;
+              div.addEventListener('click', () => {
+                custSelect.value = c.id;
+                custInput.value = c.text;
+                custResults.classList.add('hidden');
+              });
+              custResults.appendChild(div);
+            });
+            custResults.classList.remove('hidden');
+          });
+      }, 250);
+    });
+    document.addEventListener('click', e => {
+      if (!custResults.contains(e.target) && e.target !== custInput) {
+        custResults.classList.add('hidden');
+      }
+    });
+    // Pre-fill input label from existing selection
+    const selectedOpt = custSelect.options[custSelect.selectedIndex];
+    if (selectedOpt && selectedOpt.value) custInput.value = selectedOpt.text;
+  }
+
+  // ── Product search (R7.03/R7.04) ─────────────────────────────────────────
+  function attachProductSearch(row) {
+    const searchInput = row.querySelector('.product-search-input');
+    const resultsDiv = row.querySelector('.product-search-results');
+    const availBadge = row.querySelector('.availability-badge');
+    const productSelect = row.querySelector('select[name$="-product"]');
+    const pickupDateInput = document.getElementById('id_pickup_date');
+
+    if (!searchInput || !productSelect) return;
+
+    let timer;
+    searchInput.addEventListener('input', function () {
+      clearTimeout(timer);
+      const q = this.value.trim();
+      if (q.length < 1) { resultsDiv.classList.add('hidden'); return; }
+      timer = setTimeout(() => {
+        fetch(`{% url 'catalog:product_search' %}?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(data => {
+            resultsDiv.innerHTML = '';
+            if (!data.results.length) { resultsDiv.classList.add('hidden'); return; }
+            data.results.forEach(p => {
+              const div = document.createElement('div');
+              div.className = 'cursor-pointer px-4 py-2 hover:bg-slate-100';
+              div.innerHTML = `<span class="font-medium">${p.code}</span> ${p.text} <span class="text-app-muted text-xs">${p.sub} · R$ ${p.value}</span>`;
+              div.addEventListener('click', () => {
+                productSelect.value = p.id;
+                searchInput.value = `${p.code} · ${p.text}`;
+                resultsDiv.classList.add('hidden');
+                checkAvailability(p.id, productSelect, availBadge, pickupDateInput);
+                // Suggest price into value field
+                const valueInput = row.querySelector('input[name$="-value"]');
+                if (valueInput && !valueInput.value) valueInput.value = p.value;
+              });
+              resultsDiv.appendChild(div);
+            });
+            resultsDiv.classList.remove('hidden');
+          });
+      }, 250);
+    });
+    document.addEventListener('click', e => {
+      if (!resultsDiv.contains(e.target) && e.target !== searchInput) {
+        resultsDiv.classList.add('hidden');
+      }
+    });
+    // Pre-fill from existing selection
+    const sel = productSelect.options[productSelect.selectedIndex];
+    if (sel && sel.value) searchInput.value = sel.text;
+  }
+
+  function checkAvailability(productId, productSelect, badge, pickupDateInput) {
+    const d = pickupDateInput ? pickupDateInput.value : '';
+    if (!productId || !d) return;
+    fetch(`{% url 'catalog:availability_json' %}?product_id=${productId}&date=${d}`)
+      .then(r => r.json())
+      .then(data => {
+        badge.classList.remove('hidden', 'text-emerald-700', 'text-red-700');
+        if (data.available) {
+          badge.textContent = '✓ Disponível';
+          badge.classList.add('text-emerald-700');
+        } else {
+          badge.textContent = `✗ Em uso — Loc. #${data.rental_number} (${data.customer}) até ${data.return_date}`;
+          badge.classList.add('text-red-700');
+        }
+      });
+  }
+
+  // Attach to existing item rows
+  document.querySelectorAll('.item-form').forEach(attachProductSearch);
+})();
 </script>
 {% endblock %}

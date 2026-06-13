@@ -75,6 +75,17 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
             module_key=module_key, allowed=True
         ).exists()
 
+    def has_action(self, action_key):
+        """Return whether this user may perform a fine-grained action (R3.11).
+
+        Superusers always pass; other users need an allowed ActionPermission.
+        """
+        if self.is_superuser:
+            return True
+        return self.action_permissions.filter(
+            action_key=action_key, allowed=True
+        ).exists()
+
     def can_manage_users(self):
         """Return whether this user can create users and change module access."""
         if self.is_superuser:
@@ -102,3 +113,28 @@ class ModulePermission(TimeStampedModel):
 
     def __str__(self):
         return f'{self.user} · {self.module_key} · {self.allowed}'
+
+
+class ActionPermission(TimeStampedModel):
+    """Fine-grained action permission beyond module-level access (R3.11).
+
+    Action keys follow the pattern ``<module>.<action>``, e.g.
+    ``customers.delete``, ``billing.receive``, ``rentals.cancel``.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='action_permissions',
+        verbose_name='usuário',
+    )
+    action_key = models.CharField('ação', max_length=100)
+    allowed = models.BooleanField('liberado', default=False)
+
+    class Meta:
+        verbose_name = 'permissão de ação'
+        verbose_name_plural = 'permissões de ação'
+        unique_together = ('user', 'action_key')
+
+    def __str__(self):
+        return f'{self.user} · {self.action_key} · {self.allowed}'

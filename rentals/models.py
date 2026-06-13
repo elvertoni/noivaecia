@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.db.models import Sum
 from django.urls import reverse
@@ -12,6 +13,7 @@ class Rental(TimeStampedModel):
         PENDING = 'pending', 'Pendente'
         PICKED_UP = 'picked_up', 'Retirado'
         RETURNED = 'returned', 'Devolvido'
+        CANCELLED = 'cancelled', 'Cancelado'
 
     number = models.PositiveIntegerField('número', unique=True)
     customer = models.ForeignKey(
@@ -20,14 +22,32 @@ class Rental(TimeStampedModel):
         related_name='rentals',
         verbose_name='cliente',
     )
-    pickup_date = models.DateField('data de retirada')
-    return_date = models.DateField('data de retorno')
+    pickup_date = models.DateField('data de retirada', db_index=True)
+    return_date = models.DateField('data de retorno', db_index=True)
     total_value = models.DecimalField('valor total', max_digits=10, decimal_places=2, default=0)
     penalty_value = models.DecimalField('multa', max_digits=10, decimal_places=2, default=0)
     notes = models.TextField('observações', blank=True)
     status = models.CharField(
-        'situação', max_length=20, choices=Status.choices, default=Status.PENDING
+        'situação', max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
     )
+    # R3.08 — uso/evento da locação (legado: locado.usar)
+    use_for = models.CharField('usar em', max_length=200, blank=True)
+    # R3.09 — campos de cancelamento
+    cancelled_reason = models.TextField('motivo do cancelamento', blank=True)
+    cancelled_at = models.DateTimeField('cancelado em', null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cancelled_rentals',
+        verbose_name='cancelado por',
+    )
+    # R7.08 — contract audit trail
+    contract_version = models.CharField('versão do contrato', max_length=50, blank=True)
+    contract_printed_at = models.DateTimeField('contrato impresso em', null=True, blank=True)
+    # R3.01 — metadados legados
+    legacy_notes = models.TextField('notas de importação', blank=True)
 
     class Meta:
         verbose_name = 'locação'

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Atrasados · Relatórios · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header print:hidden">
+    <div>
+      <h1 class="page-title">Atrasados / Não Devolvidos</h1>
+      <p class="page-description">Locações retiradas com retorno vencido em {{ today|date:'d/m/Y' }}.</p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <a href="?customer={{ customer }}&prefix={{ prefix }}&code={{ code }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
+      <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+  {% include 'reports/_print_header.html' %}
+  <form method="get" class="panel-spacious grid grid-cols-3 gap-3 print:hidden">
+    <div class="field-group">
+      <label class="field-label">Cliente</label>
+      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Prefixo</label>
+      <input type="text" name="prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Código</label>
+      <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
+    </div>
+    <div class="flex items-end gap-2 print:hidden">
+      <button type="submit" class="btn btn-secondary">Filtrar</button>
+      <a href="{% url 'reports:atrasados' %}" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Locação</th>
+          <th>Cliente</th>
+          <th>Retorno previsto</th>
+          <th class="text-right">Dias de atraso</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in overdue %}
+          <tr>
+            <td class="font-medium"><a href="{% url 'rentals:detail' entry.rental.pk %}" class="text-link">#{{ entry.rental.number }}</a></td>
+            <td>{{ entry.rental.customer.name }}</td>
+            <td class="text-red-600 font-medium">{{ entry.rental.return_date|date:'d/m/Y' }}</td>
+            <td class="text-right"><span class="badge badge-danger">{{ entry.days_late }} dia{{ entry.days_late|pluralize }}</span></td>
+            <td class="text-right">R$ {{ entry.rental.total_value|floatformat:2 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="table-empty">Nenhuma locação em atraso.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

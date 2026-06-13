@@ -1,0 +1,4 @@
+Analise com cuidado todos os detalhes do @PRD_REFATORACAO.md e @TASK.md,  e do código, implementações e padrões já realizados no projeto, e em seguida execute a sprint R14 descrita no arquivo @TASK.md e ao concluir vá marcando x nas tarefas da sprint.
+haja como um especialistar em sistemas legados, tome a melhor decisao sempre. Orquestre multiplos agentes.
+#PRD_REFATORACAO.md
+#TASK.md 

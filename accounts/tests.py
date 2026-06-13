@@ -4,7 +4,7 @@ from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from accounts.models import ModulePermission
+from accounts.models import ActionPermission, ModulePermission
 
 User = get_user_model()
 
@@ -140,3 +140,41 @@ class AuthFlowTests(TestCase):
         admin = User.objects.create_superuser(email='adm@b.com', password='Senha12345')
         self.client.force_login(admin)
         self.assertEqual(self.client.get('/users/').status_code, 200)
+
+
+class ActionPermissionTests(TestCase):
+    """R3.11 — fine-grained action permissions."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='op@b.com', password='Senha12345')
+
+    def test_user_denied_action_by_default(self):
+        self.assertFalse(self.user.has_action('customers.delete'))
+
+    def test_user_granted_action(self):
+        ActionPermission.objects.create(
+            user=self.user, action_key='customers.delete', allowed=True
+        )
+        self.assertTrue(self.user.has_action('customers.delete'))
+
+    def test_superuser_has_all_actions(self):
+        admin = User.objects.create_superuser(email='su@b.com', password='Senha12345')
+        self.assertTrue(admin.has_action('billing.delete_receivable'))
+        self.assertTrue(admin.has_action('rentals.cancel'))
+        self.assertTrue(admin.has_action('cash.add'))
+
+    def test_action_permission_unique_per_user_action(self):
+        ActionPermission.objects.create(
+            user=self.user, action_key='rentals.cancel', allowed=True
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            ActionPermission.objects.create(
+                user=self.user, action_key='rentals.cancel', allowed=False
+            )
+
+    def test_denied_action_permission_blocks(self):
+        ActionPermission.objects.create(
+            user=self.user, action_key='billing.receive', allowed=False
+        )
+        self.assertFalse(self.user.has_action('billing.receive'))

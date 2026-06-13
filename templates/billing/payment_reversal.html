@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Estornar pagamento · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <div class="panel-spacious space-y-5">
+
+    <div>
+      <h1 class="page-title">Estornar pagamento</h1>
+      <p class="page-description">Esta ação é irreversível e gera um movimento de saída no caixa.</p>
+    </div>
+
+    <!-- Payment info -->
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm space-y-1">
+      <p><span class="text-app-muted">Data:</span> <strong>{{ payment.payment_date|date:'d/m/Y' }}</strong></p>
+      <p><span class="text-app-muted">Valor:</span> <strong class="text-app-ink">R$ {{ payment.amount|floatformat:2 }}</strong></p>
+      {% if payment.receivable %}
+        <p><span class="text-app-muted">Título:</span> Locação #{{ payment.receivable.rental.number }}</p>
+      {% endif %}
+      {% if payment.notes %}
+        <p><span class="text-app-muted">Obs.:</span> {{ payment.notes }}</p>
+      {% endif %}
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="field-group">
+          <label class="field-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-danger">Confirmar estorno</button>
+        {% if payment.customer_id %}
+          <a href="{% url 'billing:customer_receivables' payment.customer_id %}" class="btn btn-secondary">Cancelar</a>
+        {% else %}
+          <a href="{% url 'billing:receivables' %}" class="btn btn-secondary">Cancelar</a>
+        {% endif %}
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

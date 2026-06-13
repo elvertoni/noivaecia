@@ -1,0 +1,3 @@
+1 - opção de exibir a visualizacao da senha no login e cadastro (olhinho pro usuario ver se digitou correto)
+2 - limitar a criacao de usuario somente com a permissao da Ana ou ela mesma cria os usuarios, pra nao ter perigo de qualquer pessoa criar uma conta e deletar, estragar as coisas
+3 - implementar opção de upload de foto do cliente com a peça que esta sendo alugada para futura comprovação e evitar contestação futura, foto salva no banco (deixar uma resolução aceitável, nem muito alta para pesar muito, nem muito baixa)

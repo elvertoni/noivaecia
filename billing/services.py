@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from company.models import Company
 
-from .models import Receivable
+from .models import CashAccount, FinancialMovement, Payment, Receivable
 
 
 def days_overdue(receivable, on_date=None):
@@ -69,3 +69,248 @@ def _add_months(start, months):
     month = month_index % 12 + 1
     last_day = monthrange(year, month)[1]
     return date_cls(year, month, min(start.day, last_day))
+
+
+def register_payment(receivable, amount, payment_date, method='cash',
+                     interest_amount=None, discount_amount=None, notes='', user=None):
+    """Create Payment, recalculate receivable balance, create FinancialMovement inflow (R5.06)."""
+    interest_amount = Decimal(str(interest_amount or 0))
+    discount_amount = Decimal(str(discount_amount or 0))
+
+    payment = Payment.objects.create(
+        receivable=receivable,
+        customer=receivable.rental.customer,
+        rental=receivable.rental,
+        payment_date=payment_date,
+        amount=amount,
+        interest_amount=interest_amount,
+        discount_amount=discount_amount,
+        method=method,
+        notes=notes,
+        user=user,
+    )
+    receivable.recalculate_from_payments()
+
+    account = CashAccount.objects.filter(active=True).order_by('id').first()
+    if account:
+        FinancialMovement.objects.create(
+            date=payment_date,
+            account=account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=amount,
+            description=f'Recebimento — Locação #{receivable.rental.number}',
+            source=FinancialMovement.Source.PAYMENT,
+            customer=receivable.rental.customer,
+            receivable=receivable,
+            rental=receivable.rental,
+            created_by=user,
+        )
+    return payment
+
+
+def reverse_payment(payment, reason, user=None):
+    """Create reversal Payment (negative amount) and FinancialMovement outflow (R5.09)."""
+    from datetime import date as date_cls
+    reversal = Payment.objects.create(
+        receivable=payment.receivable,
+        customer=payment.customer,
+        rental=payment.rental,
+        payment_date=date_cls.today(),
+        amount=-payment.amount,
+        notes=f'Estorno: {reason}',
+        user=user,
+        is_reversal=True,
+    )
+    payment.reversed_by = reversal
+    payment.save(update_fields=['reversed_by', 'updated_at'])
+    payment.receivable.recalculate_from_payments()
+
+    account = CashAccount.objects.filter(active=True).order_by('id').first()
+    if account:
+        FinancialMovement.objects.create(
+            date=date_cls.today(),
+            account=account,
+            direction=FinancialMovement.Direction.OUTFLOW,
+            amount=payment.amount,
+            description=f'Estorno pgto #{payment.pk} — Locação #{payment.rental.number if payment.rental else "?"}',
+            source=FinancialMovement.Source.REVERSAL,
+            customer=payment.customer,
+            receivable=payment.receivable,
+            rental=payment.rental,
+            created_by=user,
+        )
+    return reversal
+
+
+def compute_moratoria(receivable, on_date=None):
+    """Late moratoria fee (multa moratória) on the open balance using Company.late_fee_rate (R6.09).
+
+    Applied once when the receivable becomes overdue (not per day).
+    Returns zero if paid or not overdue.
+    """
+    if receivable.is_paid:
+        return Decimal('0.00')
+    on_date = on_date or date_cls.today()
+    if on_date <= receivable.due_date:
+        return Decimal('0.00')
+    rate = Company.load().late_fee_rate or Decimal('0')
+    fee = receivable.balance * (rate / Decimal('100'))
+    return fee.quantize(Decimal('0.01'))
+
+
+def compute_monthly_interest(receivable, on_date=None):
+    """Monthly interest (juros ao mês) using Company.monthly_interest_rate, applied daily (R6.09).
+
+    Uses monthly_rate/30 per day. Falls back to daily_interest_rate if monthly is zero.
+    """
+    days = days_overdue(receivable, on_date)
+    if days == 0:
+        return Decimal('0.00')
+    company = Company.load()
+    monthly_rate = company.monthly_interest_rate or Decimal('0')
+    if monthly_rate:
+        daily = monthly_rate / Decimal('30')
+    else:
+        daily = company.daily_interest_rate or Decimal('0')
+    interest = receivable.balance * (daily / Decimal('100')) * days
+    return interest.quantize(Decimal('0.01'))
+
+
+def compute_damage_penalty(item_value):
+    """Damage penalty: Company.damage_penalty_rate % of item value (R6.09)."""
+    rate = Company.load().damage_penalty_rate or Decimal('0')
+    return (Decimal(str(item_value)) * rate / Decimal('100')).quantize(Decimal('0.01'))
+
+
+def compute_loss_penalty(item_value):
+    """Loss/non-return penalty: Company.loss_penalty_rate % of item value (R6.09)."""
+    rate = Company.load().loss_penalty_rate or Decimal('0')
+    return (Decimal(str(item_value)) * rate / Decimal('100')).quantize(Decimal('0.01'))
+
+
+def reconcile_financial():
+    """Compare receivables, payments, balances and movements. Return dict of aggregates (R6.05)."""
+    from django.db.models import Sum, Q
+    from .models import FinancialMovement, Payment, Receivable
+
+    total_receivable_amount = (
+        Receivable.objects.aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+    total_open_balance = (
+        Receivable.objects.filter(balance__gt=0).aggregate(v=Sum('balance'))['v'] or Decimal('0')
+    )
+    total_payments = (
+        Payment.objects.filter(is_reversal=False).aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+    total_reversals = (
+        Payment.objects.filter(is_reversal=True).aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+    total_inflow = (
+        FinancialMovement.objects.filter(direction=FinancialMovement.Direction.INFLOW)
+        .aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+    total_outflow = (
+        FinancialMovement.objects.filter(direction=FinancialMovement.Direction.OUTFLOW)
+        .aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+
+    # Divergence 1: paid receivables (balance <= 0) with no Payment records
+    # These are legacy-imported receivables forced closed by pago=0 logic
+    paid_no_payments = Receivable.objects.filter(balance__lte=0).exclude(payments__isnull=False)
+    paid_no_payments_count = paid_no_payments.count()
+    paid_no_payments_sum = (
+        paid_no_payments.aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+
+    # Divergence 2: open receivables where paid_amount != sum(payments.amount)
+    inconsistent_balances = []
+    for rec in Receivable.objects.filter(balance__gt=0).select_related('rental').prefetch_related('payments'):
+        payment_sum = rec.payments.aggregate(v=Sum('amount'))['v'] or Decimal('0')
+        if abs(rec.paid_amount - payment_sum) > Decimal('0.01'):
+            inconsistent_balances.append({
+                'id': rec.pk,
+                'rental_number': rec.rental.number if rec.rental_id else None,
+                'due_date': rec.due_date,
+                'amount': rec.amount,
+                'paid_amount_stored': rec.paid_amount,
+                'payment_sum': payment_sum,
+                'diff': rec.paid_amount - payment_sum,
+            })
+
+    # Divergence 3: payments without a corresponding FinancialMovement
+    payments_without_movement_ids = list(
+        Payment.objects.filter(is_reversal=False)
+        .exclude(
+            receivable__in=FinancialMovement.objects.filter(
+                receivable__isnull=False,
+                source__in=[FinancialMovement.Source.PAYMENT],
+            ).values_list('receivable_id', flat=True)
+        )
+        .values_list('pk', flat=True)[:200]
+    )
+
+    return {
+        'total_receivable_amount': total_receivable_amount,
+        'total_open_balance': total_open_balance,
+        'total_payments': total_payments,
+        'total_reversals': abs(total_reversals),
+        'net_payments': total_payments + total_reversals,
+        'total_inflow': total_inflow,
+        'total_outflow': total_outflow,
+        'net_movements': total_inflow - total_outflow,
+        'paid_no_payments_count': paid_no_payments_count,
+        'paid_no_payments_sum': paid_no_payments_sum,
+        'inconsistent_balances': inconsistent_balances[:100],
+        'inconsistent_count': len(inconsistent_balances),
+        'payments_without_movement_count': len(payments_without_movement_ids),
+    }
+
+
+def financial_kpis(today=None):
+    """KPIs for the billing dashboard (R5.02)."""
+    from datetime import date as date_cls, timedelta
+    from django.db.models import Sum
+    from .models import FinancialMovement, Payment, Receivable
+
+    today = today or date_cls.today()
+    week_end = today + timedelta(days=7)
+    month_start = today.replace(day=1)
+
+    open_qs = Receivable.objects.filter(balance__gt=0)
+    overdue_qs = open_qs.filter(due_date__lt=today)
+    due_today_qs = open_qs.filter(due_date=today)
+    due_week_qs = open_qs.filter(due_date__gt=today, due_date__lte=week_end)
+
+    open_balance = open_qs.aggregate(v=Sum('balance'))['v'] or Decimal('0')
+    overdue_balance = overdue_qs.aggregate(v=Sum('balance'))['v'] or Decimal('0')
+    due_today_balance = due_today_qs.aggregate(v=Sum('balance'))['v'] or Decimal('0')
+    due_week_balance = due_week_qs.aggregate(v=Sum('balance'))['v'] or Decimal('0')
+
+    received_today = (
+        Payment.objects.filter(payment_date=today, is_reversal=False)
+        .aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+    received_month = (
+        Payment.objects.filter(payment_date__gte=month_start, is_reversal=False)
+        .aggregate(v=Sum('amount'))['v'] or Decimal('0')
+    )
+
+    recent_movements = (
+        FinancialMovement.objects.select_related('account', 'customer')
+        .order_by('-date', '-created_at')[:10]
+    )
+
+    return {
+        'open_balance': open_balance,
+        'open_count': open_qs.count(),
+        'overdue_balance': overdue_balance,
+        'overdue_count': overdue_qs.count(),
+        'due_today_balance': due_today_balance,
+        'due_today_count': due_today_qs.count(),
+        'due_week_balance': due_week_balance,
+        'due_week_count': due_week_qs.count(),
+        'received_today': received_today,
+        'received_month': received_month,
+        'recent_movements': recent_movements,
+        'today': today,
+    }

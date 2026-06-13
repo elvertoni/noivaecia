@@ -14,6 +14,24 @@
     </a>
   </div>
 
+  <form method="get" class="panel p-4 flex flex-wrap gap-3 items-end">
+    <div class="field-group">
+      <label class="field-label" for="q">Buscar</label>
+      <input type="text" name="q" id="q" value="{{ q }}" class="field-input" placeholder="Nome do cliente...">
+    </div>
+    <div class="field-group">
+      <label class="field-label" for="status">Situação</label>
+      <select name="status" id="status" class="field-input">
+        <option value="">Todas</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-secondary text-sm">Filtrar</button>
+    {% if q or status_filter %}<a href="{% url 'rentals:list' %}" class="btn btn-secondary text-sm">Limpar</a>{% endif %}
+  </form>
+
   <div class="table-shell">
     <table class="data-table">
       <thead>
@@ -53,7 +71,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="table-empty">Nenhuma locação cadastrada.</td></tr>
+          <tr><td colspan="7" class="table-empty">Nenhuma locação encontrada. <a href="{% url 'rentals:create' %}" class="text-link">Nova locação</a></td></tr>
         {% endfor %}
       </tbody>
     </table>

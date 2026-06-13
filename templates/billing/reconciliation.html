@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Reconciliação Financeira · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Reconciliação financeira</h1>
+      <p class="page-description">Comparação entre títulos, pagamentos e movimentos · {{ today|date:'d/m/Y' }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'billing:reconciliation_export' %}" class="btn btn-secondary">Exportar CSV</a>
+    </div>
+  </div>
+
+  <!-- Aggregates -->
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+    <div class="panel-spacious">
+      <p class="stat-label">Total emitido (títulos)</p>
+      <p class="stat-value text-app-ink">R$ {{ recon.total_receivable_amount|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Saldo em aberto</p>
+      <p class="stat-value text-brand-700">R$ {{ recon.total_open_balance|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Total recebido (pagamentos)</p>
+      <p class="stat-value text-emerald-700">R$ {{ recon.total_payments|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Líq. pagamentos c/ estorno</p>
+      <p class="stat-value {% if recon.net_payments >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ recon.net_payments|floatformat:2 }}</p>
+      <p class="text-xs text-app-muted mt-1">Estornos: R$ {{ recon.total_reversals|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Total entradas (caixa)</p>
+      <p class="stat-value text-emerald-700">R$ {{ recon.total_inflow|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Total saídas (caixa)</p>
+      <p class="stat-value text-red-700">R$ {{ recon.total_outflow|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Saldo de caixa</p>
+      <p class="stat-value {% if recon.net_movements >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ recon.net_movements|floatformat:2 }}</p>
+    </div>
+
+    <div class="panel-spacious">
+      <p class="stat-label">Títulos quitados s/ pagamento</p>
+      <p class="stat-value {% if recon.paid_no_payments_count > 0 %}text-amber-700{% else %}text-emerald-700{% endif %}">{{ recon.paid_no_payments_count }}</p>
+      <p class="text-xs text-app-muted mt-1">R$ {{ recon.paid_no_payments_sum|floatformat:2 }} — importados do legado</p>
+    </div>
+
+  </div>
+
+  <!-- Divergences panel -->
+  <div class="space-y-4">
+
+    {% if recon.inconsistent_count > 0 %}
+    <div>
+      <div class="mb-2 flex items-center gap-3">
+        <h2 class="section-title">Saldos inconsistentes</h2>
+        <span class="badge badge-danger">{{ recon.inconsistent_count }}</span>
+        {% if recon.inconsistent_count > 100 %}
+          <span class="text-xs text-app-muted">(exibindo 100 primeiros)</span>
+        {% endif %}
+      </div>
+      <p class="text-sm text-app-muted mb-3">Recebiveis onde o saldo armazenado diverge da soma dos pagamentos registrados.</p>
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Locação</th>
+              <th>Vencimento</th>
+              <th class="text-right">Valor</th>
+              <th class="text-right">Pago (armazenado)</th>
+              <th class="text-right">Soma pagamentos</th>
+              <th class="text-right">Diferença</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in recon.inconsistent_balances %}
+            <tr>
+              <td>{{ item.id }}</td>
+              <td>{% if item.rental_number %}#{{ item.rental_number }}{% else %}—{% endif %}</td>
+              <td>{{ item.due_date|date:'d/m/Y' }}</td>
+              <td class="text-right">R$ {{ item.amount|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ item.paid_amount_stored|floatformat:2 }}</td>
+              <td class="text-right">R$ {{ item.payment_sum|floatformat:2 }}</td>
+              <td class="text-right font-medium text-red-700">R$ {{ item.diff|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="panel-spacious flex items-center gap-3 bg-emerald-50 border-emerald-200">
+      <span class="text-emerald-600 font-semibold">✓</span>
+      <p class="text-sm text-emerald-700">Nenhum saldo inconsistente encontrado.</p>
+    </div>
+    {% endif %}
+
+    {% if recon.payments_without_movement_count > 0 %}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <p class="font-semibold text-amber-800">
+        {{ recon.payments_without_movement_count }} pagamento(s) sem movimento de caixa correspondente.
+      </p>
+      <p class="text-sm text-amber-700 mt-1">
+        Estes pagamentos foram registrados mas não geraram movimento em FinancialMovement.
+        Pode ocorrer quando não havia conta caixa ativa no momento do registro.
+      </p>
+    </div>
+    {% endif %}
+
+    {% if recon.paid_no_payments_count > 0 %}
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p class="font-semibold text-slate-700">
+        {{ recon.paid_no_payments_count }} título(s) quitado(s) sem registro de Payment.
+      </p>
+      <p class="text-sm text-slate-600 mt-1">
+        Estes títulos foram importados do legado com status quitado (pago=0).
+        O saldo zero foi forçado pela importação conforme política R2.03.
+        Não representam divergência operacional — são herança do legado.
+      </p>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}

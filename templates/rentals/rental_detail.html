@@ -10,7 +10,34 @@
       <h1 class="page-title">Locação #{{ rental.number }}</h1>
       <p class="page-description">{{ rental.customer.name }}</p>
     </div>
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2">
+
+      {# R7.12 — contextual actions #}
+
+      {# Imprimir contrato — always available #}
+      <a href="{% url 'rentals:contract' rental.pk %}" target="_blank" rel="noopener" class="btn btn-secondary">Contrato</a>
+
+      {# Editar — only pending #}
+      {% if rental.status == 'pending' %}
+        <a href="{% url 'rentals:update' rental.pk %}" class="btn btn-secondary">Editar</a>
+      {% endif %}
+
+      {# Cancelar — pending or picked_up #}
+      {% if rental.status == 'pending' or rental.status == 'picked_up' %}
+        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary">Cancelar</a>
+      {% endif %}
+
+      {# Excluir — only cancelled, and no movements/payments (validated in view) #}
+      {% if rental.status == 'cancelled' %}
+        <a href="{% url 'rentals:delete' rental.pk %}" class="btn btn-danger text-sm">Excluir</a>
+      {% endif %}
+
+      {# Recebimentos — billing module #}
+      {% if request.user|has_module:'billing' %}
+        <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Recebimentos</a>
+      {% endif %}
+
+      {# Retirada / Devolução — movements module #}
       {% if request.user|has_module:'movements' %}
         {% if rental.status == 'pending' %}
           <a href="{% url 'movements:pickup' rental.pk %}" class="btn btn-primary">Registrar retirada</a>
@@ -18,9 +45,7 @@
           <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary">Registrar devolução</a>
         {% endif %}
       {% endif %}
-      {% if request.user|has_module:'billing' %}
-        <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Recebimentos</a>
-      {% endif %}
+
       <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Voltar</a>
     </div>
   </div>
@@ -55,6 +80,13 @@
       <p class="mt-1 text-lg font-semibold text-app-ink">R$ {{ rental.total_value }}</p>
     </div>
   </div>
+
+  {% if rental.use_for %}
+  <div class="panel">
+    <p class="field-label">Uso / Evento</p>
+    <p class="mt-1 text-sm text-app-ink">{{ rental.use_for }}</p>
+  </div>
+  {% endif %}
 
   <div class="panel">
     <h2 class="section-title">Itens</h2>
@@ -106,11 +138,22 @@
     </div>
   {% endif %}
 
+  {% if rental.cancelled_reason %}
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4">
+      <p class="font-semibold text-red-800">Cancelada em {{ rental.cancelled_at|date:'d/m/Y H:i' }}</p>
+      <p class="text-sm text-red-700 mt-1">{{ rental.cancelled_reason }}</p>
+    </div>
+  {% endif %}
+
   {% if rental.notes %}
     <div class="panel">
       <h2 class="section-title">Observações</h2>
       <p class="mt-2 text-sm text-app-muted">{{ rental.notes }}</p>
     </div>
+  {% endif %}
+
+  {% if rental.contract_printed_at %}
+    <p class="text-xs text-app-muted">Contrato {{ rental.contract_version }} impresso em {{ rental.contract_printed_at|date:'d/m/Y H:i' }}</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}A Retirar · Relatórios · Noivas &amp; Cia{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="page-header print:hidden">
+    <div>
+      <h1 class="page-title">Produtos a Retirar</h1>
+      <p class="page-description">Locações pendentes de retirada.</p>
+    </div>
+    <div class="flex gap-2 print:hidden">
+      <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer }}&prefix={{ prefix }}&code={{ code }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
+      <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+  {% include 'reports/_print_header.html' %}
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 md:grid-cols-5 print:hidden">
+    <div class="field-group">
+      <label class="field-label">Retirada de</label>
+      <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Retirada até</label>
+      <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Cliente</label>
+      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Prefixo</label>
+      <input type="text" name="prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Código</label>
+      <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
+    </div>
+    <div class="flex items-end gap-2 md:col-span-5 print:hidden">
+      <button type="submit" class="btn btn-secondary">Filtrar</button>
+      <a href="{% url 'reports:a_retirar' %}" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Locação</th>
+          <th>Cliente</th>
+          <th>Uso/Evento</th>
+          <th>Retirada prevista</th>
+          <th>Retorno previsto</th>
+          <th>Itens</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rental in rentals %}
+          <tr>
+            <td class="font-medium"><a href="{% url 'rentals:detail' rental.pk %}" class="text-link print:no-underline">#{{ rental.number }}</a></td>
+            <td>{{ rental.customer.name }}</td>
+            <td class="text-app-muted text-sm">{{ rental.use_for|default:'—' }}</td>
+            <td>{{ rental.pickup_date|date:'d/m/Y' }}{% if rental.pickup_date < today %} <span class="badge badge-warning">atrasada</span>{% elif rental.pickup_date == today %} <span class="badge badge-info">hoje</span>{% endif %}</td>
+            <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+            <td class="text-sm">{% for item in rental.items.all %}{{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+            <td class="text-right">R$ {{ rental.total_value|floatformat:2 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="table-empty">Nenhuma locação encontrada para os filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

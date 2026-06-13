@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Histórico — {{ product }} · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ product.category.prefix }}{{ product.code }} · {{ product.description }}</h1>
+      <p class="page-description">
+        Cor: {{ product.color|default:'—' }} · Tamanho: {{ product.size|default:'—' }} · Valor sugerido: R$ {{ product.value|floatformat:2 }}
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'catalog:product_update' product.pk %}" class="btn btn-secondary">Editar</a>
+      <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+
+  {# Badges (R8.02) #}
+  <div class="flex flex-wrap gap-2">
+    {% if product.is_placeholder %}
+      <span class="badge badge-warning">placeholder</span>
+    {% endif %}
+    {% if siblings %}
+      <span class="badge badge-danger">{{ siblings|length }} produto(s) duplicado(s) com mesmo código</span>
+    {% endif %}
+  </div>
+
+  {# Duplicate siblings warning (R8.03) #}
+  {% if siblings %}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <p class="font-semibold text-amber-800">Atenção: código duplicado</p>
+      <p class="text-sm text-amber-700 mt-1">
+        Existe(m) {{ siblings|length }} outro(s) produto(s) com o mesmo código {{ product.category.prefix }}{{ product.code }}:
+      </p>
+      <ul class="mt-2 space-y-1">
+        {% for s in siblings %}
+          <li class="text-sm text-amber-700">
+            <a href="{% url 'catalog:product_history' s.pk %}" class="text-link font-medium">#{{ s.pk }}</a>
+            — {{ s.description }} · {{ s.color|default:'—' }} · {{ s.size|default:'—' }}
+            {% if s.is_placeholder %}<span class="badge badge-warning ml-1">placeholder</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {# Rental history (R8.04) #}
+  <div>
+    <h2 class="section-title mb-3">Histórico de locações <span class="text-xs font-normal text-app-muted">(últimas 50)</span></h2>
+    {% if rental_items %}
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Locação</th>
+              <th>Cliente</th>
+              <th>Retirada</th>
+              <th>Retorno</th>
+              <th>Situação</th>
+              <th class="text-right">Valor cobrado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in rental_items %}
+              <tr>
+                <td>
+                  <a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link">#{{ item.rental.number }}</a>
+                </td>
+                <td>{{ item.rental.customer.name }}</td>
+                <td>{{ item.rental.pickup_date|date:'d/m/Y' }}</td>
+                <td>{{ item.rental.return_date|date:'d/m/Y' }}</td>
+                <td>
+                  {% if item.rental.status == 'pending' %}
+                    <span class="badge badge-warning">Pendente</span>
+                  {% elif item.rental.status == 'picked_up' %}
+                    <span class="badge badge-info">Retirado</span>
+                  {% elif item.rental.status == 'returned' %}
+                    <span class="badge badge-success">Devolvido</span>
+                  {% elif item.rental.status == 'cancelled' %}
+                    <span class="badge badge-danger">Cancelado</span>
+                  {% endif %}
+                </td>
+                <td class="text-right font-medium">R$ {{ item.value|floatformat:2 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-spacious text-center text-app-muted">
+        <p>Nenhuma locação registrada para este produto.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if product.notes %}
+    <div class="panel-spacious">
+      <h2 class="section-title">Observações</h2>
+      <p class="mt-2 text-sm text-app-muted">{{ product.notes }}</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

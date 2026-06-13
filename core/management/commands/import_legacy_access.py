@@ -1,9 +1,24 @@
+"""Import legacy BRcom Access database exported to JSONL.
+
+Usage:
+    python manage.py import_legacy_access [--export-dir DIR] [OPTIONS]
+
+Options:
+    --dry-run           Validate and transform without committing (R4.03).
+    --reset             Delete all business data before importing (R4.04).
+    --confirm-reset     Required safety gate when using --reset (R4.04).
+    --no-placeholders   Fail if any placeholder would be created (R4.05).
+    --allow-placeholders  (default) Create placeholders flagged with is_placeholder (R4.06).
+    --skip-raw          Skip recreating legacy_* raw tables.
+    --batch-size N      Bulk-insert batch size (default 2000).
+"""
+
 import json
 import re
 import shutil
 import unicodedata
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -12,13 +27,15 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
-from billing.models import Receivable
+from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
 from movements.models import Pickup, Return
 from rentals.models import Rental, RentalItem
 
+
+IMPORTER_VERSION = '2026.06.12-r2'
 
 TABLES = (
     'categoria',
@@ -34,6 +51,10 @@ TABLES = (
     'usuario',
 )
 
+# Dates outside this range are flagged as suspicious (R4.09 / RF-RM-05).
+SUSPICIOUS_DATE_MIN = date(1900, 1, 1)
+SUSPICIOUS_DATE_MAX = date(2035, 12, 31)
+
 ACCESS_TO_SQLITE = {
     2: 'INTEGER',
     3: 'INTEGER',
@@ -48,6 +69,30 @@ ACCESS_TO_SQLITE = {
     203: 'TEXT',
 }
 
+# All business models in safe deletion order (children first).
+BUSINESS_MODELS = (
+    FinancialMovement,
+    Payment,
+    Return,
+    Pickup,
+    Receivable,
+    RentalItem,
+    Rental,
+    Product,
+    Category,
+    Customer,
+    Company,
+    CashAccount,
+)
+
+
+class _DryRunRollback(Exception):
+    """Sentinel raised to rollback the transaction in --dry-run mode."""
+
+
+# ---------------------------------------------------------------------------
+# Pure helpers
+# ---------------------------------------------------------------------------
 
 def quote_identifier(value):
     return '"' + value.replace('"', '""') + '"'
@@ -129,6 +174,19 @@ def as_date(value):
     raise ValueError(f'Invalid legacy date: {value!r}')
 
 
+def safe_date(value):
+    """Parse and validate date. Returns (parsed_date_or_None, is_suspicious)."""
+    try:
+        d = as_date(value)
+    except ValueError:
+        return None, True
+    if d is None:
+        return None, False
+    if not (SUSPICIOUS_DATE_MIN <= d <= SUSPICIOUS_DATE_MAX):
+        return d, True
+    return d, False
+
+
 def first_value(rows, key):
     for row in rows:
         value = row.get(key)
@@ -148,8 +206,12 @@ def unique_clean_values(rows, key, max_length=None):
     return values
 
 
+# ---------------------------------------------------------------------------
+# Command
+# ---------------------------------------------------------------------------
+
 class Command(BaseCommand):
-    help = 'Importa o banco Access legado exportado para JSONL.'
+    help = 'Importa o banco Access legado exportado para JSONL (R4).'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -161,6 +223,26 @@ class Command(BaseCommand):
             '--reset',
             action='store_true',
             help='Limpa tabelas de negocio antes de carregar os dados legados.',
+        )
+        parser.add_argument(
+            '--confirm-reset',
+            action='store_true',
+            help='Gate de seguranca obrigatorio ao usar --reset.',
+        )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Valida e transforma sem gravar nada no banco.',
+        )
+        parser.add_argument(
+            '--no-placeholders',
+            action='store_true',
+            help='Modo estrito: falha se qualquer placeholder precisar ser criado.',
+        )
+        parser.add_argument(
+            '--allow-placeholders',
+            action='store_true',
+            help='(padrao) Cria placeholders com is_placeholder=True e relatorio.',
         )
         parser.add_argument(
             '--skip-raw',
@@ -177,31 +259,62 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.export_dir = Path(options['export_dir'])
         self.batch_size = options['batch_size']
+        self.dry_run = options['dry_run']
+        self.no_placeholders = options['no_placeholders']
         self.now = timezone.now()
+        self.start_time = self.now
         self.summary = {}
 
         if not self.export_dir.exists():
             raise CommandError(f'Export dir not found: {self.export_dir}')
 
+        # R4.04: --reset requires explicit --confirm-reset
+        if options['reset'] and not options['confirm_reset']:
+            raise CommandError(
+                '--reset foi especificado mas --confirm-reset nao foi fornecido. '
+                'Adicione --confirm-reset para confirmar a exclusao de todos os dados de negocio.'
+            )
+
         self._validate_export()
-        self._backup_sqlite()
+        self._load_manifest()
 
-        with transaction.atomic():
-            if not options['skip_raw']:
-                self._import_raw_tables()
+        if not self.dry_run:
+            self._backup_sqlite()
 
-            if options['reset']:
-                self._reset_business_tables()
-            else:
-                self._ensure_empty_business_tables()
+        try:
+            with transaction.atomic():
+                if not options['skip_raw']:
+                    self._import_raw_tables()
 
-            tables = {table: list(self._read_rows(table)) for table in TABLES}
-            self._import_normalized(tables)
-            self._write_audit_rows()
+                if options['reset']:
+                    self._reset_business_tables()
+                else:
+                    self._ensure_empty_business_tables()
+
+                tables = {table: list(self._read_rows(table)) for table in TABLES}
+                self._import_normalized(tables, options)
+                self._write_audit_rows(options)
+
+                if self.dry_run:
+                    raise _DryRunRollback()
+
+        except _DryRunRollback:
+            self.stdout.write(self.style.WARNING('DRY RUN — nenhuma alteracao gravada no banco.'))
+
+        elapsed = (timezone.now() - self.start_time).total_seconds()
+        self.summary['elapsed_seconds'] = round(elapsed, 1)
 
         for key, value in self.summary.items():
-            self.stdout.write(f'{key}: {value}')
-        self.stdout.write(self.style.SUCCESS('Importacao legado concluida.'))
+            self.stdout.write(f'  {key}: {value}')
+
+        if self.dry_run:
+            self.stdout.write(self.style.WARNING('Simulacao concluida sem gravacao.'))
+        else:
+            self.stdout.write(self.style.SUCCESS('Importacao legado concluida.'))
+
+    # -----------------------------------------------------------------------
+    # Validation
+    # -----------------------------------------------------------------------
 
     def _validate_export(self):
         missing = []
@@ -213,62 +326,70 @@ class Command(BaseCommand):
         if missing:
             raise CommandError(f'Missing export files: {", ".join(missing)}')
 
+    def _load_manifest(self):
+        manifest_path = self.export_dir / 'manifest.json'
+        if manifest_path.exists():
+            with manifest_path.open(encoding='utf-8-sig') as f:
+                self.manifest = json.load(f)
+        else:
+            self.manifest = {}
+
+    # -----------------------------------------------------------------------
+    # Backup (R4.04)
+    # -----------------------------------------------------------------------
+
     def _backup_sqlite(self):
         engine = settings.DATABASES['default']['ENGINE']
         if engine != 'django.db.backends.sqlite3':
             self.stdout.write('Backup automatico ignorado: banco default nao e SQLite.')
             return
-
         database_name = settings.DATABASES['default']['NAME']
         if database_name == ':memory:':
             return
         source = Path(database_name)
         if not source.exists():
             return
-
         backup_dir = Path('var/backups')
         backup_dir.mkdir(parents=True, exist_ok=True)
         stamp = timezone.localtime(self.now).strftime('%Y%m%d-%H%M%S')
         target = backup_dir / f'{source.stem}.before-legacy-{stamp}{source.suffix}'
         shutil.copy2(source, target)
         self.summary['backup'] = str(target)
+        self.stdout.write(f'Backup: {target}')
+
+    # -----------------------------------------------------------------------
+    # Business table management (R4.01, R4.04)
+    # -----------------------------------------------------------------------
 
     def _ensure_empty_business_tables(self):
-        models = (
-            Return,
-            Pickup,
-            Receivable,
-            RentalItem,
-            Rental,
-            Product,
-            Category,
-            Customer,
-            Company,
-        )
         non_empty = [
             f'{model._meta.label}={model.objects.count()}'
-            for model in models
+            for model in BUSINESS_MODELS
             if model.objects.exists()
         ]
         if non_empty:
             raise CommandError(
-                'Business tables are not empty. Use --reset to replace them: '
+                'Tabelas de negocio nao estao vazias. '
+                'Use --reset --confirm-reset para substituir: '
                 + ', '.join(non_empty)
             )
 
     def _reset_business_tables(self):
-        for model in (
-            Return,
-            Pickup,
-            Receivable,
-            RentalItem,
-            Rental,
-            Product,
-            Category,
-            Customer,
-            Company,
-        ):
-            model.objects.all().delete()
+        # Use raw DELETE to avoid SQLite's 999-variable limit on large tables (R14.01).
+        deleted_counts = {}
+        with connection.cursor() as cursor:
+            for model in BUSINESS_MODELS:
+                count = model.objects.count()
+                if count:
+                    table = model._meta.db_table
+                    cursor.execute(f'DELETE FROM "{table}"')
+                    deleted_counts[model._meta.label] = count
+        self.summary['reset_deleted'] = str(deleted_counts) if deleted_counts else 'vazio'
+        self.stdout.write(f'Reset: {deleted_counts}')
+
+    # -----------------------------------------------------------------------
+    # Raw tables (R4.01, R4.02)
+    # -----------------------------------------------------------------------
 
     def _schema_for(self, table_name):
         path = self.export_dir / 'schema' / f'{table_name}.json'
@@ -284,6 +405,7 @@ class Command(BaseCommand):
                     yield json.loads(line)
 
     def _import_raw_tables(self):
+        """Recreate legacy_* tables from JSONL export (idempotent DROP+CREATE, R4.01)."""
         with connection.cursor() as cursor:
             for table_name in TABLES:
                 schema = self._schema_for(table_name)
@@ -323,20 +445,92 @@ class Command(BaseCommand):
                     inserted += len(batch)
                 self.summary[f'raw_{raw_name}'] = inserted
 
+    # -----------------------------------------------------------------------
+    # Normalized import orchestration
+    # -----------------------------------------------------------------------
+
     def _bulk_create(self, model, objects):
         if not objects:
             return
         model.objects.bulk_create(objects, batch_size=self.batch_size)
 
-    def _import_normalized(self, tables):
+    def _import_normalized(self, tables, options):
+        # Pre-flight: if --no-placeholders, check for missing references first.
+        if self.no_placeholders:
+            self._check_placeholders(tables)
+
         customer_by_legacy = self._load_customers(tables)
         categories = self._load_categories(tables)
         product_by_key = self._load_products(tables, categories)
         rental_by_number = self._load_rentals(tables, customer_by_legacy)
-        self._load_rental_items(tables, product_by_key)
+        self._load_rental_items(tables, product_by_key, rental_by_number)
         self._load_movements(tables, rental_by_number)
-        self._load_receivables(tables)
+        receivable_by_legacy_id = self._load_receivables(tables)
+        cash_account = self._ensure_cash_account()
+        self._load_financial_movements(tables, customer_by_legacy, receivable_by_legacy_id, cash_account)
         self._load_company(tables)
+
+    # -----------------------------------------------------------------------
+    # --no-placeholders pre-flight check (R4.05)
+    # -----------------------------------------------------------------------
+
+    def _check_placeholders(self, tables):
+        issues = []
+
+        # Missing customers
+        customer_ids = {
+            as_int(row.get('numero'))
+            for row in tables['clientes']
+            if as_int(row.get('numero')) is not None
+        }
+        referenced_customer_ids = {
+            as_int(row.get('cliente'))
+            for row in tables['locado'] + tables['pagar']
+            if as_int(row.get('cliente')) is not None
+        }
+        missing_customers = sorted(referenced_customer_ids - customer_ids)
+        if missing_customers:
+            issues.append(f'Clientes orfaos referenciados em locado/pagar: {missing_customers}')
+
+        # Missing category prefixes
+        known_prefixes = {
+            normalize_prefix(row.get('prefixo'))
+            for row in tables['categoria']
+            if normalize_prefix(row.get('prefixo'))
+        }
+        referenced_prefixes = {
+            normalize_prefix(row.get('prefixo'))
+            for table_name in ('produtos', 'locado')
+            for row in tables[table_name]
+            if normalize_prefix(row.get('prefixo'))
+        }
+        missing_prefixes = sorted(referenced_prefixes - known_prefixes)
+        if missing_prefixes:
+            issues.append(f'Prefixos sem categoria em produtos/locado: {missing_prefixes}')
+
+        # Missing products (items in locado with no entry in produtos)
+        product_keys = {
+            (normalize_prefix(row.get('prefixo')), as_int(row.get('codigo')))
+            for row in tables['produtos']
+            if normalize_prefix(row.get('prefixo')) and as_int(row.get('codigo')) is not None
+        }
+        missing_items = {
+            (normalize_prefix(row.get('prefixo')), as_int(row.get('codigo')))
+            for row in tables['locado']
+            if normalize_prefix(row.get('prefixo')) and as_int(row.get('codigo')) is not None
+        } - product_keys
+        if missing_items:
+            issues.append(f'Produtos sem cadastro referenciados em locado: {sorted(missing_items)}')
+
+        if issues:
+            raise CommandError(
+                '--no-placeholders: importacao abortada por referencias ausentes.\n'
+                + '\n'.join(f'  - {issue}' for issue in issues)
+            )
+
+    # -----------------------------------------------------------------------
+    # Customers (R4.07)
+    # -----------------------------------------------------------------------
 
     def _load_customers(self, tables):
         customer_ids = {
@@ -361,6 +555,7 @@ class Command(BaseCommand):
 
         customers = []
         customer_by_legacy = {}
+
         for row in tables['clientes']:
             legacy_id = as_int(row.get('numero'))
             if legacy_id is None:
@@ -378,17 +573,26 @@ class Command(BaseCommand):
                 phone_mobile=clean_text(row.get('celular'), 20),
                 phone_work=clean_text(row.get('fone_cial'), 20),
                 notes=clean_text(row.get('obs')),
+                # R3.01 / R3.02 legacy metadata
+                legacy_id=legacy_id,
+                legacy_source='clientes',
+                is_placeholder=False,
                 created_at=self.now,
                 updated_at=self.now,
             )
             customers.append(customer)
             customer_by_legacy[legacy_id] = customer
 
+        # Placeholder customers for orphan references (R4.06)
         for legacy_id, pk in placeholder_map.items():
             customer = Customer(
                 id=pk,
                 name=f'Cliente legado sem cadastro {legacy_id}',
                 notes=f'Referenciado no legado com codigo de cliente {legacy_id}.',
+                legacy_id=legacy_id,
+                legacy_source='clientes',
+                legacy_notes=f'Placeholder: cliente {legacy_id} nao encontrado em clientes.',
+                is_placeholder=True,
                 created_at=self.now,
                 updated_at=self.now,
             )
@@ -398,10 +602,19 @@ class Command(BaseCommand):
         self._bulk_create(Customer, customers)
         self.summary['customers'] = len(customers)
         self.summary['placeholder_customers'] = len(placeholder_map)
+        if placeholder_map:
+            self.stdout.write(
+                self.style.WARNING(f'  Clientes placeholder criados: {len(placeholder_map)}')
+            )
         return customer_by_legacy
+
+    # -----------------------------------------------------------------------
+    # Categories (R4.08)
+    # -----------------------------------------------------------------------
 
     def _load_categories(self, tables):
         categories_by_prefix = {}
+        legacy_ids_by_prefix = {}
         for row in tables['categoria']:
             prefix = normalize_prefix(row.get('prefixo'))
             if not prefix or prefix in categories_by_prefix:
@@ -419,19 +632,32 @@ class Command(BaseCommand):
         for prefix in sorted(missing_prefixes):
             categories_by_prefix[prefix] = f'Legado {prefix}'
 
-        categories = [
-            Category(
+        categories = []
+        for prefix, name in sorted(categories_by_prefix.items()):
+            is_placeholder = prefix in missing_prefixes
+            cat = Category(
                 prefix=prefix,
                 name=name or f'Legado {prefix}',
+                legacy_source='categoria',
+                is_placeholder=is_placeholder,
+                legacy_notes='Prefixo sem entrada em categoria.' if is_placeholder else '',
                 created_at=self.now,
                 updated_at=self.now,
             )
-            for prefix, name in sorted(categories_by_prefix.items())
-        ]
+            categories.append(cat)
+
         self._bulk_create(Category, categories)
         self.summary['categories'] = len(categories)
         self.summary['placeholder_categories'] = len(missing_prefixes)
+        if missing_prefixes:
+            self.stdout.write(
+                self.style.WARNING(f'  Categorias placeholder criadas: {sorted(missing_prefixes)}')
+            )
         return Category.objects.in_bulk(field_name='prefix')
+
+    # -----------------------------------------------------------------------
+    # Products (R4.08)
+    # -----------------------------------------------------------------------
 
     def _load_products(self, tables, categories):
         products = []
@@ -455,6 +681,9 @@ class Command(BaseCommand):
                 size=clean_text(row.get('tamanho'), 50),
                 value=as_decimal(row.get('valor')),
                 notes=clean_text(row.get('obs')),
+                legacy_id=legacy_id,
+                legacy_source='produtos',
+                is_placeholder=False,
                 created_at=self.now,
                 updated_at=self.now,
             )
@@ -465,6 +694,7 @@ class Command(BaseCommand):
             if key not in product_by_key or legacy_id < product_by_key[key].id:
                 product_by_key[key] = product
 
+        # Placeholder products for items in locado without entry in produtos (R4.06)
         placeholder_count = 0
         missing_item_keys = {}
         for row in tables['locado']:
@@ -485,6 +715,9 @@ class Command(BaseCommand):
                 code=code,
                 description=description,
                 notes='Criado automaticamente: item de locacao sem cadastro em produtos.',
+                legacy_source='locado',
+                is_placeholder=True,
+                legacy_notes=f'Produto {prefix}{code} nao encontrado em produtos.',
                 created_at=self.now,
                 updated_at=self.now,
             )
@@ -498,7 +731,15 @@ class Command(BaseCommand):
         self.summary['products'] = len(products)
         self.summary['duplicate_product_keys'] = duplicate_count
         self.summary['placeholder_products'] = placeholder_count
+        if placeholder_count:
+            self.stdout.write(
+                self.style.WARNING(f'  Produtos placeholder criados: {placeholder_count}')
+            )
         return product_by_key
+
+    # -----------------------------------------------------------------------
+    # Rentals (R4.09)
+    # -----------------------------------------------------------------------
 
     def _load_rentals(self, tables, customer_by_legacy):
         locado_groups = defaultdict(list)
@@ -515,11 +756,35 @@ class Command(BaseCommand):
 
         rentals = []
         rental_by_number = {}
+        suspicious_rental_count = 0
 
         for number, rows in sorted(locado_groups.items()):
-            pickup_dates = [as_date(row.get('retirada')) for row in rows]
-            return_dates = [as_date(row.get('dev_prevista')) for row in rows]
+            pickup_dates = []
+            return_dates = []
+            suspicious_dates = []
+
+            for row in rows:
+                pd, pd_suspicious = safe_date(row.get('retirada'))
+                rd, rd_suspicious = safe_date(row.get('dev_prevista'))
+                if pd is not None:
+                    if pd_suspicious:
+                        suspicious_dates.append(f'retirada={row.get("retirada")}')
+                    else:
+                        pickup_dates.append(pd)
+                if rd is not None:
+                    if rd_suspicious:
+                        suspicious_dates.append(f'dev_prevista={row.get("dev_prevista")}')
+                    else:
+                        return_dates.append(rd)
+
+            if not pickup_dates or not return_dates:
+                suspicious_rental_count += 1
+                continue
+
             customer_legacy_id = as_int(first_value(rows, 'cliente'))
+            if customer_legacy_id is None or customer_legacy_id not in customer_by_legacy:
+                suspicious_rental_count += 1
+                continue
             total_value = sum(as_decimal(row.get('valor')) for row in rows)
             penalty_value = max(as_decimal(row.get('multa')) for row in rows)
 
@@ -530,16 +795,29 @@ class Command(BaseCommand):
             else:
                 status = Rental.Status.PENDING
 
-            notes = self._rental_notes(rows)
+            # R3.08: use_for from locado.usar
+            use_for_values = unique_clean_values(rows, 'usar', 200)
+            use_for = '; '.join(use_for_values)[:200]
+
+            # R3.01: legacy_notes preserves obs and suspicious date markers
+            notes_parts = unique_clean_values(rows, 'obs')
+            legacy_parts = []
+            if notes_parts:
+                legacy_parts.append('locado.obs: ' + '; '.join(notes_parts))
+            if suspicious_dates:
+                legacy_parts.append('datas_suspeitas: ' + ', '.join(suspicious_dates))
+
             rental = Rental(
                 id=number,
                 number=number,
                 customer=customer_by_legacy[customer_legacy_id],
-                pickup_date=min(date for date in pickup_dates if date is not None),
-                return_date=max(date for date in return_dates if date is not None),
+                pickup_date=min(pickup_dates),
+                return_date=max(return_dates),
                 total_value=total_value,
                 penalty_value=penalty_value,
-                notes=notes,
+                notes='; '.join(unique_clean_values(rows, 'obs')),
+                use_for=use_for,
+                legacy_notes='\n'.join(legacy_parts),
                 status=status,
                 created_at=self.now,
                 updated_at=self.now,
@@ -551,18 +829,27 @@ class Command(BaseCommand):
         for number, rows in sorted(pagar_groups.items()):
             if number in rental_by_number:
                 continue
-            due_dates = [as_date(row.get('vencimento')) for row in rows]
+            due_dates = []
+            for row in rows:
+                d, suspicious = safe_date(row.get('vencimento'))
+                if d and not suspicious:
+                    due_dates.append(d)
+            if not due_dates:
+                continue
             customer_legacy_id = as_int(first_value(rows, 'cliente'))
+            if customer_legacy_id is None or customer_legacy_id not in customer_by_legacy:
+                continue
             total_value = sum(as_decimal(row.get('valor')) for row in rows)
             is_open = any(as_bool(row.get('pago')) for row in rows)
             rental = Rental(
                 id=number,
                 number=number,
                 customer=customer_by_legacy[customer_legacy_id],
-                pickup_date=min(date for date in due_dates if date is not None),
-                return_date=max(date for date in due_dates if date is not None),
+                pickup_date=min(due_dates),
+                return_date=max(due_dates),
                 total_value=total_value,
                 notes='Importado de pagar sem itens correspondentes em locado.',
+                legacy_notes='locado_source=pagar_only',
                 status=Rental.Status.PENDING if is_open else Rental.Status.RETURNED,
                 created_at=self.now,
                 updated_at=self.now,
@@ -575,19 +862,16 @@ class Command(BaseCommand):
         self.summary['rentals'] = len(rentals)
         self.summary['rentals_from_locado'] = len(locado_groups)
         self.summary['rentals_from_pagar_only'] = pagar_only_count
+        self.summary['rentals_skipped_suspicious_dates'] = suspicious_rental_count
+        if suspicious_rental_count:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'  Locacoes ignoradas por datas suspeitas: {suspicious_rental_count}'
+                )
+            )
         return rental_by_number
 
-    def _rental_notes(self, rows):
-        notes = []
-        uses = unique_clean_values(rows, 'usar', 80)
-        row_notes = unique_clean_values(rows, 'obs')
-        if uses:
-            notes.append('Usar: ' + '; '.join(uses))
-        if row_notes:
-            notes.append('Obs: ' + '; '.join(row_notes))
-        return '\n'.join(notes)
-
-    def _load_rental_items(self, tables, product_by_key):
+    def _load_rental_items(self, tables, product_by_key, rental_by_number):
         items = []
         for row in tables['locado']:
             legacy_id = as_int(row.get('id'))
@@ -596,12 +880,15 @@ class Command(BaseCommand):
             code = as_int(row.get('codigo'))
             if legacy_id is None or rental_number is None or not prefix or code is None:
                 continue
-            product = product_by_key[(prefix, code)]
+            if rental_number not in rental_by_number:
+                continue
+            if (prefix, code) not in product_by_key:
+                continue
             items.append(
                 RentalItem(
                     id=legacy_id,
                     rental_id=rental_number,
-                    product=product,
+                    product=product_by_key[(prefix, code)],
                     description=clean_text(row.get('descrição'), 200),
                     value=as_decimal(row.get('valor')),
                     created_at=self.now,
@@ -617,25 +904,30 @@ class Command(BaseCommand):
         groups = defaultdict(list)
         for row in tables['locado']:
             number = as_int(row.get('locação'))
-            if number is not None:
+            if number is not None and number in rental_by_number:
                 groups[number].append(row)
 
         for number, rows in groups.items():
             rental = rental_by_number[number]
             if rental.status in {Rental.Status.PICKED_UP, Rental.Status.RETURNED}:
                 pickup_dates = [as_date(row.get('retirada')) for row in rows]
-                pickups.append(
-                    Pickup(
-                        rental=rental,
-                        pickup_date=min(date for date in pickup_dates if date is not None),
-                        created_at=self.now,
-                        updated_at=self.now,
+                valid_pickup_dates = [d for d in pickup_dates if d is not None]
+                if valid_pickup_dates:
+                    pickups.append(
+                        Pickup(
+                            rental=rental,
+                            pickup_date=min(valid_pickup_dates),
+                            created_at=self.now,
+                            updated_at=self.now,
+                        )
                     )
-                )
 
             if rental.status == Rental.Status.RETURNED:
                 actual_dates = [as_date(row.get('dev_efetiva')) for row in rows]
-                actual_date = max(date for date in actual_dates if date is not None)
+                valid_actual_dates = [d for d in actual_dates if d is not None]
+                if not valid_actual_dates:
+                    continue
+                actual_date = max(valid_actual_dates)
                 days_late = max((actual_date - rental.return_date).days, 0)
                 returns.append(
                     Return(
@@ -653,39 +945,172 @@ class Command(BaseCommand):
         self.summary['pickups'] = len(pickups)
         self.summary['returns'] = len(returns)
 
+    # -----------------------------------------------------------------------
+    # Receivables (R4.10)
+    # -----------------------------------------------------------------------
+
     def _load_receivables(self, tables):
+        """Import pagar rows with correct pago semantics.
+
+        Legacy semantics (R4.10 / RF-FI-07):
+            pago = 1  → titulo em aberto (open)   → balance > 0
+            pago = 0  → titulo quitado (closed)   → balance = 0
+
+        Special case: pago=0 with valor_pago=0 → force paid_amount=amount to close.
+        """
         receivables = []
+        receivable_by_legacy_id = {}
+        suspicious_count = 0
+
         for row in tables['pagar']:
             legacy_id = as_int(row.get('id'))
             rental_number = as_int(row.get('locação'))
-            due_date = as_date(row.get('vencimento'))
-            if legacy_id is None or rental_number is None or due_date is None:
+            if legacy_id is None or rental_number is None:
+                continue
+
+            due_date, due_suspicious = safe_date(row.get('vencimento'))
+            if due_date is None:
+                suspicious_count += 1
+                continue
+            if due_suspicious:
+                suspicious_count += 1
                 continue
 
             amount = as_decimal(row.get('valor'))
             legacy_paid = as_decimal(row.get('valor_pago'))
-            if as_bool(row.get('pago')):
+            pago_raw = row.get('pago')
+
+            # pago=1 (True) = open → paid_amount = what was actually recorded
+            # pago=0 (False) = closed → ensure paid_amount >= amount
+            if as_bool(pago_raw):
                 paid_amount = legacy_paid
             else:
                 paid_amount = max(legacy_paid, amount)
+
             balance = amount - paid_amount
 
-            receivables.append(
-                Receivable(
-                    id=legacy_id,
-                    rental_id=rental_number,
-                    due_date=due_date,
-                    amount=amount,
-                    paid_amount=paid_amount,
-                    balance=balance,
-                    last_payment_date=as_date(row.get('ult_pagto')),
-                    created_at=self.now,
-                    updated_at=self.now,
-                )
+            notes = []
+            if as_bool(pago_raw):
+                notes.append('pago=1(aberto)')
+            else:
+                notes.append('pago=0(quitado)')
+                if legacy_paid < amount:
+                    notes.append(f'valor_pago_legado={legacy_paid}')
+
+            last_payment_date = None
+            if row.get('ult_pagto'):
+                lp, lp_suspicious = safe_date(row.get('ult_pagto'))
+                if not lp_suspicious:
+                    last_payment_date = lp
+
+            rec = Receivable(
+                id=legacy_id,
+                rental_id=rental_number,
+                due_date=due_date,
+                amount=amount,
+                paid_amount=paid_amount,
+                balance=balance,
+                last_payment_date=last_payment_date,
+                legacy_id=legacy_id,
+                legacy_source='pagar',
+                legacy_notes='; '.join(notes),
+                created_at=self.now,
+                updated_at=self.now,
             )
+            receivables.append(rec)
+            receivable_by_legacy_id[legacy_id] = rec
 
         self._bulk_create(Receivable, receivables)
         self.summary['receivables'] = len(receivables)
+        self.summary['receivables_skipped_suspicious_dates'] = suspicious_count
+        if suspicious_count:
+            self.stdout.write(
+                self.style.WARNING(f'  Recebiveis ignorados por datas suspeitas: {suspicious_count}')
+            )
+        return receivable_by_legacy_id
+
+    # -----------------------------------------------------------------------
+    # Financial movements (R4.11)
+    # -----------------------------------------------------------------------
+
+    def _ensure_cash_account(self):
+        """Get or create the default CashAccount for legacy movements."""
+        account, _ = CashAccount.objects.get_or_create(
+            legacy_code='1',
+            defaults={
+                'name': 'Caixa',
+                'active': True,
+            },
+        )
+        return account
+
+    def _load_financial_movements(self, tables, customer_by_legacy, receivable_by_legacy_id, cash_account):
+        """Import movimento rows into FinancialMovement (R4.11).
+
+        For rows with partida → link to Receivable via legacy_id.
+        Orphan movements (no matching partida) → receivable=None, still auditable.
+        """
+        movements = []
+        orphan_count = 0
+        suspicious_count = 0
+        linked_count = 0
+
+        es_map = {
+            'E': FinancialMovement.Direction.INFLOW,
+            'S': FinancialMovement.Direction.OUTFLOW,
+        }
+
+        for row in tables['movimento']:
+            legacy_id = as_int(row.get('id'))
+            if legacy_id is None:
+                continue
+
+            mv_date, mv_suspicious = safe_date(row.get('data'))
+            if mv_date is None or mv_suspicious:
+                suspicious_count += 1
+                continue
+
+            amount = as_decimal(row.get('valor'))
+            if amount <= 0:
+                continue
+
+            es_raw = str(row.get('es') or 'E').strip().upper()
+            direction = es_map.get(es_raw, FinancialMovement.Direction.INFLOW)
+
+            cliente_id = as_int(row.get('cliente'))
+            customer = customer_by_legacy.get(cliente_id) if cliente_id else None
+
+            partida_id = as_int(row.get('partida'))
+            receivable = receivable_by_legacy_id.get(partida_id) if partida_id else None
+            if partida_id and receivable is None:
+                orphan_count += 1
+            elif receivable is not None:
+                linked_count += 1
+
+            mv = FinancialMovement(
+                date=mv_date,
+                account=cash_account,
+                direction=direction,
+                amount=amount,
+                description=clean_text(row.get('historico'), 200),
+                source=FinancialMovement.Source.IMPORT,
+                customer=customer,
+                receivable=receivable,
+                legacy_id=legacy_id,
+                created_at=self.now,
+                updated_at=self.now,
+            )
+            movements.append(mv)
+
+        self._bulk_create(FinancialMovement, movements)
+        self.summary['financial_movements'] = len(movements)
+        self.summary['financial_movements_linked_receivable'] = linked_count
+        self.summary['financial_movements_orphan_partida'] = orphan_count
+        self.summary['financial_movements_skipped_suspicious'] = suspicious_count
+
+    # -----------------------------------------------------------------------
+    # Company
+    # -----------------------------------------------------------------------
 
     def _load_company(self, tables):
         row = tables['empresa'][0] if tables['empresa'] else {}
@@ -705,7 +1130,26 @@ class Command(BaseCommand):
         )
         self.summary['company'] = company.name or company.pk
 
-    def _write_audit_rows(self):
+    # -----------------------------------------------------------------------
+    # Audit log (R4.12)
+    # -----------------------------------------------------------------------
+
+    def _write_audit_rows(self, options):
+        """Write import metadata to legacy_import_audit table (R4.12)."""
+        elapsed = round((timezone.now() - self.start_time).total_seconds(), 1)
+        audit = {
+            **self.summary,
+            'importer_version': IMPORTER_VERSION,
+            'exporter_version': self.manifest.get('exporter_version', 'unknown'),
+            'mdb_sha256': self.manifest.get('source_mdb_sha256', 'unknown'),
+            'mdb_exported_at': self.manifest.get('exported_at', 'unknown'),
+            'dry_run': str(self.dry_run),
+            'no_placeholders': str(options['no_placeholders']),
+            'allow_placeholders': str(options['allow_placeholders']),
+            'reset': str(options['reset']),
+            'elapsed_seconds': str(elapsed),
+            'started_at': self.start_time.isoformat(),
+        }
         with connection.cursor() as cursor:
             cursor.execute(
                 'CREATE TABLE IF NOT EXISTS legacy_import_audit ('
@@ -714,7 +1158,7 @@ class Command(BaseCommand):
                 'key TEXT NOT NULL, '
                 'value TEXT NOT NULL)'
             )
-            for key, value in self.summary.items():
+            for key, value in audit.items():
                 cursor.execute(
                     'INSERT INTO legacy_import_audit '
                     '(imported_at, key, value) VALUES (%s, %s, %s)',

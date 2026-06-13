@@ -3,72 +3,25 @@
 {% block title %}Relatórios · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
+{# Visão legada mantida para compatibilidade. Os relatórios individuais estão disponíveis abaixo. #}
 <div class="space-y-6">
   <div>
     <h1 class="page-title">Relatórios de acompanhamento</h1>
-    <p class="page-description">Selecione o tipo e os filtros.</p>
+    <p class="page-description">Esta é a visão legada. Acesse os relatórios individuais pelos links abaixo.</p>
   </div>
 
-  <form method="get" class="panel">
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
-      <div class="field-group md:col-span-2">
-        <label class="field-label">Tipo</label>
-        <select name="type" class="field-input">
-          <option value="">Selecione…</option>
-          {% for key, label in report_types %}
-            <option value="{{ key }}" {% if key == selected_type %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Data inicial</label>
-        <input type="date" name="date_start" value="{{ date_start }}" class="field-input">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Data final</label>
-        <input type="date" name="date_end" value="{{ date_end }}" class="field-input">
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div class="field-group">
-          <label class="field-label">Prefixo</label>
-          <input type="text" name="prefix" value="{{ prefix }}" class="field-input">
-        </div>
-        <div class="field-group">
-          <label class="field-label">Código</label>
-          <input type="text" name="code" value="{{ code }}" class="field-input">
-        </div>
-      </div>
-    </div>
-    <button type="submit" class="mt-4 btn btn-primary">Gerar relatório</button>
-  </form>
-
-  {% if has_results %}
-    <div class="table-shell">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Número</th>
-            <th>Cliente</th>
-            <th>Retirada</th>
-            <th>Retorno</th>
-            <th>Situação</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for rental in rentals %}
-            <tr>
-              <td class="font-medium text-app-ink">#{{ rental.number }}</td>
-              <td>{{ rental.customer.name }}</td>
-              <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
-              <td>{{ rental.return_date|date:'d/m/Y' }}</td>
-              <td>{{ rental.get_status_display }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="5" class="table-empty">Nenhum resultado para os filtros.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endif %}
+  <div class="panel-spacious space-y-2">
+    <p class="section-title mb-3">Acesso rápido aos relatórios</p>
+    <ul class="space-y-2 text-sm">
+      <li><a href="{% url 'reports:index' %}" class="text-link">Hub de Relatórios</a></li>
+      <li><a href="{% url 'reports:a_retirar' %}" class="text-link">Produtos a Retirar</a></li>
+      <li><a href="{% url 'reports:retirados' %}" class="text-link">Produtos Retirados</a></li>
+      <li><a href="{% url 'reports:devolvidos' %}" class="text-link">Devolvidos</a></li>
+      <li><a href="{% url 'reports:atrasados' %}" class="text-link">Atrasados / Não Devolvidos</a></li>
+      <li><a href="{% url 'reports:locacoes' %}" class="text-link">Locações Realizadas</a></li>
+      <li><a href="{% url 'reports:contas_vencimento' %}" class="text-link">Contas a Receber por Vencimento</a></li>
+      <li><a href="{% url 'reports:contas_cliente' %}" class="text-link">Contas a Receber por Cliente</a></li>
+    </ul>
+  </div>
 </div>
 {% endblock %}

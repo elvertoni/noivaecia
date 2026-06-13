@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}A Retirar · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Produtos a Retirar</h1>
+      <p class="page-description">Locações pendentes de retirada.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'movements:return_list' %}" class="btn btn-secondary">Retirados</a>
+      <a href="{% url 'movements:overdue_list' %}" class="btn btn-secondary">Atrasados</a>
+    </div>
+  </div>
+
+  {# Filters #}
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div class="field-group">
+      <label class="field-label">Retirada de</label>
+      <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Retirada até</label>
+      <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Cliente</label>
+      <input type="text" name="customer" value="{{ customer_q }}" placeholder="Nome do cliente" class="field-input">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Produto</label>
+      <input type="text" name="product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
+    </div>
+    <div class="flex items-end gap-2 md:col-span-4">
+      <button type="submit" class="btn btn-secondary">Filtrar</button>
+      <a href="{% url 'movements:pickup_list' %}" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
+
+  {# Table #}
+  <div class="table-shell">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Locação</th>
+          <th>Cliente</th>
+          <th>Retirada</th>
+          <th>Retorno previsto</th>
+          <th>Usar em</th>
+          <th>Itens</th>
+          <th class="text-right">Total</th>
+          <th class="text-right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rental in rentals %}
+          <tr>
+            <td class="font-medium">
+              <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a>
+            </td>
+            <td>{{ rental.customer.name }}</td>
+            <td>
+              {{ rental.pickup_date|date:'d/m/Y' }}
+              {% if rental.pickup_date < today %}
+                <span class="badge badge-warning ml-1">atrasada</span>
+              {% elif rental.pickup_date == today %}
+                <span class="badge badge-info ml-1">hoje</span>
+              {% endif %}
+            </td>
+            <td>{{ rental.return_date|date:'d/m/Y' }}</td>
+            <td class="text-app-muted text-sm">{{ rental.use_for|default:'—' }}</td>
+            <td class="text-sm">
+              {% for item in rental.items.all %}
+                {{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}
+              {% empty %}—{% endfor %}
+            </td>
+            <td class="text-right font-medium">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right whitespace-nowrap">
+              <a href="{% url 'movements:pickup' rental.pk %}" class="btn btn-primary">Registrar retirada</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="table-empty">Nenhuma locação pendente de retirada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <div class="pagination">
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

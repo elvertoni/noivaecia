@@ -2,19 +2,22 @@
 
 ## Project Structure & Module Organization
 
-This is a Django 5 monolith for Noivas & Cia. Project settings live in `noivas_cia/`; root-level Django apps map to business domains: `accounts`, `billing`, `catalog`, `company`, `core`, `customers`, `maintenance`, `movements`, `rentals`, `reports`, and `website`. Shared templates are in `templates/`, with reusable fragments in `templates/includes/`. Static assets are under `static/`; edit Tailwind input in `static/src/input.css` and generate `static/css/output.css`. Product and architecture references live in `PRD.md` and `docs/`.
+This is a Django 5 monolith for Noivas & Cia. Project settings live in `noivas_cia/`; root-level Django apps map to business domains: `accounts`, `billing`, `catalog`, `company`, `core`, `customers`, `maintenance`, `movements`, `rentals`, `reports`, and `website`. Shared templates are in `templates/`, with reusable fragments in `templates/includes/`. Static assets are under `static/`; edit Tailwind input in `static/src/input.css` and generate `static/css/output.css`. Product and architecture references live in `PRD.md`, `README.md`, and `docs/`.
 
 ## Build, Test, and Development Commands
 
 - `pip install -r requirements.txt` installs Python dependencies.
 - `npm install` installs Tailwind tooling.
 - `python manage.py migrate` applies database migrations.
+- `python manage.py check` runs Django system checks.
 - `python manage.py runserver` starts the local Django server.
 - `python manage.py makemigrations <app>` creates migrations after model changes.
 - `python manage.py test` runs the full Django test suite.
 - `python manage.py test catalog.tests.AvailabilityTests` runs a focused test class.
 - `npm run watch:css` rebuilds Tailwind during development.
 - `npm run build:css` writes the minified CSS output for release.
+- `docker compose up --build` builds and starts the optional containerized app.
+- `docker compose exec app python manage.py test` runs tests inside the container.
 
 ## Coding Style & Naming Conventions
 
@@ -26,8 +29,8 @@ Tests use Django `TestCase` and currently live in each app's `tests.py`. Name cl
 
 ## Commit & Pull Request Guidelines
 
-This checkout does not include `.git`, so no commit history is available to summarize. Use clear Conventional Commit-style subjects such as `feat: add rental return workflow` or `fix: correct availability lookup`. Pull requests should include a short purpose statement, linked issue or PRD section when relevant, test commands run, migration notes, and screenshots for visible UI changes.
+Use Conventional Commit-style subjects. Existing history includes `feat: ensure_admins command, bigger logo, prominent nav sections`, `fix: gate maintenance by module permission`, `style: enlarge brand logo`, and scoped variants such as `refactor(ui): design system review and optimization`. Pull requests should include a short purpose statement, linked issue or PRD section when relevant, test commands run, migration notes, and screenshots for visible UI changes.
 
 ## Security & Configuration Tips
 
-Do not commit local artifacts such as `venv/`, `node_modules/`, `db.sqlite3`, `.env`, or generated `static/css/output.css`; these are already ignored. Keep secrets and production settings out of `settings.py` before deployment.
+Do not commit local artifacts such as `venv/`, `node_modules/`, `db.sqlite3`, `.env`, `staticfiles/`, `var/`, or generated `static/css/output.css`; these are already ignored. Use `.env.example` as the template for local or Docker configuration, and keep secrets and production settings out of `settings.py` before deployment.

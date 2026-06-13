@@ -9,6 +9,9 @@
     <p class="mt-2 text-sm text-slate-600">
       Tem certeza que deseja excluir <strong>{{ object.name }}</strong>? Esta ação não pode ser desfeita.
     </p>
+    <p class="mt-2 text-sm text-app-muted">
+      Se o cliente possuir locações ou recebimentos, a exclusão será bloqueada e você será redirecionado para inativar o cliente.
+    </p>
 
     <form method="post" class="mt-6 form-actions">
       {% csrf_token %}

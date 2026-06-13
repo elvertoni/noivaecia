@@ -13,7 +13,7 @@ MODULE_URL_NAMES = {
     'rentals': 'rentals:list',
     'movements': 'rentals:list',
     'billing': 'rentals:list',
-    'reports': 'reports:report',
+    'reports': 'reports:index',
     'maintenance': 'maintenance:index',
 }
 

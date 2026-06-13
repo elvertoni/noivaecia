@@ -12,7 +12,7 @@ class Pickup(TimeStampedModel):
         related_name='pickup',
         verbose_name='locação',
     )
-    pickup_date = models.DateField('data de retirada')
+    pickup_date = models.DateField('data de retirada', db_index=True)
 
     class Meta:
         verbose_name = 'retirada'
@@ -31,7 +31,7 @@ class Return(TimeStampedModel):
         related_name='return_record',
         verbose_name='locação',
     )
-    return_date = models.DateField('data de devolução')
+    return_date = models.DateField('data de devolução', db_index=True)
     days_late = models.PositiveIntegerField('dias de atraso', default=0)
     penalty_applied = models.DecimalField(
         'multa aplicada', max_digits=10, decimal_places=2, default=0

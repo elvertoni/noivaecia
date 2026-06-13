@@ -9,7 +9,7 @@ from django.views.generic.detail import SingleObjectMixin
 from core.modules import MODULES
 
 from .forms import EmailUserCreationForm
-from .models import ModulePermission, User
+from .models import ActionPermission, ModulePermission, User
 
 
 class UserManagementRequiredMixin(UserPassesTestMixin):
@@ -87,3 +87,43 @@ class UserPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListVi
             )
         messages.success(request, 'Permissões atualizadas.')
         return redirect('user_permissions', pk=user.pk)
+
+
+class UserActionPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListView):
+    """Manage fine-grained action permissions for a single user (R12.01)."""
+
+    template_name = 'accounts/user_action_permissions.html'
+
+    def get(self, request, *args, **kwargs):
+        self.object = get_object_or_404(User, pk=kwargs['pk'])
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return User.objects.all()
+
+    def get_context_data(self, **kwargs):
+        from core.actions import ACTIONS
+        context = super().get_context_data(**kwargs)
+        allowed = set(
+            self.object.action_permissions.filter(allowed=True)
+            .values_list('action_key', flat=True)
+        )
+        context['target_user'] = self.object
+        context['actions'] = [
+            {'key': key, 'label': label, 'allowed': key in allowed}
+            for key, label in ACTIONS
+        ]
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from core.actions import ACTION_KEYS
+        user = get_object_or_404(User, pk=kwargs['pk'])
+        selected = set(request.POST.getlist('actions'))
+        for key in ACTION_KEYS:
+            ActionPermission.objects.update_or_create(
+                user=user,
+                action_key=key,
+                defaults={'allowed': key in selected},
+            )
+        messages.success(request, 'Permissões de ação atualizadas.')
+        return redirect('user_action_permissions', pk=user.pk)

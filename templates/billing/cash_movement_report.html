@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatório de Caixa · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Relatório de movimento de caixa</h1>
+      <p class="page-description">Período: {{ date_from }} a {{ date_to }} · Emitido em {{ today|date:'d/m/Y' }}</p>
+    </div>
+    <a href="#" class="btn btn-secondary" onclick="window.print();return false;">Imprimir</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="panel-spacious print:hidden">
+    <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div class="field-group">
+        <label class="field-label">De</label>
+        <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Até</label>
+        <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Conta</label>
+        <select name="account" class="field-input">
+          <option value="">Todas</option>
+          {% for acc in accounts %}
+            <option value="{{ acc.pk }}" {% if filters.account == acc.pk|stringformat:'s' %}selected{% endif %}>{{ acc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group self-end">
+        <button type="submit" class="btn btn-primary w-full">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Summary -->
+  <div class="grid grid-cols-3 gap-4">
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total entradas</p>
+      <p class="stat-value text-emerald-700">R$ {{ total_inflow|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Total saídas</p>
+      <p class="stat-value text-red-700">R$ {{ total_outflow|floatformat:2 }}</p>
+    </div>
+    <div class="panel-spacious text-center">
+      <p class="stat-label">Saldo do período</p>
+      <p class="stat-value {% if balance >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ balance|floatformat:2 }}</p>
+    </div>
+  </div>
+
+  <!-- Breakdown by source -->
+  {% if source_breakdown %}
+  <div>
+    <h2 class="section-title mb-3">Por origem</h2>
+    <div class="table-shell">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Origem</th>
+            <th class="text-right">Entradas</th>
+            <th class="text-right">Saídas</th>
+            <th class="text-right">Líquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in source_breakdown %}
+          <tr>
+            <td>{{ row.source }}</td>
+            <td class="text-right text-emerald-700">R$ {{ row.inflow|floatformat:2 }}</td>
+            <td class="text-right text-red-700">R$ {{ row.outflow|floatformat:2 }}</td>
+            <td class="text-right font-medium {% if row.net >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ row.net|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Detail table -->
+  {% if movements %}
+  <div>
+    <h2 class="section-title mb-3">Detalhamento</h2>
+    <div class="table-shell">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Conta</th>
+            <th>Origem</th>
+            <th>Histórico</th>
+            <th>Direção</th>
+            <th class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mv in movements %}
+          <tr>
+            <td>{{ mv.date|date:'d/m/Y' }}</td>
+            <td>{{ mv.account.name }}</td>
+            <td class="text-xs text-app-muted">{{ mv.get_source_display }}</td>
+            <td class="max-w-xs truncate">{{ mv.description|default:'—' }}</td>
+            <td>
+              {% if mv.direction == 'inflow' %}
+                <span class="badge badge-success">Entrada</span>
+              {% else %}
+                <span class="badge badge-danger">Saída</span>
+              {% endif %}
+            </td>
+            <td class="text-right font-medium">R$ {{ mv.amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
