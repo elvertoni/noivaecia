@@ -7,6 +7,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.ui import INPUT_CLASS
 
+from customers.models import Customer
 from .models import Rental, RentalItem
 
 MAX_PROOF_PHOTO_UPLOAD_SIZE = 8 * 1024 * 1024
@@ -116,6 +117,23 @@ class RentalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _style(self)
+        # Hide select — JS search widget handles display; this avoids loading 18k+ options
+        self.fields['customer'].widget.attrs['class'] = 'hidden'
+        # Limit queryset to at most the relevant customer (huge performance gain)
+        customer_id = None
+        if self.instance and self.instance.pk:
+            customer_id = getattr(self.instance, 'customer_id', None)
+        if customer_id is None and self.data.get('customer'):
+            try:
+                customer_id = int(self.data['customer'])
+            except (ValueError, TypeError):
+                pass
+        if customer_id:
+            self.fields['customer'].queryset = (
+                Customer.objects.filter(pk=customer_id).only('pk', 'name')
+            )
+        else:
+            self.fields['customer'].queryset = Customer.objects.none()
 
     def clean(self):
         cleaned = super().clean()

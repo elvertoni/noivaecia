@@ -239,6 +239,12 @@
               div.className = 'cursor-pointer px-4 py-2 hover:bg-slate-100';
               div.innerHTML = `<span class="font-medium">${c.text}</span> <span class="text-app-muted text-xs">${c.sub}</span>`;
               div.addEventListener('click', () => {
+                // Insert option so the hidden select carries the chosen value on submit
+                custSelect.innerHTML = '';
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.text;
+                custSelect.appendChild(opt);
                 custSelect.value = c.id;
                 custInput.value = c.text;
                 custResults.classList.add('hidden');
