@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Max, Q, Sum
 
 from core.models import TimeStampedModel
 
@@ -50,6 +50,13 @@ class Receivable(TimeStampedModel):
             models.Index(fields=('due_date',), name='rcv_due_date_idx'),
             models.Index(fields=('balance',), name='rcv_balance_idx'),
             models.Index(fields=('due_date', 'balance'), name='rcv_overdue_idx'),
+            models.Index(fields=('balance', 'due_date'), name='rcv_balance_due_idx'),
+            models.Index(fields=('rental', 'due_date'), name='rcv_rental_due_idx'),
+            models.Index(
+                fields=('due_date',),
+                condition=Q(balance__gt=0),
+                name='rcv_open_due_idx',
+            ),
         ]
 
     def __str__(self):
@@ -72,11 +79,19 @@ class Receivable(TimeStampedModel):
 
     def recalculate_from_payments(self, save=True):
         """Recalculate paid_amount and balance by summing Payment records (R3.06)."""
-        total = self.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        totals = self.payments.aggregate(
+            total=Sum('amount'),
+            last_date=Max(
+                'payment_date',
+                filter=Q(is_reversal=False, reversed_by__isnull=True),
+            ),
+        )
+        total = totals['total'] or Decimal('0')
         self.paid_amount = total
         self.balance = (self.amount or Decimal('0')) - self.paid_amount
+        self.last_payment_date = totals['last_date']
         if save:
-            self.save(update_fields=['paid_amount', 'balance', 'updated_at'])
+            self.save(update_fields=['paid_amount', 'balance', 'last_payment_date', 'updated_at'])
         return self.balance
 
 
@@ -149,6 +164,11 @@ class Payment(TimeStampedModel):
         ordering = ('payment_date', 'created_at')
         indexes = [
             models.Index(fields=('payment_date',), name='pmt_date_idx'),
+            models.Index(fields=('customer', 'payment_date'), name='pmt_customer_date_idx'),
+            models.Index(
+                fields=('is_reversal', '-payment_date', '-created_at'),
+                name='pmt_reversal_date_idx',
+            ),
         ]
 
     def __str__(self):
@@ -200,6 +220,14 @@ class FinancialMovement(TimeStampedModel):
         related_name='movements',
         verbose_name='recebimento',
     )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='financial_movements',
+        verbose_name='pagamento',
+    )
     rental = models.ForeignKey(
         'rentals.Rental',
         on_delete=models.SET_NULL,
@@ -229,6 +257,12 @@ class FinancialMovement(TimeStampedModel):
             models.Index(fields=('date',), name='fmv_date_idx'),
             models.Index(fields=('direction',), name='fmv_direction_idx'),
             models.Index(fields=('source',), name='fmv_source_idx'),
+            models.Index(fields=('-date', '-created_at'), name='fmv_date_created_idx'),
+            models.Index(fields=('direction', 'date'), name='fmv_direction_date_idx'),
+            models.Index(
+                fields=('source', 'direction', 'date'),
+                name='fmv_source_direction_date_idx',
+            ),
         ]
 
     def __str__(self):
