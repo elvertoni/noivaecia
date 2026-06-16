@@ -104,6 +104,32 @@ class ProductListFiltersTests(TestCase):
         self.assertNotIn(self.p4.pk, pks)
 
 
+class ProductSearchViewTests(TestCase):
+    def setUp(self):
+        self.cat_a, self.cat_b, self.p1, self.p2, self.p3, self.p4 = _make_catalog()
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.url = reverse('catalog:product_search')
+
+    def test_search_by_one_digit_code(self):
+        response = self.client.get(self.url, {'q': '1'})
+
+        self.assertEqual(response.status_code, 200)
+        ids = {row['id'] for row in response.json()['results']}
+        self.assertIn(self.p1.pk, ids)
+        self.assertIn(self.p2.pk, ids)
+        self.assertNotIn(self.p3.pk, ids)
+
+    def test_search_by_prefix_and_code(self):
+        response = self.client.get(self.url, {'q': 'TRN10'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [row['id'] for row in response.json()['results']],
+            [self.p4.pk],
+        )
+
+
 # ── R8.02 Badges ──────────────────────────────────────────────────────────────
 
 class ProductListBadgesTests(TestCase):

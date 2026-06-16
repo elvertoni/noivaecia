@@ -1,5 +1,7 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import JsonResponse
 from django.urls import reverse
+from django.views.decorators.http import require_GET
 from django.views.generic import TemplateView
 
 from billing.models import Receivable
@@ -16,6 +18,11 @@ MODULE_URL_NAMES = {
     'reports': 'reports:index',
     'maintenance': 'maintenance:index',
 }
+
+
+@require_GET
+def healthz(request):
+    return JsonResponse({'status': 'ok'})
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):

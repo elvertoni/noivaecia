@@ -5,11 +5,13 @@ from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 from PIL import Image
 
-from accounts.models import ModulePermission
+from accounts.models import ActionPermission, ModulePermission
 from catalog.models import Category, Product
 from customers.models import Customer
+from movements.models import Pickup
 from rentals.models import Rental, RentalItem
 
 User = get_user_model()
@@ -58,6 +60,14 @@ class RentalModelTests(TestCase):
         self.assertIsNotNone(rental.created_at)
         self.assertIsNotNone(rental.updated_at)
 
+    def test_report_indexes_declared(self):
+        index_names = {index.name for index in Rental._meta.indexes}
+
+        self.assertIn('rental_customer_status_idx', index_names)
+        self.assertIn('rental_status_pickup_num_idx', index_names)
+        self.assertIn('rental_status_return_num_idx', index_names)
+        self.assertIn('rental_customer_pickup_idx', index_names)
+
 
 class RentalCreateFlowTests(TestCase):
     def setUp(self):
@@ -67,6 +77,7 @@ class RentalCreateFlowTests(TestCase):
         self.customer = Customer.objects.create(name='Maria')
         cat = Category.objects.create(prefix='VN', name='Vestidos')
         self.product = Product.objects.create(category=cat, code=1, description='A', value=300)
+        self.other_product = Product.objects.create(category=cat, code=2, description='B', value=150)
 
     def test_create_rental_generates_sequential_number_and_total(self):
         data = {
@@ -105,6 +116,45 @@ class RentalCreateFlowTests(TestCase):
         other = User.objects.create_user(email='no@b.com', password='Senha12345')
         self.client.force_login(other)
         self.assertEqual(self.client.get('/locacoes/').status_code, 403)
+
+    def test_update_rental_can_change_item_product(self):
+        rental = Rental.objects.create(
+            number=10,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+            penalty_value=Decimal('0'),
+        )
+        item = RentalItem.objects.create(
+            rental=rental,
+            product=self.product,
+            description='Branco M',
+            value=Decimal('300'),
+        )
+
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-15',
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '1',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-id': item.pk,
+            'items-0-product': self.other_product.pk,
+            'items-0-description': 'Preto P',
+            'items-0-value': '150',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        rental.refresh_from_db()
+        self.assertEqual(item.product_id, self.other_product.pk)
+        self.assertEqual(rental.total_value, Decimal('150'))
 
 
 class RentalCancelledStatusTests(TestCase):
@@ -164,3 +214,28 @@ class RentalCancelledStatusTests(TestCase):
         )
         rental.refresh_from_db()
         self.assertIn('debutante', rental.legacy_notes)
+
+
+class RentalDeleteViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='delete@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        ActionPermission.objects.create(user=self.user, action_key='rentals.delete', allowed=True)
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name='Maria')
+
+    def test_cancelled_rental_with_pickup_cannot_be_deleted(self):
+        rental = Rental.objects.create(
+            number=30,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+            status=Rental.Status.CANCELLED,
+        )
+        Pickup.objects.create(rental=rental, pickup_date=date(2026, 6, 10))
+        Rental.objects.filter(pk=rental.pk).update(status=Rental.Status.CANCELLED)
+
+        response = self.client.post(reverse('rentals:delete', args=[rental.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Rental.objects.filter(pk=rental.pk).exists())

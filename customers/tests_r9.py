@@ -77,6 +77,31 @@ class CustomerListSearchTests(TestCase):
         self.assertIn(self.c1.pk, pks)
         self.assertNotIn(self.c2.pk, pks)
 
+    def test_search_by_rg_digits_matches_masked_rg(self):
+        customer = _make_customer(name='Clara RG', rg='12.345.678-9')
+
+        r = self.client.get(self.url, {'q': '123456789'})
+
+        pks = {c.pk for c in r.context['customers']}
+        self.assertIn(customer.pk, pks)
+
+    def test_search_by_masked_rg_matches_digits_rg(self):
+        customer = _make_customer(name='Dora RG', rg='123456789')
+
+        r = self.client.get(self.url, {'q': '12.345.678-9'})
+
+        pks = {c.pk for c in r.context['customers']}
+        self.assertIn(customer.pk, pks)
+
+    def test_quick_search_by_rg_digits_matches_masked_rg(self):
+        customer = _make_customer(name='Eva RG', rg='98.765.432-1')
+
+        r = self.client.get(reverse('customers:search'), {'q': '987654321'})
+
+        self.assertEqual(r.status_code, 200)
+        ids = {row['id'] for row in r.json()['results']}
+        self.assertIn(customer.pk, ids)
+
     def test_search_by_phone_home(self):
         r = self.client.get(self.url, {'q': '2222-3333'})
         pks = {c.pk for c in r.context['customers']}

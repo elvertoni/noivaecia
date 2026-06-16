@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import INPUT_CLASS
+from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import Pickup, Return
 
@@ -11,10 +11,11 @@ class PickupForm(forms.ModelForm):
     class Meta:
         model = Pickup
         fields = ('pickup_date',)
-        widgets = {'pickup_date': forms.DateInput(attrs={'type': 'date'})}
+        widgets = {'pickup_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['pickup_date'].input_formats = DATE_INPUT_FORMATS
         self.fields['pickup_date'].widget.attrs['class'] = INPUT_CLASS
 
 
@@ -40,16 +41,18 @@ class ReturnForm(forms.ModelForm):
     )
     payment_date = forms.DateField(
         label='Data do pagamento', required=False,
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
 
     class Meta:
         model = Return
         fields = ('return_date',)
-        widgets = {'return_date': forms.DateInput(attrs={'type': 'date'})}
+        widgets = {'return_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['return_date'].input_formats = DATE_INPUT_FORMATS
         self.fields['return_date'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_amount'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_method'].widget.attrs['class'] = INPUT_CLASS

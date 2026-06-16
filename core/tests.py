@@ -8,6 +8,14 @@ from customers.models import Customer
 User = get_user_model()
 
 
+class HealthcheckTests(TestCase):
+    def test_healthz_returns_ok(self):
+        response = self.client.get('/healthz/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ok'})
+
+
 class DashboardModuleTests(TestCase):
     def test_dashboard_only_lists_allowed_modules(self):
         user = User.objects.create_user(email='ops@b.com', password='Senha12345')
