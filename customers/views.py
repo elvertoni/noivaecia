@@ -2,7 +2,7 @@ import re
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -20,6 +20,10 @@ def _fmt_cpf(digits):
     return f'{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}'
 
 
+def _digits(value):
+    return re.sub(r'\D', '', value or '')
+
+
 class CustomerListView(ModuleAccessMixin, ListView):
     """Paginated, searchable customer listing (RF-11)."""
 
@@ -30,7 +34,7 @@ class CustomerListView(ModuleAccessMixin, ListView):
     paginate_by = 25
 
     # Colunas necessárias na lista — evita carregar text blobs de 18k linhas
-    _LIST_FIELDS = ('pk', 'name', 'city', 'state', 'cpf', 'phone_mobile',
+    _LIST_FIELDS = ('pk', 'name', 'city', 'state', 'rg', 'cpf', 'phone_mobile',
                     'phone_home', 'is_active', 'legacy_id')
 
     def get_queryset(self):
@@ -41,7 +45,7 @@ class CustomerListView(ModuleAccessMixin, ListView):
         active = self.request.GET.get('active', '').strip()
 
         if search:
-            digits = re.sub(r'\D', '', search)
+            digits = _digits(search)
             q_filter = (
                 Q(name__icontains=search)
                 | Q(phone_home__icontains=search)
@@ -50,18 +54,24 @@ class CustomerListView(ModuleAccessMixin, ListView):
                 | Q(rg__icontains=search)
                 | Q(cpf__icontains=search)
             )
-            # Aceita CPF digitado sem formatação (11 dígitos)
-            if len(digits) == 11:
-                q_filter |= Q(cpf=_fmt_cpf(digits))
-            elif digits.isdigit() and len(digits) <= 10:
-                q_filter |= Q(legacy_id=int(digits)) if digits.isdigit() else q_filter
+            if digits:
+                q_filter |= (
+                    Q(cpf_digits__icontains=digits)
+                    | Q(rg_digits__icontains=digits)
+                    | Q(phone_mobile_digits__icontains=digits)
+                )
+                # Aceita CPF digitado sem formatação (11 dígitos)
+                if len(digits) == 11:
+                    q_filter |= Q(cpf=_fmt_cpf(digits))
+                elif len(digits) <= 10:
+                    q_filter |= Q(legacy_id=int(digits))
             queryset = queryset.filter(q_filter)
 
         if cpf_q:
-            cpf_digits = re.sub(r'\D', '', cpf_q)
-            if len(cpf_digits) == 11:
-                queryset = queryset.filter(cpf=_fmt_cpf(cpf_digits))
-            elif cpf_digits:
+            cpf_digits = _digits(cpf_q)
+            if cpf_digits:
+                queryset = queryset.filter(cpf_digits__icontains=cpf_digits)
+            else:
                 queryset = queryset.filter(cpf__icontains=cpf_q)
 
         if active == '1':
@@ -156,7 +166,7 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         from decimal import Decimal
         from django.db.models import Sum
         from billing.models import Payment, Receivable
-        from rentals.models import Rental
+        from rentals.models import Rental, RentalItem
 
         ctx = super().get_context_data(**kwargs)
         customer = self.object
@@ -169,9 +179,11 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         product_q = self.request.GET.get('product', '').strip()
 
         # Rentals — optimized (R9.05)
+        rental_items = RentalItem.objects.select_related('product__category').defer('proof_photo')
         rentals_qs = (
             Rental.objects.filter(customer=customer)
-            .prefetch_related('items__product__category', 'pickup', 'return_record')
+            .select_related('pickup', 'return_record')
+            .prefetch_related(Prefetch('items', queryset=rental_items))
             .order_by('-number')
         )
         if date_from:
@@ -250,19 +262,28 @@ class CustomerSearchView(View):
         q = request.GET.get('q', '').strip()
         if len(q) < 2:
             return JsonResponse({'results': []})
-        qs = Customer.objects.filter(
+        digits = _digits(q)
+        q_filter = (
             Q(name__icontains=q)
             | Q(cpf__icontains=q)
             | Q(rg__icontains=q)
             | Q(phone_home__icontains=q)
             | Q(phone_mobile__icontains=q)
             | Q(phone_work__icontains=q)
-        ).values('id', 'name', 'cpf', 'city')[:15]
+        )
+        qs = Customer.objects.all()
+        if digits:
+            q_filter |= (
+                Q(cpf_digits__icontains=digits)
+                | Q(rg_digits__icontains=digits)
+                | Q(phone_mobile_digits__icontains=digits)
+            )
+        qs = qs.filter(q_filter).values('id', 'name', 'cpf', 'rg', 'city')[:15]
         results = [
             {
                 'id': c['id'],
                 'text': c['name'],
-                'sub': f"{c['cpf'] or '—'} · {c['city'] or '—'}",
+                'sub': f"CPF {c['cpf'] or '—'} · RG {c['rg'] or '—'} · {c['city'] or '—'}",
             }
             for c in qs
         ]
