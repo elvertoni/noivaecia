@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -56,13 +57,27 @@ class RegisterPaymentServiceTests(TestCase):
         self.assertEqual(self.rec.balance, Decimal('200'))
 
     def test_creates_financial_movement_inflow(self):
-        register_payment(self.rec, Decimal('150'), date(2026, 6, 20))
+        payment = register_payment(self.rec, Decimal('150'), date(2026, 6, 20))
         mv = FinancialMovement.objects.first()
         self.assertIsNotNone(mv)
         self.assertEqual(mv.direction, FinancialMovement.Direction.INFLOW)
         self.assertEqual(mv.amount, Decimal('150'))
         self.assertEqual(mv.source, FinancialMovement.Source.PAYMENT)
         self.assertEqual(mv.account, self.account)
+        self.assertEqual(mv.payment, payment)
+
+    def test_rolls_back_payment_when_movement_fails(self):
+        with mock.patch(
+            'billing.services.FinancialMovement.objects.create',
+            side_effect=RuntimeError('movement failed'),
+        ):
+            with self.assertRaises(RuntimeError):
+                register_payment(self.rec, Decimal('150'), date(2026, 6, 20))
+
+        self.assertEqual(Payment.objects.count(), 0)
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.paid_amount, Decimal('0'))
+        self.assertEqual(self.rec.balance, Decimal('300'))
 
     def test_links_payment_to_customer_and_rental(self):
         register_payment(self.rec, Decimal('50'), date(2026, 6, 20))
@@ -112,13 +127,32 @@ class ReversePaymentServiceTests(TestCase):
         self.assertEqual(self.rec.balance, Decimal('300'))
 
     def test_creates_outflow_financial_movement(self):
-        reverse_payment(self.payment, reason='Motivo')
+        reversal = reverse_payment(self.payment, reason='Motivo')
         outflow = FinancialMovement.objects.filter(
             direction=FinancialMovement.Direction.OUTFLOW
         ).first()
         self.assertIsNotNone(outflow)
         self.assertEqual(outflow.amount, Decimal('200'))
         self.assertEqual(outflow.source, FinancialMovement.Source.REVERSAL)
+        self.assertEqual(outflow.payment, reversal)
+
+    def test_rolls_back_reversal_when_movement_fails(self):
+        with mock.patch(
+            'billing.services.FinancialMovement.objects.create',
+            side_effect=RuntimeError('movement failed'),
+        ):
+            with self.assertRaises(RuntimeError):
+                reverse_payment(self.payment, reason='Motivo')
+
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(
+            FinancialMovement.objects.filter(direction=FinancialMovement.Direction.OUTFLOW).count(),
+            0,
+        )
+        self.payment.refresh_from_db()
+        self.rec.refresh_from_db()
+        self.assertIsNone(self.payment.reversed_by)
+        self.assertEqual(self.rec.balance, Decimal('100'))
 
 
 class FinancialKPIsTests(TestCase):

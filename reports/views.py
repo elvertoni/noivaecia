@@ -8,6 +8,7 @@ from django.views.generic import TemplateView
 from core.mixins import ModuleAccessMixin
 
 from .services import (
+    DEFAULT_REPORT_LIMIT,
     report_a_retirar,
     report_atrasados,
     report_contas_cliente,
@@ -30,6 +31,7 @@ class ReportsIndexView(ReportsAccessMixin, TemplateView):
 class _BaseReportView(ReportsAccessMixin, TemplateView):
     """Base with common filter param helpers and CSV export (R11.09/R11.10)."""
     csv_filename = 'relatorio.csv'
+    report_limit = DEFAULT_REPORT_LIMIT
 
     def _p(self, key, default=''):
         return self.request.GET.get(key, default).strip()
@@ -47,6 +49,9 @@ class _BaseReportView(ReportsAccessMixin, TemplateView):
             writer.writerow(row)
         return response
 
+    def _limit_for_export(self):
+        return None
+
 
 class ARetirarReportView(_BaseReportView):
     """Produtos a retirar — equiv. locados.rpt não retirados (R11.02)."""
@@ -58,16 +63,17 @@ class ARetirarReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_a_retirar(
             date_from=self._p('date_from'), date_to=self._p('date_to'),
             customer=self._p('customer'), prefix=self._p('prefix'), code=self._p('code'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Total']
         rows = []
-        for r in self._get_data():
+        for r in self._get_data(max_results=self._limit_for_export()):
             rows.append([
                 f'#{r.number}', r.customer.name, r.use_for or '',
                 r.pickup_date.strftime('%d/%m/%Y'), r.return_date.strftime('%d/%m/%Y'),
@@ -85,6 +91,7 @@ class ARetirarReportView(_BaseReportView):
             'prefix': self._p('prefix'),
             'code': self._p('code'),
             'today': date_cls.today(),
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -99,16 +106,17 @@ class RetiradosReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_retirados(
             date_from=self._p('date_from'), date_to=self._p('date_to'),
             customer=self._p('customer'), prefix=self._p('prefix'), code=self._p('code'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retirada', 'Retorno previsto', 'Total']
         rows = []
-        for r in self._get_data():
+        for r in self._get_data(max_results=self._limit_for_export()):
             pickup_date = r.pickup.pickup_date.strftime('%d/%m/%Y') if hasattr(r, 'pickup') and r.pickup else '—'
             rows.append([
                 f'#{r.number}', r.customer.name, pickup_date,
@@ -126,6 +134,7 @@ class RetiradosReportView(_BaseReportView):
             'prefix': self._p('prefix'),
             'code': self._p('code'),
             'today': date_cls.today(),
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -140,16 +149,17 @@ class DevolvidosReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_devolvidos(
             date_from=self._p('date_from'), date_to=self._p('date_to'),
             customer=self._p('customer'), prefix=self._p('prefix'), code=self._p('code'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retirada', 'Devolução efetiva', 'Total']
         rows = []
-        for r in self._get_data():
+        for r in self._get_data(max_results=self._limit_for_export()):
             actual = r.return_record.return_date.strftime('%d/%m/%Y') if hasattr(r, 'return_record') and r.return_record else '—'
             pickup = r.pickup.pickup_date.strftime('%d/%m/%Y') if hasattr(r, 'pickup') and r.pickup else '—'
             rows.append([f'#{r.number}', r.customer.name, pickup, actual, str(r.total_value)])
@@ -164,6 +174,7 @@ class DevolvidosReportView(_BaseReportView):
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -178,15 +189,16 @@ class AtrasadosReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_atrasados(
             customer=self._p('customer'), prefix=self._p('prefix'), code=self._p('code'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retorno previsto', 'Dias de atraso', 'Total']
         rows = []
-        for entry in self._get_data():
+        for entry in self._get_data(max_results=self._limit_for_export()):
             r = entry['rental']
             rows.append([f'#{r.number}', r.customer.name,
                          r.return_date.strftime('%d/%m/%Y'), entry['days_late'], str(r.total_value)])
@@ -200,6 +212,7 @@ class AtrasadosReportView(_BaseReportView):
             'prefix': self._p('prefix'),
             'code': self._p('code'),
             'today': date_cls.today(),
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -214,16 +227,17 @@ class LocacoesReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_locacoes(
             date_from=self._p('date_from'), date_to=self._p('date_to'),
             customer=self._p('customer'), status=self._p('status'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Status', 'Total']
         rows = []
-        for r in self._get_data():
+        for r in self._get_data(max_results=self._limit_for_export()):
             rows.append([
                 f'#{r.number}', r.customer.name, r.use_for or '',
                 r.pickup_date.strftime('%d/%m/%Y'), r.return_date.strftime('%d/%m/%Y'),
@@ -241,6 +255,7 @@ class LocacoesReportView(_BaseReportView):
             'customer': self._p('customer'),
             'status': self._p('status'),
             'status_choices': RentalModel.Status.choices,
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -255,15 +270,16 @@ class ContasVencimentoReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         overdue_only = self._p('overdue') == '1'
         return report_contas_vencimento(
             date_from=self._p('date_from'), date_to=self._p('date_to'),
             customer=self._p('customer'), overdue_only=overdue_only,
+            max_results=max_results,
         )
 
     def _export_csv(self):
-        qs, _ = self._get_data()
+        qs, _ = self._get_data(max_results=self._limit_for_export())
         headers = ['Vencimento', 'Locação', 'Cliente', 'Valor', 'Pago', 'Saldo']
         rows = []
         for rec in qs:
@@ -285,6 +301,7 @@ class ContasVencimentoReportView(_BaseReportView):
             'customer': self._p('customer'),
             'overdue': self._p('overdue'),
             'today': date_cls.today(),
+            'report_limit': self.report_limit,
         })
         return ctx
 
@@ -299,15 +316,16 @@ class ContasClienteReportView(_BaseReportView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_data(self):
+    def _get_data(self, max_results=DEFAULT_REPORT_LIMIT):
         return report_contas_cliente(
             customer=self._p('customer'), status=self._p('status'),
+            max_results=max_results,
         )
 
     def _export_csv(self):
         headers = ['Cliente', 'Locação', 'Vencimento', 'Valor', 'Pago', 'Saldo']
         rows = []
-        for group in self._get_data():
+        for group in self._get_data(max_results=self._limit_for_export()):
             for rec in group['receivables']:
                 rows.append([
                     group['customer'].name, f'#{rec.rental.number}',
@@ -322,6 +340,7 @@ class ContasClienteReportView(_BaseReportView):
             'groups': self._get_data(),
             'customer': self._p('customer'),
             'status': self._p('status'),
+            'report_limit': self.report_limit,
         })
         return ctx
 

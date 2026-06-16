@@ -1,9 +1,10 @@
+import re
 from datetime import date as date_cls
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -86,25 +87,6 @@ class CategoryDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
 
 # ── Products ──────────────────────────────────────────────────────────────────
 
-def _duplicate_product_ids():
-    """Return set of Product PKs whose (category, code) pair appears more than once."""
-    dupes = (
-        Product.objects.values('category_id', 'code')
-        .annotate(cnt=Count('id'))
-        .filter(cnt__gt=1)
-    )
-    if not dupes:
-        return set()
-    ids = set()
-    for d in dupes:
-        ids.update(
-            Product.objects.filter(
-                category_id=d['category_id'], code=d['code']
-            ).values_list('id', flat=True)
-        )
-    return ids
-
-
 class ProductListView(CatalogAccessMixin, ListView):
     """Product listing with extended filters (R8.01/R8.02)."""
 
@@ -114,7 +96,15 @@ class ProductListView(CatalogAccessMixin, ListView):
     paginate_by = 30
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('category')
+        duplicate = Product.objects.filter(
+            category_id=OuterRef('category_id'),
+            code=OuterRef('code'),
+        ).exclude(pk=OuterRef('pk'))
+        qs = (
+            super().get_queryset()
+            .select_related('category')
+            .annotate(is_duplicate=Exists(duplicate))
+        )
 
         prefix = self.request.GET.get('prefix', '').strip()
         code = self.request.GET.get('code', '').strip()
@@ -140,12 +130,13 @@ class ProductListView(CatalogAccessMixin, ListView):
         if only_placeholder:
             qs = qs.filter(is_placeholder=True)
         if only_duplicate:
-            qs = qs.filter(pk__in=_duplicate_product_ids())
+            qs = qs.filter(is_duplicate=True)
 
         return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        visible_products = ctx['object_list']
         ctx.update({
             'prefix': self.request.GET.get('prefix', ''),
             'code': self.request.GET.get('code', ''),
@@ -156,7 +147,9 @@ class ProductListView(CatalogAccessMixin, ListView):
             'only_duplicate': self.request.GET.get('duplicate', ''),
             'categories': Category.objects.all(),
             'placeholder_count': Product.objects.filter(is_placeholder=True).count(),
-            'duplicate_ids': _duplicate_product_ids(),
+            'duplicate_ids': {
+                product.pk for product in visible_products if product.is_duplicate
+            },
         })
         return ctx
 
@@ -220,6 +213,7 @@ class ProductHistoryView(CatalogAccessMixin, DetailView):
         rental_items = (
             RentalItem.objects.filter(product=self.object)
             .select_related('rental', 'rental__customer')
+            .defer('proof_photo')
             .order_by('-rental__pickup_date', '-rental__number')[:50]
         )
         ctx['rental_items'] = rental_items
@@ -386,16 +380,24 @@ class ProductSearchView(View):
         if not request.user.is_authenticated:
             return JsonResponse({'results': []}, status=403)
         q = request.GET.get('q', '').strip()
-        if len(q) < 1:
+        code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
+        if len(q) < 2 and not code_match:
             return JsonResponse({'results': []})
+        q_filter = (
+            Q(description__icontains=q)
+            | Q(color__icontains=q)
+            | Q(size__icontains=q)
+            | Q(category__prefix__icontains=q)
+        )
+        if code_match:
+            prefix, code = code_match.groups()
+            code_filter = Q(code=int(code))
+            if prefix:
+                code_filter &= Q(category__prefix__iexact=prefix)
+            q_filter |= code_filter
         qs = (
             Product.objects.select_related('category')
-            .filter(
-                Q(description__icontains=q)
-                | Q(color__icontains=q)
-                | Q(size__icontains=q)
-                | Q(category__prefix__icontains=q)
-            )
+            .filter(q_filter)
             .order_by('category__prefix', 'code')[:20]
         )
         results = [

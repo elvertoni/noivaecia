@@ -69,6 +69,27 @@ class ReceivableModelTests(TestCase):
         self.assertEqual(rec.paid_amount, Decimal('150'))
         self.assertEqual(rec.balance, Decimal('50'))
 
+    def test_report_indexes_declared(self):
+        index_names = {index.name for index in Receivable._meta.indexes}
+
+        self.assertIn('rcv_overdue_idx', index_names)
+        self.assertIn('rcv_balance_due_idx', index_names)
+        self.assertIn('rcv_rental_due_idx', index_names)
+
+    def test_recalculate_from_payments_updates_last_payment_date(self):
+        rec = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('200'),
+        )
+        Payment.objects.create(
+            receivable=rec, payment_date=date(2026, 6, 21), amount=Decimal('80'),
+        )
+        Payment.objects.create(
+            receivable=rec, payment_date=date(2026, 6, 22), amount=Decimal('70'),
+        )
+        rec.recalculate_from_payments()
+
+        self.assertEqual(rec.last_payment_date, date(2026, 6, 22))
+
 
 class InterestServiceTests(TestCase):
     def setUp(self):
@@ -175,6 +196,12 @@ class PaymentModelTests(TestCase):
         self.assertFalse(rec.is_paid)
         self.assertEqual(rec.balance, Decimal('300'))
 
+    def test_customer_date_index_declared(self):
+        index_names = {index.name for index in Payment._meta.indexes}
+
+        self.assertIn('pmt_customer_date_idx', index_names)
+        self.assertIn('pmt_reversal_date_idx', index_names)
+
 
 class FinancialMovementTests(TestCase):
     def setUp(self):
@@ -197,6 +224,23 @@ class FinancialMovementTests(TestCase):
         self.assertEqual(mv.direction, 'inflow')
         self.assertEqual(str(mv), 'Entrada R$200 · 2026-07-05')
 
+    def test_movement_can_link_payment(self):
+        payment = Payment.objects.create(
+            receivable=self.rec,
+            payment_date=date(2026, 7, 5),
+            amount=Decimal('200'),
+        )
+        mv = FinancialMovement.objects.create(
+            date=date(2026, 7, 5),
+            account=self.account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=Decimal('200'),
+            source=FinancialMovement.Source.PAYMENT,
+            receivable=self.rec,
+            payment=payment,
+        )
+        self.assertEqual(mv.payment, payment)
+
     def test_create_manual_outflow(self):
         mv = FinancialMovement.objects.create(
             date=date(2026, 7, 6),
@@ -218,3 +262,10 @@ class FinancialMovementTests(TestCase):
             legacy_id=9876,
         )
         self.assertEqual(mv.legacy_id, 9876)
+
+    def test_date_direction_index_declared(self):
+        index_names = {index.name for index in FinancialMovement._meta.indexes}
+
+        self.assertIn('fmv_date_created_idx', index_names)
+        self.assertIn('fmv_direction_date_idx', index_names)
+        self.assertIn('fmv_source_direction_date_idx', index_names)

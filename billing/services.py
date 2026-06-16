@@ -8,6 +8,10 @@ daily rate (RF-20): interest = balance * (daily_rate / 100) * days_late.
 from datetime import date as date_cls
 from decimal import Decimal
 
+from django.db import transaction
+from django.db.models import DecimalField, F, Sum, Value
+from django.db.models.functions import Coalesce
+
 from company.models import Company
 
 from .models import CashAccount, FinancialMovement, Payment, Receivable
@@ -74,71 +78,100 @@ def _add_months(start, months):
 def register_payment(receivable, amount, payment_date, method='cash',
                      interest_amount=None, discount_amount=None, notes='', user=None):
     """Create Payment, recalculate receivable balance, create FinancialMovement inflow (R5.06)."""
+    amount = Decimal(str(amount))
     interest_amount = Decimal(str(interest_amount or 0))
     discount_amount = Decimal(str(discount_amount or 0))
 
-    payment = Payment.objects.create(
-        receivable=receivable,
-        customer=receivable.rental.customer,
-        rental=receivable.rental,
-        payment_date=payment_date,
-        amount=amount,
-        interest_amount=interest_amount,
-        discount_amount=discount_amount,
-        method=method,
-        notes=notes,
-        user=user,
-    )
-    receivable.recalculate_from_payments()
-
-    account = CashAccount.objects.filter(active=True).order_by('id').first()
-    if account:
-        FinancialMovement.objects.create(
-            date=payment_date,
-            account=account,
-            direction=FinancialMovement.Direction.INFLOW,
-            amount=amount,
-            description=f'Recebimento — Locação #{receivable.rental.number}',
-            source=FinancialMovement.Source.PAYMENT,
-            customer=receivable.rental.customer,
-            receivable=receivable,
-            rental=receivable.rental,
-            created_by=user,
+    with transaction.atomic():
+        locked_receivable = (
+            Receivable.objects.select_for_update()
+            .select_related('rental__customer')
+            .get(pk=receivable.pk)
         )
+        payment = Payment.objects.create(
+            receivable=locked_receivable,
+            customer=locked_receivable.rental.customer,
+            rental=locked_receivable.rental,
+            payment_date=payment_date,
+            amount=amount,
+            interest_amount=interest_amount,
+            discount_amount=discount_amount,
+            method=method,
+            notes=notes,
+            user=user,
+        )
+        locked_receivable.recalculate_from_payments()
+
+        account = CashAccount.objects.select_for_update().filter(active=True).order_by('id').first()
+        if account:
+            FinancialMovement.objects.create(
+                date=payment_date,
+                account=account,
+                direction=FinancialMovement.Direction.INFLOW,
+                amount=amount,
+                description=f'Recebimento — Locação #{locked_receivable.rental.number}',
+                source=FinancialMovement.Source.PAYMENT,
+                customer=locked_receivable.rental.customer,
+                receivable=locked_receivable,
+                payment=payment,
+                rental=locked_receivable.rental,
+                created_by=user,
+            )
     return payment
 
 
 def reverse_payment(payment, reason, user=None):
     """Create reversal Payment (negative amount) and FinancialMovement outflow (R5.09)."""
-    from datetime import date as date_cls
-    reversal = Payment.objects.create(
-        receivable=payment.receivable,
-        customer=payment.customer,
-        rental=payment.rental,
-        payment_date=date_cls.today(),
-        amount=-payment.amount,
-        notes=f'Estorno: {reason}',
-        user=user,
-        is_reversal=True,
-    )
-    payment.reversed_by = reversal
-    payment.save(update_fields=['reversed_by', 'updated_at'])
-    payment.receivable.recalculate_from_payments()
-
-    account = CashAccount.objects.filter(active=True).order_by('id').first()
-    if account:
-        FinancialMovement.objects.create(
-            date=date_cls.today(),
-            account=account,
-            direction=FinancialMovement.Direction.OUTFLOW,
-            amount=payment.amount,
-            description=f'Estorno pgto #{payment.pk} — Locação #{payment.rental.number if payment.rental else "?"}',
-            source=FinancialMovement.Source.REVERSAL,
-            customer=payment.customer,
-            receivable=payment.receivable,
-            rental=payment.rental,
-            created_by=user,
+    today = date_cls.today()
+    with transaction.atomic():
+        locked_payment = (
+            Payment.objects.select_for_update()
+            .select_related('receivable', 'customer', 'rental')
+            .get(pk=payment.pk)
         )
+        if locked_payment.is_reversal or locked_payment.reversed_by_id is not None:
+            raise ValueError('Este pagamento já foi estornado.')
+
+        receivable = (
+            Receivable.objects.select_for_update()
+            .select_related('rental__customer')
+            .get(pk=locked_payment.receivable_id)
+        )
+        reversal = Payment.objects.create(
+            receivable=receivable,
+            customer=locked_payment.customer,
+            rental=locked_payment.rental,
+            payment_date=today,
+            amount=-locked_payment.amount,
+            interest_amount=-locked_payment.interest_amount,
+            discount_amount=-locked_payment.discount_amount,
+            method=locked_payment.method,
+            notes=f'Estorno: {reason}',
+            user=user,
+            is_reversal=True,
+        )
+        locked_payment.reversed_by = reversal
+        locked_payment.save(update_fields=['reversed_by', 'updated_at'])
+        receivable.recalculate_from_payments()
+
+        account = CashAccount.objects.select_for_update().filter(active=True).order_by('id').first()
+        if account:
+            FinancialMovement.objects.create(
+                date=today,
+                account=account,
+                direction=FinancialMovement.Direction.OUTFLOW,
+                amount=locked_payment.amount,
+                description=(
+                    f'Estorno pgto #{locked_payment.pk} — '
+                    f'Locação #{locked_payment.rental.number if locked_payment.rental else "?"}'
+                ),
+                source=FinancialMovement.Source.REVERSAL,
+                customer=locked_payment.customer,
+                receivable=receivable,
+                payment=reversal,
+                rental=locked_payment.rental,
+                created_by=user,
+            )
     return reversal
 
 
@@ -190,7 +223,6 @@ def compute_loss_penalty(item_value):
 
 def reconcile_financial():
     """Compare receivables, payments, balances and movements. Return dict of aggregates (R6.05)."""
-    from django.db.models import Sum, Q
     from .models import FinancialMovement, Payment, Receivable
 
     total_receivable_amount = (
@@ -223,30 +255,41 @@ def reconcile_financial():
     )
 
     # Divergence 2: open receivables where paid_amount != sum(payments.amount)
+    inconsistent_qs = (
+        Receivable.objects.filter(balance__gt=0)
+        .select_related('rental')
+        .annotate(
+            payment_sum=Coalesce(
+                Sum('payments__amount'),
+                Value(Decimal('0')),
+                output_field=DecimalField(max_digits=10, decimal_places=2),
+            )
+        )
+        .exclude(paid_amount=F('payment_sum'))
+    )
+    inconsistent_count = inconsistent_qs.count()
     inconsistent_balances = []
-    for rec in Receivable.objects.filter(balance__gt=0).select_related('rental').prefetch_related('payments'):
-        payment_sum = rec.payments.aggregate(v=Sum('amount'))['v'] or Decimal('0')
-        if abs(rec.paid_amount - payment_sum) > Decimal('0.01'):
+    for rec in inconsistent_qs[:100]:
+        if abs(rec.paid_amount - rec.payment_sum) > Decimal('0.01'):
             inconsistent_balances.append({
                 'id': rec.pk,
                 'rental_number': rec.rental.number if rec.rental_id else None,
                 'due_date': rec.due_date,
                 'amount': rec.amount,
                 'paid_amount_stored': rec.paid_amount,
-                'payment_sum': payment_sum,
-                'diff': rec.paid_amount - payment_sum,
+                'payment_sum': rec.payment_sum,
+                'diff': rec.paid_amount - rec.payment_sum,
             })
 
     # Divergence 3: payments without a corresponding FinancialMovement
-    payments_without_movement_ids = list(
+    payments_without_movement = (
         Payment.objects.filter(is_reversal=False)
-        .exclude(
-            receivable__in=FinancialMovement.objects.filter(
-                receivable__isnull=False,
-                source__in=[FinancialMovement.Source.PAYMENT],
-            ).values_list('receivable_id', flat=True)
-        )
-        .values_list('pk', flat=True)[:200]
+        .exclude(financial_movements__source=FinancialMovement.Source.PAYMENT)
+        .distinct()
+    )
+    payments_without_movement_count = payments_without_movement.count()
+    payments_without_movement_ids = list(
+        payments_without_movement.values_list('pk', flat=True)[:200]
     )
 
     return {
@@ -260,9 +303,9 @@ def reconcile_financial():
         'net_movements': total_inflow - total_outflow,
         'paid_no_payments_count': paid_no_payments_count,
         'paid_no_payments_sum': paid_no_payments_sum,
-        'inconsistent_balances': inconsistent_balances[:100],
-        'inconsistent_count': len(inconsistent_balances),
-        'payments_without_movement_count': len(payments_without_movement_ids),
+        'inconsistent_balances': inconsistent_balances,
+        'inconsistent_count': inconsistent_count,
+        'payments_without_movement_count': payments_without_movement_count,
     }
 
 

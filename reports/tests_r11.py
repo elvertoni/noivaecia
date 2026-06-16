@@ -13,6 +13,7 @@ from company.models import Company
 from customers.models import Customer
 from movements.models import Pickup, Return
 from rentals.models import Rental, RentalItem
+from reports.services import report_a_retirar
 
 User = get_user_model()
 TODAY = date.today()
@@ -99,6 +100,60 @@ class ARetirarReportViewTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('text/csv', r['Content-Type'])
         self.assertIn('attachment', r.get('Content-Disposition', ''))
+
+
+class ReportQueryPerformanceTests(TestCase):
+    def setUp(self):
+        _make_company()
+        self.category = Category.objects.create(prefix='VES', name='Vestidos')
+        self.product = Product.objects.create(
+            category=self.category,
+            code=1,
+            description='Vestido',
+            value=Decimal('100'),
+        )
+
+    def _rental_with_item(self, number):
+        rental = _make_rental(number, status='pending')
+        RentalItem.objects.create(
+            rental=rental,
+            product=self.product,
+            value=Decimal('100'),
+            proof_photo=b'large-binary',
+            proof_photo_size=12,
+        )
+        return rental
+
+    def test_rental_report_does_not_distinct_without_item_filters(self):
+        self._rental_with_item(210)
+
+        sql = str(report_a_retirar(max_results=None).query).upper()
+
+        self.assertNotIn('DISTINCT', sql)
+
+    def test_rental_report_distinct_only_when_item_filters_join(self):
+        self._rental_with_item(211)
+
+        sql = str(report_a_retirar(prefix='VES', max_results=None).query).upper()
+
+        self.assertIn('DISTINCT', sql)
+
+    def test_rental_report_defers_item_proof_photo_blob(self):
+        rental = self._rental_with_item(212)
+
+        result = report_a_retirar(code='1', max_results=None).get(pk=rental.pk)
+        item = result.items.all()[0]
+
+        self.assertIn('proof_photo', item.get_deferred_fields())
+
+    def test_rental_report_applies_default_display_limit(self):
+        self._rental_with_item(213)
+        self._rental_with_item(214)
+        self._rental_with_item(215)
+
+        rentals = list(report_a_retirar(max_results=2))
+
+        self.assertEqual(len(rentals), 2)
 
 
 class RetiradosReportViewTests(TestCase):

@@ -26,7 +26,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(FinancialMovement)
 class FinancialMovementAdmin(admin.ModelAdmin):
-    list_display = ('date', 'account', 'direction', 'amount', 'source', 'customer')
+    list_display = ('date', 'account', 'direction', 'amount', 'source', 'customer', 'payment')
     list_filter = ('date', 'direction', 'source', 'account')
     search_fields = ('description',)
-    raw_id_fields = ('customer', 'receivable', 'rental', 'created_by')
+    raw_id_fields = ('customer', 'receivable', 'payment', 'rental', 'created_by')

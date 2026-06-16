@@ -151,6 +151,49 @@ class ReconcileFinancialTests(TestCase):
         result = reconcile_financial()
         self.assertEqual(result['paid_no_payments_count'], 1)
 
+    def test_payments_without_movement_counts_before_sampling_ids(self):
+        Payment.objects.bulk_create([
+            Payment(
+                receivable=self.rec,
+                customer=self.customer,
+                rental=self.rental,
+                payment_date=date(2026, 6, 20),
+                amount=Decimal('1'),
+            )
+            for _ in range(201)
+        ])
+
+        result = reconcile_financial()
+        self.assertEqual(result['payments_without_movement_count'], 201)
+
+    def test_payments_without_movement_uses_payment_link(self):
+        first = Payment.objects.create(
+            receivable=self.rec,
+            customer=self.customer,
+            rental=self.rental,
+            payment_date=date(2026, 6, 20),
+            amount=Decimal('100'),
+        )
+        Payment.objects.create(
+            receivable=self.rec,
+            customer=self.customer,
+            rental=self.rental,
+            payment_date=date(2026, 6, 21),
+            amount=Decimal('100'),
+        )
+        FinancialMovement.objects.create(
+            date=date(2026, 6, 20),
+            account=self.account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=Decimal('100'),
+            source=FinancialMovement.Source.PAYMENT,
+            receivable=self.rec,
+            payment=first,
+        )
+
+        result = reconcile_financial()
+        self.assertEqual(result['payments_without_movement_count'], 1)
+
 
 class CashMovementListViewTests(TestCase):
     def setUp(self):

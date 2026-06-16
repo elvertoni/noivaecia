@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import INPUT_CLASS
+from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import CashAccount, FinancialMovement, Payment
 
@@ -17,7 +17,8 @@ class GenerateReceivablesForm(forms.Form):
     )
     first_due_date = forms.DateField(
         label='Primeiro vencimento', required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLASS}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
 
 
@@ -30,7 +31,8 @@ class PaymentForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLASS}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
 
 
@@ -43,7 +45,8 @@ class ReceivablePayForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLASS}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(
         label='Forma de pagamento',
@@ -84,8 +87,9 @@ class ManualMovementForm(forms.Form):
 
     date = forms.DateField(
         label='Data',
-        widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLASS}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
         initial=date_cls.today,
+        input_formats=DATE_INPUT_FORMATS,
     )
     account = forms.ModelChoiceField(
         label='Conta', queryset=CashAccount.objects.filter(active=True),
@@ -119,7 +123,8 @@ class MultiPayForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs={'type': 'date', 'class': INPUT_CLASS}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(
         label='Forma de pagamento',
