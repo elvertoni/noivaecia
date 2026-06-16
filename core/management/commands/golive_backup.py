@@ -1,6 +1,9 @@
 import hashlib
 import json
+import os
 import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 
 from django.conf import settings
@@ -22,61 +25,121 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _backup_sqlite(source_path: Path, backup_path: Path) -> None:
+    import sqlite3
+
+    source = sqlite3.connect(str(source_path))
+    try:
+        source.execute('PRAGMA query_only = ON')
+        target = sqlite3.connect(str(backup_path))
+        try:
+            with target:
+                source.backup(target)
+        finally:
+            target.close()
+    finally:
+        source.close()
+
+
+def _backup_postgres(db_config: dict, backup_path: Path) -> None:
+    env = os.environ.copy()
+    password = db_config.get('PASSWORD') or ''
+    if password:
+        env['PGPASSWORD'] = password
+
+    cmd = [
+        'pg_dump',
+        '--host', db_config.get('HOST') or 'localhost',
+        '--port', str(db_config.get('PORT') or 5432),
+        '--username', db_config.get('USER') or '',
+        '--dbname', db_config.get('NAME') or '',
+        '--format', 'custom',
+        '--no-password',
+        '--file', str(backup_path),
+    ]
+
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise CommandError(f'pg_dump falhou (exit {result.returncode}):\n{result.stderr}')
+
+
+def _archive_media(media_root: Path, archive_path: Path) -> None:
+    with tarfile.open(archive_path, 'w:gz') as tar:
+        tar.add(media_root, arcname='media')
+
+
 class Command(BaseCommand):
-    help = 'Create a go-live backup before Sprint R14.09 production go-live.'
+    help = 'Cria backup do banco (SQLite ou PostgreSQL), da mídia e um manifesto JSON.'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--output-dir',
-            default='var/backups',
-            help='Directory to write backup files (default: var/backups).',
+            default=None,
+            help='Diretório para os arquivos de backup (padrão: BACKUP_ROOT).',
         )
         parser.add_argument(
-            '--export-dir',
-            default='var/legacy_export',
-            help='Directory containing the legacy export manifest (default: var/legacy_export).',
+            '--skip-media',
+            action='store_true',
+            help='Pula o backup do diretório de mídia.',
         )
 
     def handle(self, *args, **options):
         db_config = settings.DATABASES['default']
-        if db_config.get('ENGINE') != 'django.db.backends.sqlite3':
-            raise CommandError(
-                'golive_backup only supports SQLite. '
-                f"Current engine: {db_config.get('ENGINE')}"
-            )
-
-        db_path = Path(db_config['NAME']).resolve()
-        if not db_path.exists():
-            raise CommandError(f'Database file not found: {db_path}')
+        engine = db_config.get('ENGINE', '')
 
         now = timezone.now()
         stamp = now.strftime('%Y-%m-%d-%H-%M-%S')
 
-        output_dir = Path(options['output_dir'])
+        output_dir = Path(options['output_dir'] or settings.BACKUP_ROOT)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        backup_path = output_dir / f'golive-{stamp}.sqlite3'
-        manifest_path = output_dir / f'golive-{stamp}-manifest.json'
+        manifest = {
+            'backup_at': now.isoformat(),
+            'database': None,
+            'database_backup': None,
+            'database_sha256': None,
+            'media_backup': None,
+            'media_sha256': None,
+            'counts': None,
+        }
 
-        self.stdout.write(f'Copying database to {backup_path} …')
-        shutil.copy2(db_path, backup_path)
+        # — banco —
+        if 'sqlite3' in engine:
+            db_path = Path(db_config['NAME']).resolve()
+            if not db_path.exists():
+                raise CommandError(f'Arquivo SQLite não encontrado: {db_path}')
+            backup_path = output_dir / f'noivas-{stamp}.sqlite3'
+            self.stdout.write(f'Backup SQLite → {backup_path}')
+            _backup_sqlite(db_path, backup_path)
+            shutil.copystat(db_path, backup_path)
+            manifest['database'] = 'sqlite'
 
-        sqlite_sha256 = _sha256(backup_path)
-        sqlite_size = backup_path.stat().st_size
+        elif 'postgresql' in engine:
+            backup_path = output_dir / f'noivas-{stamp}.dump'
+            self.stdout.write(f'Backup PostgreSQL → {backup_path}')
+            _backup_postgres(db_config, backup_path)
+            manifest['database'] = 'postgresql'
 
-        mdb_sha256 = None
-        mdb_exported_at = None
-        legacy_manifest_path = Path(options['export_dir']) / 'manifest.json'
-        if legacy_manifest_path.exists():
-            try:
-                with open(legacy_manifest_path, encoding='utf-8') as fh:
-                    legacy = json.load(fh)
-                mdb_sha256 = legacy.get('source_mdb_sha256') or legacy.get('mdb_sha256')
-                mdb_exported_at = legacy.get('exported_at')
-            except Exception as exc:
-                self.stderr.write(f'Warning: could not read legacy manifest: {exc}')
+        else:
+            raise CommandError(f'Engine não suportada: {engine}')
 
-        django_counts = {
+        manifest['database_backup'] = str(backup_path)
+        manifest['database_sha256'] = _sha256(backup_path)
+
+        # — mídia —
+        if not options['skip_media']:
+            media_root = Path(getattr(settings, 'MEDIA_ROOT', settings.BASE_DIR / 'media'))
+            if media_root.exists() and any(media_root.iterdir()):
+                media_path = output_dir / f'media-{stamp}.tar.gz'
+                self.stdout.write(f'Arquivando mídia → {media_path}')
+                _archive_media(media_root, media_path)
+                manifest['media_backup'] = str(media_path)
+                manifest['media_sha256'] = _sha256(media_path)
+            else:
+                self.stdout.write('Diretório de mídia vazio ou ausente — pulando.')
+
+        # — contagens —
+        manifest['counts'] = {
             'customers': Customer.objects.count(),
             'categories': Category.objects.count(),
             'products': Product.objects.count(),
@@ -90,18 +153,7 @@ class Command(BaseCommand):
             'cash_accounts': CashAccount.objects.count(),
         }
 
-        manifest = {
-            'backup_at': now.isoformat(),
-            'sqlite_source': str(db_path),
-            'sqlite_backup': str(backup_path.resolve()),
-            'sqlite_sha256': sqlite_sha256,
-            'sqlite_size': sqlite_size,
-            'mdb_sha256': mdb_sha256,
-            'mdb_exported_at': mdb_exported_at,
-            'django_counts': django_counts,
-            'notes': '',
-        }
-
+        manifest_path = output_dir / f'noivas-{stamp}-manifest.json'
         manifest_json = json.dumps(manifest, indent=2, ensure_ascii=False)
 
         with open(manifest_path, 'w', encoding='utf-8') as fh:
@@ -109,4 +161,4 @@ class Command(BaseCommand):
             fh.write('\n')
 
         self.stdout.write(manifest_json)
-        self.stdout.write(self.style.SUCCESS(f'\nManifest written to {manifest_path}'))
+        self.stdout.write(self.style.SUCCESS(f'\nManifesto escrito em {manifest_path}'))
