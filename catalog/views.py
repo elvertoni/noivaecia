@@ -14,7 +14,9 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, T
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from core.models import AuditLog
 
-from .availability import find_rental_for
+from rentals.models import RentalItem
+
+from .availability import INACTIVE_RENTAL_STATUSES, find_rental_for
 from .forms import CategoryForm, CategoryMergeForm, ProductForm
 from .models import Category, Product
 
@@ -411,6 +413,161 @@ class ProductSearchView(View):
             for p in qs
         ]
         return JsonResponse({'results': results})
+
+
+class ProductBrowseView(View):
+    """JSON faceted browse for the rental item picker modal.
+
+    Cascading facets: ``q`` narrows categories; the chosen category narrows the
+    size/color facets; size/color narrow the result grid. Availability for the
+    given ``date`` is computed inline (single query) so 500+ items can be
+    triaged at a glance instead of checked one by one.
+    """
+
+    PAGE_SIZE = 24
+    COLOR_FACET_LIMIT = 40
+    # Active rentals exclude both returned AND cancelled holds; shared with
+    # find_rental_for so the picker and the availability screen never diverge.
+    INACTIVE_STATUSES = INACTIVE_RENTAL_STATUSES
+
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'results': []}, status=403)
+
+        prefix = request.GET.get('prefix', '').strip()
+        size = request.GET.get('size', '').strip()
+        color = request.GET.get('color', '').strip()
+        q = request.GET.get('q', '').strip()
+        date_str = request.GET.get('date', '').strip()
+        include_empty = request.GET.get('empty') == '1'
+        try:
+            page = max(1, int(request.GET.get('page', '1')))
+        except (TypeError, ValueError):
+            page = 1
+
+        on_date = None
+        if date_str:
+            try:
+                on_date = date_cls.fromisoformat(date_str)
+            except ValueError:
+                on_date = None
+
+        # ``scoped``: q + visibility only (drives the category facet).
+        scoped = Product.objects.select_related('category')
+        if not include_empty:
+            scoped = scoped.exclude(description='')
+        if q:
+            scoped = scoped.filter(self._text_filter(q))
+
+        categories = list(
+            scoped.values('category__prefix', 'category__name')
+            .annotate(n=Count('id'))
+            .order_by('-n', 'category__prefix')
+        )
+
+        # ``base``: category applied (drives the size/color facets).
+        base = scoped.filter(category__prefix__iexact=prefix) if prefix else scoped
+        sizes = list(
+            base.exclude(size='').values('size')
+            .annotate(n=Count('id')).order_by('size')
+        )
+        colors = list(
+            base.exclude(color='').values('color')
+            .annotate(n=Count('id')).order_by('-n')[:self.COLOR_FACET_LIMIT]
+        )
+
+        # ``results``: size + color narrowing.
+        results_qs = base
+        if size:
+            results_qs = results_qs.filter(size__iexact=size)
+        if color:
+            results_qs = results_qs.filter(color__icontains=color)
+        results_qs = results_qs.order_by('category__prefix', 'code')
+
+        if on_date:
+            active_item = (
+                RentalItem.objects.filter(
+                    product=OuterRef('pk'),
+                    rental__pickup_date__lte=on_date,
+                    rental__return_date__gte=on_date,
+                )
+                .exclude(rental__status__in=self.INACTIVE_STATUSES)
+            )
+            results_qs = results_qs.annotate(in_use=Exists(active_item))
+
+        total = results_qs.count()
+        num_pages = max(1, (total + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        page = min(page, num_pages)
+        start = (page - 1) * self.PAGE_SIZE
+        page_items = list(results_qs[start:start + self.PAGE_SIZE])
+
+        rental_map = self._rentals_for_page(page_items, on_date) if on_date else {}
+
+        results = []
+        for product in page_items:
+            entry = {
+                'id': product.pk,
+                'code': f'{product.category.prefix}{product.code}',
+                'text': product.description or '—',
+                'color': product.color,
+                'size': product.size,
+                'value': str(product.value),
+            }
+            if on_date:
+                in_use = getattr(product, 'in_use', False)
+                entry['available'] = not in_use
+                rental = rental_map.get(product.pk)
+                if in_use and rental:
+                    entry['rental'] = {
+                        'number': rental.number,
+                        'customer': rental.customer.name,
+                        'return_date': rental.return_date.isoformat(),
+                    }
+            results.append(entry)
+
+        return JsonResponse({
+            'results': results,
+            'page': page,
+            'num_pages': num_pages,
+            'total': total,
+            'categories': categories,
+            'facets': {'sizes': sizes, 'colors': colors},
+        })
+
+    def _text_filter(self, q):
+        q_filter = (
+            Q(description__icontains=q)
+            | Q(description_search__icontains=q)
+            | Q(color__icontains=q)
+            | Q(size__icontains=q)
+            | Q(category__prefix__icontains=q)
+        )
+        code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
+        if code_match:
+            prefix, code = code_match.groups()
+            code_filter = Q(code=int(code))
+            if prefix:
+                code_filter &= Q(category__prefix__iexact=prefix)
+            q_filter |= code_filter
+        return q_filter
+
+    def _rentals_for_page(self, page_items, on_date):
+        in_use_ids = [p.pk for p in page_items if getattr(p, 'in_use', False)]
+        if not in_use_ids:
+            return {}
+        items = (
+            RentalItem.objects.filter(
+                product_id__in=in_use_ids,
+                rental__pickup_date__lte=on_date,
+                rental__return_date__gte=on_date,
+            )
+            .exclude(rental__status__in=self.INACTIVE_STATUSES)
+            .select_related('rental', 'rental__customer')
+        )
+        rental_map = {}
+        for item in items:
+            rental_map.setdefault(item.product_id, item.rental)
+        return rental_map
 
 
 class ProductAvailabilityJsonView(View):

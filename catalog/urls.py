@@ -11,6 +11,7 @@ from .views import (
     ProductAvailabilityJsonView,
     ProductCreateView,
     ProductDeleteView,
+    ProductBrowseView,
     ProductHistoryView,
     ProductListView,
     ProductSearchView,
@@ -37,5 +38,6 @@ urlpatterns = [
     path('disponibilidade/', AvailabilityView.as_view(), name='availability'),
     # JSON API for rental form (R7.03/R7.04)
     path('api/busca/', ProductSearchView.as_view(), name='product_search'),
+    path('api/navegar/', ProductBrowseView.as_view(), name='product_browse'),
     path('api/disponibilidade/', ProductAvailabilityJsonView.as_view(), name='availability_json'),
 ]
