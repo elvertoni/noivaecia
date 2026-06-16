@@ -1,18 +1,43 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-noivas_cia}
+      POSTGRES_USER: ${POSTGRES_USER:-noivas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${HOST_PORT:-8000}:${PORT:-8000}"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      - sqlite_data:/app/data
       - static_data:/app/staticfiles
+      - media_data:/app/media
     env_file:
       - .env
     environment:
-      - DATABASE_NAME=/app/data/db.sqlite3
       - STATIC_ROOT=/app/staticfiles
+      - PORT=${PORT:-8000}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${PORT:-8000}/healthz/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
 volumes:
-  sqlite_data:
+  postgres_data:
   static_data:
+  media_data:

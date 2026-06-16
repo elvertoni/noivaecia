@@ -1,0 +1,52 @@
+.git
+.gitignore
+.dockerignore
+
+# Local Python/runtime artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+
+# Local Node artifacts
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Databases, imports, backups and uploaded/runtime data
+db.sqlite3
+*.sqlite3
+*.sqlite3-*
+*.db
+*.mdb
+*.accdb
+var/
+staticfiles/
+media/
+
+# Generated frontend/build artifacts
+static/css/output.css
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Project-local scratch files
+_tmp_*
+print_*.png

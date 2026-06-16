@@ -7,6 +7,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -23,7 +24,7 @@ COPY . .
 
 RUN npm run build:css
 RUN npm prune --omit=dev
-RUN python manage.py collectstatic --noinput 2>/dev/null || true
+RUN DJANGO_SECRET_KEY=build-time-only DJANGO_ALLOWED_HOSTS=localhost python manage.py collectstatic --noinput
 RUN mkdir -p /app/data /app/staticfiles \
     && chmod +x /app/docker-entrypoint.sh
 
