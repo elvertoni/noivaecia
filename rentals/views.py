@@ -3,7 +3,7 @@ from datetime import date as date_cls
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -80,8 +80,12 @@ class RentalItemProofPhotoView(RentalAccessMixin, View):
         )
         if not item.proof_photo:
             raise Http404('Foto não encontrada.')
-        response = HttpResponse(
-            bytes(item.proof_photo),
+        try:
+            photo_file = item.proof_photo.open('rb')
+        except (FileNotFoundError, OSError, ValueError):
+            raise Http404('Foto não encontrada.')
+        response = FileResponse(
+            photo_file,
             content_type=item.proof_photo_content_type or 'image/jpeg',
         )
         response['Cache-Control'] = 'private, max-age=3600'
@@ -280,7 +284,7 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         rental = get_object_or_404(Rental, pk=kwargs['pk'])
 
-        has_pickup = hasattr(rental, 'pickup_record') and rental.pickup_record is not None
+        has_pickup = hasattr(rental, 'pickup') and rental.pickup is not None
         has_return = hasattr(rental, 'return_record') and rental.return_record is not None
         has_payments = rental.receivables.filter(payments__isnull=False).exists()
 
@@ -334,7 +338,7 @@ class RentalContractView(RentalAccessMixin, TemplateView):
             Rental.objects.select_related('customer').prefetch_related(
                 Prefetch(
                     'items',
-                    queryset=RentalItem.objects.select_related('product'),
+                    queryset=RentalItem.objects.select_related('product').defer('proof_photo'),
                 )
             ),
             pk=kwargs['pk'],

@@ -3,9 +3,11 @@ from pathlib import Path
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from core.ui import INPUT_CLASS
+from catalog.models import Product
+from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from customers.models import Customer
 from .models import Rental, RentalItem
@@ -61,11 +63,12 @@ def process_proof_photo(uploaded_file):
         uploaded_file.seek(0)
 
     stem = Path(uploaded_file.name or 'foto').stem[:120] or 'foto'
+    filename = f'{stem}.jpg'
     data = output.getvalue()
     return {
-        'data': data,
+        'file': ContentFile(data, name=filename),
         'content_type': 'image/jpeg',
-        'filename': f'{stem}.jpg',
+        'filename': filename,
         'size': len(data),
         'width': width,
         'height': height,
@@ -83,7 +86,8 @@ class RentalForm(forms.ModelForm):
     )
     first_due_date = forms.DateField(
         label='1ª data de vencimento', required=False,
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
         help_text='Padrão: data de retorno.',
     )
 
@@ -103,20 +107,23 @@ class RentalForm(forms.ModelForm):
     )
     down_payment_date = forms.DateField(
         label='Data da entrada', required=False,
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        input_formats=DATE_INPUT_FORMATS,
     )
 
     class Meta:
         model = Rental
         fields = ('customer', 'use_for', 'pickup_date', 'return_date', 'penalty_value', 'notes')
         widgets = {
-            'pickup_date': forms.DateInput(attrs={'type': 'date'}),
-            'return_date': forms.DateInput(attrs={'type': 'date'}),
+            'pickup_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+            'return_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _style(self)
+        for field_name in ('pickup_date', 'return_date'):
+            self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
         self.fields['customer'].widget.attrs['class'] = 'hidden'
         # Limit queryset to at most the relevant customer (huge performance gain)
@@ -170,6 +177,24 @@ class RentalItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.processed_proof_photo = None
         _style(self)
+        # Hidden select populated by the AJAX product search; keep only the selected
+        # product in the queryset to avoid rendering thousands of options per row.
+        self.fields['product'].widget.attrs['class'] = 'hidden'
+        product_id = None
+        if self.is_bound:
+            value = self.data.get(self.add_prefix('product'))
+            try:
+                product_id = int(value)
+            except (TypeError, ValueError):
+                pass
+        if product_id is None and self.instance and self.instance.pk:
+            product_id = getattr(self.instance, 'product_id', None)
+        if product_id:
+            self.fields['product'].queryset = (
+                Product.objects.filter(pk=product_id).select_related('category')
+            )
+        else:
+            self.fields['product'].queryset = Product.objects.none()
 
     def clean_proof_photo_upload(self):
         uploaded_file = self.cleaned_data.get('proof_photo_upload')
@@ -181,7 +206,7 @@ class RentalItemForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.processed_proof_photo:
-            instance.proof_photo = self.processed_proof_photo['data']
+            instance.proof_photo = self.processed_proof_photo['file']
             instance.proof_photo_content_type = self.processed_proof_photo['content_type']
             instance.proof_photo_filename = self.processed_proof_photo['filename']
             instance.proof_photo_size = self.processed_proof_photo['size']

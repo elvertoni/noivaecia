@@ -53,6 +53,12 @@ class Rental(TimeStampedModel):
         verbose_name = 'locação'
         verbose_name_plural = 'locações'
         ordering = ('-number',)
+        indexes = [
+            models.Index(fields=('customer', 'status'), name='rental_customer_status_idx'),
+            models.Index(fields=('status', 'pickup_date', 'number'), name='rental_status_pickup_num_idx'),
+            models.Index(fields=('status', 'return_date', 'number'), name='rental_status_return_num_idx'),
+            models.Index(fields=('customer', 'pickup_date'), name='rental_customer_pickup_idx'),
+        ]
 
     def __str__(self):
         return f'Locação #{self.number}'
@@ -86,11 +92,10 @@ class RentalItem(TimeStampedModel):
     )
     description = models.CharField('descrição', max_length=200, blank=True)
     value = models.DecimalField('valor', max_digits=10, decimal_places=2, default=0)
-    proof_photo = models.BinaryField(
+    proof_photo = models.FileField(
         'foto de comprovação',
+        upload_to='rentals/proof_photos/%Y/%m/',
         blank=True,
-        null=True,
-        editable=False,
     )
     proof_photo_content_type = models.CharField(
         'tipo da foto',
