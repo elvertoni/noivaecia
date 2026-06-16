@@ -13,16 +13,56 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-s3zvi52gohd2vm7)1=h@=1jd83%++@xboal+p#+swpam(%qha!',
-)
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('true', '1', 'yes', 'on')
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if os.environ.get('DJANGO_ALLOWED_HOSTS') else []
+
+def _env_int(name, default):
+    value = os.environ.get(name)
+    if value is None or value.strip() == '':
+        return default
+    return int(value)
+
+
+def _env_list(name, default=''):
+    value = os.environ.get(name, default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+DJANGO_ENV = os.environ.get('DJANGO_ENV', 'development').strip().lower()
+DEBUG = _env_bool('DJANGO_DEBUG', DJANGO_ENV != 'production')
+
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-only-noivas-cia'
+    else:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.'
+        )
+if not DEBUG and (
+    SECRET_KEY.lower().startswith('changeme')
+    or SECRET_KEY.startswith('django-insecure')
+):
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY must be replaced with a strong secret in production.'
+    )
+
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        'DJANGO_ALLOWED_HOSTS is required when DJANGO_DEBUG is false.'
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -53,10 +93,7 @@ LOGOUT_REDIRECT_URL = 'home'
 
 USER_CREATOR_EMAILS = [
     email.strip().lower()
-    for email in os.environ.get(
-        'USER_CREATOR_EMAILS',
-        'elvertoni@gmail.com,celsotavaresia@gmail.com',
-    ).split(',')
+    for email in os.environ.get('USER_CREATOR_EMAILS', '').split(',')
     if email.strip()
 ]
 
@@ -90,13 +127,31 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'noivas_cia.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('DATABASE_NAME', BASE_DIR / 'db.sqlite3'),
-        'OPTIONS': {'timeout': 20},
+_DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if _DATABASE_URL:
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(
+            _DATABASE_URL,
+            conn_max_age=60,
+            conn_health_checks=True,
+        )
     }
-}
+elif DEBUG:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.environ.get('DATABASE_NAME', BASE_DIR / 'db.sqlite3'),
+            'OPTIONS': {'timeout': 20},
+        }
+    }
+else:
+    raise ImproperlyConfigured(
+        'DATABASE_URL is required when DJANGO_DEBUG is false.'
+    )
+
+BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', BASE_DIR / 'var' / 'backups'))
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -127,6 +182,9 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 
 STATIC_ROOT = os.environ.get('STATIC_ROOT', BASE_DIR / 'staticfiles')
 
+MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -152,31 +210,27 @@ EMAIL_BACKEND = os.environ.get(
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in (
-    'true',
-    '1',
-    'yes',
-)
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in (
-    'true',
-    '1',
-    'yes',
-)
+EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', False)
 DEFAULT_FROM_EMAIL = os.environ.get(
     'DEFAULT_FROM_EMAIL',
     'Noivas & Cia <no-reply@tonicoimbra.com>',
 )
 
-if not DEBUG:
+CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS')
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_REDIRECT_EXEMPT = [r'^healthz/$']
+SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = _env_bool('CSRF_COOKIE_HTTPONLY', False)
+SECURE_HSTS_SECONDS = _env_int('SECURE_HSTS_SECONDS', 31536000 if not DEBUG else 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', False)
+
+if _env_bool('DJANGO_TRUST_X_FORWARDED_PROTO', not DEBUG):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    USE_X_FORWARDED_HOST = True
-    CSRF_TRUSTED_ORIGINS = [
-        origin.strip()
-        for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
-        if origin.strip()
-    ]
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
-    CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
+
+USE_X_FORWARDED_HOST = _env_bool('DJANGO_USE_X_FORWARDED_HOST', False)
