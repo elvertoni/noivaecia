@@ -19,8 +19,8 @@
   <form method="get" class="panel-spacious">
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <div class="field-group">
-        <label class="field-label">Prefixo / Categoria</label>
-        <select name="prefix" class="field-input">
+        <label class="field-label" for="product-prefix">Prefixo / Categoria</label>
+        <select name="prefix" id="product-prefix" class="field-input">
           <option value="">Todas</option>
           {% for cat in categories %}
             <option value="{{ cat.prefix }}" {% if cat.prefix == prefix %}selected{% endif %}>
@@ -30,29 +30,29 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Código</label>
-        <input type="number" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 123">
+        <label class="field-label" for="product-code">Código</label>
+        <input type="number" name="code" id="product-code" value="{{ code }}" class="field-input" placeholder="Ex: 123">
       </div>
       <div class="field-group">
-        <label class="field-label">Descrição</label>
-        <input type="text" name="description" value="{{ description }}" class="field-input" placeholder="Contém…">
+        <label class="field-label" for="product-description">Descrição</label>
+        <input type="text" name="description" id="product-description" value="{{ description }}" class="field-input" placeholder="Contém…">
       </div>
       <div class="field-group">
-        <label class="field-label">Cor</label>
-        <input type="text" name="color" value="{{ color }}" class="field-input" placeholder="Ex: branco">
+        <label class="field-label" for="product-color">Cor</label>
+        <input type="text" name="color" id="product-color" value="{{ color }}" class="field-input" placeholder="Ex: branco">
       </div>
       <div class="field-group">
-        <label class="field-label">Tamanho</label>
-        <input type="text" name="size" value="{{ size }}" class="field-input" placeholder="Ex: M">
+        <label class="field-label" for="product-size">Tamanho</label>
+        <input type="text" name="size" id="product-size" value="{{ size }}" class="field-input" placeholder="Ex: M">
       </div>
       <div class="field-group flex items-end gap-4">
-        <label class="inline-flex items-center gap-2 text-sm text-app-muted">
-          <input type="checkbox" name="placeholder" value="1" {% if only_placeholder %}checked{% endif %} class="rounded border-slate-300">
+        <label class="touch-target inline-flex items-center gap-2 text-sm text-app-muted" for="product-placeholder">
+          <input type="checkbox" name="placeholder" id="product-placeholder" value="1" {% if only_placeholder %}checked{% endif %} class="rounded border-slate-300">
           Apenas placeholders
           {% if placeholder_count %}<span class="badge badge-warning">{{ placeholder_count }}</span>{% endif %}
         </label>
-        <label class="inline-flex items-center gap-2 text-sm text-app-muted">
-          <input type="checkbox" name="duplicate" value="1" {% if only_duplicate %}checked{% endif %} class="rounded border-slate-300">
+        <label class="touch-target inline-flex items-center gap-2 text-sm text-app-muted" for="product-duplicate">
+          <input type="checkbox" name="duplicate" id="product-duplicate" value="1" {% if only_duplicate %}checked{% endif %} class="rounded border-slate-300">
           Apenas duplicados
         </label>
       </div>

@@ -12,16 +12,16 @@
   <form method="get" class="panel-spacious">
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="field-group">
-        <label class="field-label">Prefixo</label>
-        <input type="text" name="prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
+        <label class="field-label" for="availability-prefix">Prefixo</label>
+        <input type="text" name="prefix" id="availability-prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
       </div>
       <div class="field-group">
-        <label class="field-label">Código</label>
-        <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 42">
+        <label class="field-label" for="availability-code">Código</label>
+        <input type="text" name="code" id="availability-code" value="{{ code }}" class="field-input" placeholder="Ex: 42">
       </div>
       <div class="field-group">
-        <label class="field-label">Data</label>
-        <input type="date" name="date" value="{{ date }}" class="field-input">
+        <label class="field-label" for="availability-date">Data</label>
+        <input type="date" name="date" id="availability-date" value="{{ date }}" class="field-input" data-date-br="true">
       </div>
     </div>
     <button type="submit" class="mt-4 btn btn-primary">Consultar</button>

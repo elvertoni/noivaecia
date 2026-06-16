@@ -26,6 +26,7 @@
     <form method="get" class="flex gap-2" id="form-busca-geral">
       {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
       {% if cpf_search %}<input type="hidden" name="cpf" value="{{ cpf_search }}">{% endif %}
+      <label for="q" class="sr-only">Buscar clientes</label>
       <input type="search" name="q" id="q" value="{{ search }}"
              placeholder="Buscar por nome, RG, telefone ou ID legado…"
              class="field-input flex-1"
@@ -40,6 +41,7 @@
     <form method="get" class="flex gap-2" id="form-busca-cpf">
       {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
       {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
+      <label for="cpf_q" class="sr-only">Buscar por CPF</label>
       <input type="search" name="cpf" id="cpf_q" value="{{ cpf_search }}"
              placeholder="Buscar por CPF (com ou sem pontuação)"
              class="field-input flex-1"
@@ -53,15 +55,15 @@
     <div class="flex items-center gap-4 text-sm">
       <span class="text-slate-500">Mostrar:</span>
       <a href="?q={{ search }}&cpf={{ cpf_search }}"
-         class="{% if active_filter == '' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
+         class="touch-target inline-flex items-center {% if active_filter == '' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Todos
       </a>
       <a href="?active=1&q={{ search }}&cpf={{ cpf_search }}"
-         class="{% if active_filter == '1' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
+         class="touch-target inline-flex items-center {% if active_filter == '1' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Ativos
       </a>
       <a href="?active=0&q={{ search }}&cpf={{ cpf_search }}"
-         class="{% if active_filter == '0' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
+         class="touch-target inline-flex items-center {% if active_filter == '0' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Inativos
       </a>
     </div>
@@ -74,6 +76,7 @@
         <tr>
           <th>Nome</th>
           <th>Cidade / UF</th>
+          <th>RG</th>
           <th>CPF</th>
           <th>Celular</th>
           <th>Tel. Residencial</th>
@@ -98,6 +101,7 @@
                 —
               {% endif %}
             </td>
+            <td class="text-sm">{{ customer.rg|default:'—' }}</td>
             <td class="text-sm">{{ customer.cpf|default:'—' }}</td>
             <td>{{ customer.phone_mobile|default:'—' }}</td>
             <td>{{ customer.phone_home|default:'—' }}</td>
@@ -109,7 +113,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="6" class="table-empty">
+            <td colspan="7" class="table-empty">
               {% if search or cpf_search %}
                 Nenhum cliente encontrado para os filtros informados.
                 <a href="{% url 'customers:list' %}" class="text-link">Limpar busca</a>

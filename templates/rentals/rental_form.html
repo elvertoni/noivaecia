@@ -21,46 +21,52 @@
       <!-- Customer search (R7.02) -->
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="field-group md:col-span-2">
-          <label class="field-label">Cliente</label>
+          <label class="field-label" for="customer-search-input">Cliente</label>
           <!-- Hidden select for form submission -->
           <div class="relative">
             {{ form.customer }}
           </div>
-          <div class="mt-1 flex gap-2">
+          <div class="relative mt-1">
             <input type="text" id="customer-search-input"
                    class="field-input flex-1"
-                   placeholder="Digite para buscar cliente por nome, CPF ou telefone…"
-                   autocomplete="off">
+                   placeholder="Digite para buscar cliente por nome, CPF, RG ou telefone…"
+                   autocomplete="off"
+                   role="combobox"
+                   aria-autocomplete="list"
+                   aria-expanded="false"
+                   aria-controls="customer-search-results"
+                   aria-describedby="customer-search-status">
+            <div id="customer-search-results" class="autocomplete-results hidden" role="listbox"></div>
           </div>
-          <div id="customer-search-results" class="hidden absolute z-20 mt-1 max-h-60 w-full max-w-lg overflow-auto rounded-lg border border-app-border bg-white shadow-lg"></div>
+          <p id="customer-search-status" class="sr-only" aria-live="polite"></p>
           {% if form.customer.errors %}<p class="field-error">{{ form.customer.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- use_for -->
         <div class="field-group">
-          <label class="field-label">{{ form.use_for.label }}</label>
+          <label class="field-label" for="{{ form.use_for.id_for_label }}">{{ form.use_for.label }}</label>
           {{ form.use_for }}
           {% if form.use_for.errors %}<p class="field-error">{{ form.use_for.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- Dates -->
         <div class="field-group">
-          <label class="field-label">{{ form.pickup_date.label }}</label>
+          <label class="field-label" for="{{ form.pickup_date.id_for_label }}">{{ form.pickup_date.label }}</label>
           {{ form.pickup_date }}
           {% if form.pickup_date.errors %}<p class="field-error">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
-          <label class="field-label">{{ form.return_date.label }}</label>
+          <label class="field-label" for="{{ form.return_date.id_for_label }}">{{ form.return_date.label }}</label>
           {{ form.return_date }}
           {% if form.return_date.errors %}<p class="field-error">{{ form.return_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
-          <label class="field-label">{{ form.penalty_value.label }}</label>
+          <label class="field-label" for="{{ form.penalty_value.id_for_label }}">{{ form.penalty_value.label }}</label>
           {{ form.penalty_value }}
           {% if form.penalty_value.errors %}<p class="field-error">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group md:col-span-2">
-          <label class="field-label">{{ form.notes.label }}</label>
+          <label class="field-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
           {{ form.notes }}
           {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
         </div>
@@ -85,20 +91,25 @@
               {{ item_form.id }}
               <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
                 <!-- Product field with search widget (R7.03/R7.04) -->
-                <div class="field-group md:col-span-2">
-                  <label class="field-label">Produto</label>
+                <div class="field-group md:col-span-2 product-search-field">
+                  <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
                   {{ item_form.product }}
-                  <input type="text" class="product-search-input field-input mt-1"
+                  <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input mt-1"
                          placeholder="Buscar produto por código ou descrição…"
-                         autocomplete="off" data-field-id="{{ item_form.product.id_for_label }}">
-                  <div class="product-search-results hidden absolute z-20 mt-1 max-h-52 w-full max-w-sm overflow-auto rounded-lg border border-app-border bg-white shadow-lg text-sm"></div>
+                         autocomplete="off"
+                         data-field-id="{{ item_form.product.id_for_label }}"
+                         role="combobox"
+                         aria-autocomplete="list"
+                         aria-expanded="false">
+                  <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+                  <p class="product-search-status sr-only" aria-live="polite"></p>
                   <span class="availability-badge hidden text-xs mt-1"></span>
                   {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
                 </div>
                 {% for field in item_form.visible_fields %}
                   {% if field.name != 'DELETE' and field.name != 'product' %}
                     <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
-                      <label class="field-label">{{ field.label }}</label>
+                      <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                       {{ field }}
                       {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
                       {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
@@ -106,7 +117,7 @@
                   {% endif %}
                 {% endfor %}
               </div>
-              <label class="mt-3 inline-flex items-center gap-2 text-sm text-app-muted">
+              <label class="touch-target mt-3 inline-flex items-center gap-2 text-sm text-app-muted" for="{{ item_form.DELETE.id_for_label }}">
                 {{ item_form.DELETE }} Remover este item
               </label>
             </div>
@@ -121,13 +132,13 @@
         <h2 class="section-title">Parcelas</h2>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div class="field-group">
-            <label class="field-label">{{ form.installment_count.label }}</label>
+            <label class="field-label" for="{{ form.installment_count.id_for_label }}">{{ form.installment_count.label }}</label>
             {{ form.installment_count }}
             {% if form.installment_count.help_text %}<p class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
             {% if form.installment_count.errors %}<p class="field-error">{{ form.installment_count.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
-            <label class="field-label">{{ form.first_due_date.label }}</label>
+            <label class="field-label" for="{{ form.first_due_date.id_for_label }}">{{ form.first_due_date.label }}</label>
             {{ form.first_due_date }}
             {% if form.first_due_date.help_text %}<p class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
             {% if form.first_due_date.errors %}<p class="field-error">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
@@ -140,17 +151,17 @@
         <h2 class="section-title">Pagamento de entrada <span class="text-sm font-normal text-app-muted">(opcional)</span></h2>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div class="field-group">
-            <label class="field-label">{{ form.down_payment_amount.label }}</label>
+            <label class="field-label" for="{{ form.down_payment_amount.id_for_label }}">{{ form.down_payment_amount.label }}</label>
             {{ form.down_payment_amount }}
             {% if form.down_payment_amount.errors %}<p class="field-error">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
-            <label class="field-label">{{ form.down_payment_method.label }}</label>
+            <label class="field-label" for="{{ form.down_payment_method.id_for_label }}">{{ form.down_payment_method.label }}</label>
             {{ form.down_payment_method }}
             {% if form.down_payment_method.errors %}<p class="field-error">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
-            <label class="field-label">{{ form.down_payment_date.label }}</label>
+            <label class="field-label" for="{{ form.down_payment_date.id_for_label }}">{{ form.down_payment_date.label }}</label>
             {{ form.down_payment_date }}
             {% if form.down_payment_date.errors %}<p class="field-error">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
           </div>
@@ -175,26 +186,30 @@
   <div class="item-form rounded-xl border border-slate-200 p-4">
     <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
       <!-- product placeholder, injected by JS -->
-      <div class="field-group md:col-span-2">
-        <label class="field-label">Produto</label>
+      <div class="field-group md:col-span-2 product-search-field">
+        <label class="field-label" for="{{ items.empty_form.product.id_for_label }}-search">Produto</label>
         {% with f=items.empty_form %}{{ f.product }}{% endwith %}
-        <input type="text" class="product-search-input field-input mt-1"
+        <input type="text" id="{{ items.empty_form.product.id_for_label }}-search" class="product-search-input field-input mt-1"
                placeholder="Buscar produto por código ou descrição…"
-               autocomplete="off">
-        <div class="product-search-results hidden absolute z-20 mt-1 max-h-52 w-full max-w-sm overflow-auto rounded-lg border border-app-border bg-white shadow-lg text-sm"></div>
+               autocomplete="off"
+               role="combobox"
+               aria-autocomplete="list"
+               aria-expanded="false">
+        <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+        <p class="product-search-status sr-only" aria-live="polite"></p>
         <span class="availability-badge hidden text-xs mt-1"></span>
       </div>
       {% for field in items.empty_form.visible_fields %}
         {% if field.name != 'DELETE' and field.name != 'product' %}
           <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
-            <label class="field-label">{{ field.label }}</label>
+            <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}
             {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
           </div>
         {% endif %}
       {% endfor %}
     </div>
-    <label class="mt-3 inline-flex items-center gap-2 text-sm text-app-muted">
+    <label class="touch-target mt-3 inline-flex items-center gap-2 text-sm text-app-muted" for="{{ items.empty_form.DELETE.id_for_label }}">
       {{ items.empty_form.DELETE }} Remover este item
     </label>
   </div>
@@ -203,132 +218,359 @@
 
 <script>
 (function () {
-  // ── Item formset clone ────────────────────────────────────────────────────
+  const customerSearchUrl = "{% url 'customers:search' %}";
+  const productSearchUrl = "{% url 'catalog:product_search' %}";
+  const availabilityUrl = "{% url 'catalog:availability_json' %}";
+
+  function replaceToken(value, index) {
+    return value ? value.replace(/__prefix__/g, index) : value;
+  }
+
+  function updateFormsetFragment(fragment, index) {
+    fragment.querySelectorAll('*').forEach(function (el) {
+      Array.from(el.attributes).forEach(function (attr) {
+        if (attr.value.includes('__prefix__')) {
+          el.setAttribute(attr.name, replaceToken(attr.value, index));
+        }
+      });
+    });
+  }
+
+  function createText(className, text) {
+    const el = document.createElement('span');
+    el.className = className;
+    el.textContent = text || '';
+    return el;
+  }
+
+  function setHiddenSelectValue(select, value, label) {
+    select.replaceChildren();
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    select.appendChild(opt);
+    select.value = value;
+  }
+
+  function setSearchExpanded(input, expanded) {
+    input.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
+  function setupAutocomplete(config) {
+    const input = config.input;
+    const results = config.results;
+    const status = config.status;
+    let timer = null;
+    let controller = null;
+    let requestId = 0;
+    let options = [];
+    let activeIndex = -1;
+
+    if (!input || !results) return;
+
+    if (!results.id) results.id = `${input.id}-results`;
+    input.setAttribute('aria-controls', results.id);
+    setSearchExpanded(input, false);
+
+    function setStatus(message) {
+      if (status) status.textContent = message || '';
+    }
+
+    function open() {
+      results.classList.remove('hidden');
+      setSearchExpanded(input, true);
+    }
+
+    function close() {
+      results.classList.add('hidden');
+      setSearchExpanded(input, false);
+      activeIndex = -1;
+      input.removeAttribute('aria-activedescendant');
+      options.forEach(function (option) {
+        option.el.setAttribute('aria-selected', 'false');
+        option.el.classList.remove('autocomplete-option-active');
+      });
+    }
+
+    function abortPending() {
+      requestId += 1;
+      if (controller) controller.abort();
+      controller = null;
+    }
+
+    function showMessage(message) {
+      options = [];
+      activeIndex = -1;
+      input.removeAttribute('aria-activedescendant');
+      const item = document.createElement('div');
+      item.className = 'autocomplete-message';
+      item.textContent = message;
+      results.replaceChildren(item);
+      open();
+      setStatus(message);
+    }
+
+    function clear() {
+      options = [];
+      activeIndex = -1;
+      results.replaceChildren();
+      input.removeAttribute('aria-activedescendant');
+      close();
+    }
+
+    function setActive(index) {
+      if (!options.length) return;
+      activeIndex = (index + options.length) % options.length;
+      options.forEach(function (option, optionIndex) {
+        const active = optionIndex === activeIndex;
+        option.el.setAttribute('aria-selected', active ? 'true' : 'false');
+        option.el.classList.toggle('autocomplete-option-active', active);
+      });
+      input.setAttribute('aria-activedescendant', options[activeIndex].el.id);
+      options[activeIndex].el.scrollIntoView({ block: 'nearest' });
+    }
+
+    function choose(option) {
+      config.onSelect(option.data);
+      clear();
+      setStatus(`${config.selectedLabel} selecionado.`);
+    }
+
+    function render(data) {
+      const rows = data.results || [];
+      options = [];
+      activeIndex = -1;
+      results.replaceChildren();
+
+      if (!rows.length) {
+        showMessage(config.emptyMessage);
+        return;
+      }
+
+      rows.forEach(function (row, index) {
+        const option = document.createElement('div');
+        option.id = `${results.id}-option-${index}`;
+        option.className = 'autocomplete-option';
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', 'false');
+        config.renderOption(option, row);
+        option.addEventListener('pointerdown', function (event) {
+          event.preventDefault();
+        });
+        option.addEventListener('click', function () {
+          choose({ data: row, el: option });
+        });
+        results.appendChild(option);
+        options.push({ data: row, el: option });
+      });
+
+      open();
+      setStatus(`${rows.length} resultado${rows.length === 1 ? '' : 's'} encontrado${rows.length === 1 ? '' : 's'}.`);
+    }
+
+    input.addEventListener('input', function () {
+      const query = input.value.trim();
+      clearTimeout(timer);
+      abortPending();
+
+      if (!config.shouldSearch(query)) {
+        clear();
+        setStatus('');
+        return;
+      }
+
+      timer = setTimeout(function () {
+        const currentRequestId = requestId + 1;
+        requestId = currentRequestId;
+        controller = new AbortController();
+        showMessage('Buscando...');
+
+        fetch(`${config.url}?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+          .then(function (response) {
+            if (!response.ok) throw new Error('search_failed');
+            return response.json();
+          })
+          .then(function (data) {
+            if (currentRequestId !== requestId) return;
+            render(data);
+          })
+          .catch(function (error) {
+            if (error.name === 'AbortError' || currentRequestId !== requestId) return;
+            showMessage(config.errorMessage);
+          });
+      }, 250);
+    });
+
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown') {
+        if (options.length) {
+          event.preventDefault();
+          open();
+          setActive(activeIndex + 1);
+        }
+      } else if (event.key === 'ArrowUp') {
+        if (options.length) {
+          event.preventDefault();
+          open();
+          setActive(activeIndex - 1);
+        }
+      } else if (event.key === 'Enter') {
+        if (!results.classList.contains('hidden') && activeIndex >= 0 && options[activeIndex]) {
+          event.preventDefault();
+          choose(options[activeIndex]);
+        }
+      } else if (event.key === 'Escape') {
+        abortPending();
+        clear();
+      }
+    });
+
+    document.addEventListener('pointerdown', function (event) {
+      if (event.target !== input && !results.contains(event.target)) {
+        close();
+      }
+    });
+  }
+
+  function markRentalDateInputs(root) {
+    root.querySelectorAll('input[type="date"]').forEach(function (input) {
+      input.dataset.dateBr = 'true';
+    });
+    if (window.NoivasCiaForms && window.NoivasCiaForms.prepareDateInputs) {
+      window.NoivasCiaForms.prepareDateInputs(root);
+    }
+  }
+
+  markRentalDateInputs(document);
+
+  // Item formset clone
   const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
   const container = document.getElementById('item-forms');
   const tpl = document.getElementById('empty-form');
   if (tpl && totalForms && container) {
     document.getElementById('add-item').addEventListener('click', function () {
       const index = parseInt(totalForms.value, 10);
-      const html = tpl.innerHTML.replace(/__prefix__/g, index);
-      container.insertAdjacentHTML('beforeend', html);
+      const fragment = tpl.content.cloneNode(true);
+      updateFormsetFragment(fragment, index);
+      container.appendChild(fragment);
       totalForms.value = index + 1;
-      attachProductSearch(container.lastElementChild);
+      const row = container.lastElementChild;
+      markRentalDateInputs(row);
+      attachProductSearch(row);
     });
   }
 
-  // ── Customer search (R7.02) ───────────────────────────────────────────────
+  // Customer search (R7.02)
   const custInput = document.getElementById('customer-search-input');
   const custSelect = document.getElementById('id_customer');
   const custResults = document.getElementById('customer-search-results');
+  const custStatus = document.getElementById('customer-search-status');
 
-  if (custInput && custSelect) {
-    let custTimer;
-    custInput.addEventListener('input', function () {
-      clearTimeout(custTimer);
-      const q = this.value.trim();
-      if (q.length < 2) { custResults.classList.add('hidden'); return; }
-      custTimer = setTimeout(() => {
-        fetch(`{% url 'customers:search' %}?q=${encodeURIComponent(q)}`)
-          .then(r => r.json())
-          .then(data => {
-            custResults.innerHTML = '';
-            if (!data.results.length) { custResults.classList.add('hidden'); return; }
-            data.results.forEach(c => {
-              const div = document.createElement('div');
-              div.className = 'cursor-pointer px-4 py-2 hover:bg-slate-100';
-              div.innerHTML = `<span class="font-medium">${c.text}</span> <span class="text-app-muted text-xs">${c.sub}</span>`;
-              div.addEventListener('click', () => {
-                // Insert option so the hidden select carries the chosen value on submit
-                custSelect.innerHTML = '';
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.textContent = c.text;
-                custSelect.appendChild(opt);
-                custSelect.value = c.id;
-                custInput.value = c.text;
-                custResults.classList.add('hidden');
-              });
-              custResults.appendChild(div);
-            });
-            custResults.classList.remove('hidden');
-          });
-      }, 250);
-    });
-    document.addEventListener('click', e => {
-      if (!custResults.contains(e.target) && e.target !== custInput) {
-        custResults.classList.add('hidden');
-      }
+  if (custInput && custSelect && custResults) {
+    custSelect.setAttribute('aria-hidden', 'true');
+    setupAutocomplete({
+      input: custInput,
+      results: custResults,
+      status: custStatus,
+      url: customerSearchUrl,
+      selectedLabel: 'Cliente',
+      emptyMessage: 'Nenhum cliente encontrado.',
+      errorMessage: 'Não foi possível buscar clientes. Tente novamente.',
+      shouldSearch: function (query) { return query.length >= 2; },
+      renderOption: function (option, customer) {
+        option.appendChild(createText('font-medium text-app-ink', customer.text));
+        if (customer.sub) {
+          option.appendChild(createText('ml-2 text-xs text-app-muted', customer.sub));
+        }
+      },
+      onSelect: function (customer) {
+        setHiddenSelectValue(custSelect, customer.id, customer.text);
+        custInput.value = customer.text;
+      },
     });
     // Pre-fill input label from existing selection
     const selectedOpt = custSelect.options[custSelect.selectedIndex];
     if (selectedOpt && selectedOpt.value) custInput.value = selectedOpt.text;
   }
 
-  // ── Product search (R7.03/R7.04) ─────────────────────────────────────────
+  // Product search (R7.03/R7.04)
   function attachProductSearch(row) {
     const searchInput = row.querySelector('.product-search-input');
     const resultsDiv = row.querySelector('.product-search-results');
+    const status = row.querySelector('.product-search-status');
     const availBadge = row.querySelector('.availability-badge');
     const productSelect = row.querySelector('select[name$="-product"]');
     const pickupDateInput = document.getElementById('id_pickup_date');
 
-    if (!searchInput || !productSelect) return;
+    if (!searchInput || !productSelect || !resultsDiv) return;
 
-    let timer;
-    searchInput.addEventListener('input', function () {
-      clearTimeout(timer);
-      const q = this.value.trim();
-      if (q.length < 1) { resultsDiv.classList.add('hidden'); return; }
-      timer = setTimeout(() => {
-        fetch(`{% url 'catalog:product_search' %}?q=${encodeURIComponent(q)}`)
-          .then(r => r.json())
-          .then(data => {
-            resultsDiv.innerHTML = '';
-            if (!data.results.length) { resultsDiv.classList.add('hidden'); return; }
-            data.results.forEach(p => {
-              const div = document.createElement('div');
-              div.className = 'cursor-pointer px-4 py-2 hover:bg-slate-100';
-              div.innerHTML = `<span class="font-medium">${p.code}</span> ${p.text} <span class="text-app-muted text-xs">${p.sub} · R$ ${p.value}</span>`;
-              div.addEventListener('click', () => {
-                productSelect.value = p.id;
-                searchInput.value = `${p.code} · ${p.text}`;
-                resultsDiv.classList.add('hidden');
-                checkAvailability(p.id, productSelect, availBadge, pickupDateInput);
-                // Suggest price into value field
-                const valueInput = row.querySelector('input[name$="-value"]');
-                if (valueInput && !valueInput.value) valueInput.value = p.value;
-              });
-              resultsDiv.appendChild(div);
-            });
-            resultsDiv.classList.remove('hidden');
-          });
-      }, 250);
-    });
-    document.addEventListener('click', e => {
-      if (!resultsDiv.contains(e.target) && e.target !== searchInput) {
-        resultsDiv.classList.add('hidden');
-      }
+    productSelect.setAttribute('aria-hidden', 'true');
+    setupAutocomplete({
+      input: searchInput,
+      results: resultsDiv,
+      status: status,
+      url: productSearchUrl,
+      selectedLabel: 'Produto',
+      emptyMessage: 'Nenhum produto encontrado.',
+      errorMessage: 'Não foi possível buscar produtos. Tente novamente.',
+      shouldSearch: function (query) { return query.length >= 2 || /^\d+$/.test(query); },
+      renderOption: function (option, product) {
+        option.appendChild(createText('font-medium text-app-ink', product.code));
+        option.appendChild(createText('ml-2 text-app-ink', product.text));
+        option.appendChild(createText('ml-2 text-xs text-app-muted', `${product.sub} · R$ ${product.value}`));
+      },
+      onSelect: function (product) {
+        const label = `${product.code} · ${product.text}`;
+        setHiddenSelectValue(productSelect, product.id, label);
+        searchInput.value = label;
+        checkAvailability(product.id, row, availBadge, pickupDateInput);
+        const valueInput = row.querySelector('input[name$="-value"]');
+        if (valueInput && !valueInput.value) valueInput.value = product.value;
+      },
     });
     // Pre-fill from existing selection
     const sel = productSelect.options[productSelect.selectedIndex];
     if (sel && sel.value) searchInput.value = sel.text;
   }
 
-  function checkAvailability(productId, productSelect, badge, pickupDateInput) {
-    const d = pickupDateInput ? pickupDateInput.value : '';
+  function checkAvailability(productId, row, badge, pickupDateInput) {
+    const d = window.NoivasCiaForms && window.NoivasCiaForms.getDateInputIsoValue
+      ? window.NoivasCiaForms.getDateInputIsoValue(pickupDateInput)
+      : (pickupDateInput ? pickupDateInput.value : '');
     if (!productId || !d) return;
-    fetch(`{% url 'catalog:availability_json' %}?product_id=${productId}&date=${d}`)
-      .then(r => r.json())
-      .then(data => {
-        badge.classList.remove('hidden', 'text-emerald-700', 'text-red-700');
+
+    row._availabilityRequestId = (row._availabilityRequestId || 0) + 1;
+    const currentRequestId = row._availabilityRequestId;
+    if (row._availabilityController) row._availabilityController.abort();
+    row._availabilityController = new AbortController();
+
+    badge.classList.remove('hidden', 'text-emerald-700', 'text-red-700');
+    badge.classList.add('text-app-muted');
+    badge.textContent = 'Verificando disponibilidade...';
+
+    fetch(`${availabilityUrl}?product_id=${encodeURIComponent(productId)}&date=${encodeURIComponent(d)}`, {
+      signal: row._availabilityController.signal,
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error('availability_failed');
+        return response.json();
+      })
+      .then(function (data) {
+        if (currentRequestId !== row._availabilityRequestId) return;
+        badge.classList.remove('text-app-muted', 'text-emerald-700', 'text-red-700');
         if (data.available) {
-          badge.textContent = '✓ Disponível';
+          badge.textContent = 'Disponível';
           badge.classList.add('text-emerald-700');
         } else {
-          badge.textContent = `✗ Em uso — Loc. #${data.rental_number} (${data.customer}) até ${data.return_date}`;
+          badge.textContent = `Em uso: locação #${data.rental_number} (${data.customer}) até ${data.return_date}`;
           badge.classList.add('text-red-700');
         }
+      })
+      .catch(function (error) {
+        if (error.name === 'AbortError' || currentRequestId !== row._availabilityRequestId) return;
+        badge.classList.remove('text-app-muted', 'text-emerald-700');
+        badge.classList.add('text-red-700');
+        badge.textContent = 'Não foi possível verificar disponibilidade.';
       });
   }
 

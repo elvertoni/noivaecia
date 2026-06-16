@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
+  <script id="noivas-cia-app-js" src="{% static 'js/app.js' %}" data-module="NoivasCiaApp" defer></script>
 </head>
 <body class="min-h-screen bg-app-bg font-sans text-app-ink">
   <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-700 focus:px-4 focus:py-2 focus:text-white focus:outline-none">Pular para o conteúdo</a>
@@ -26,7 +27,7 @@
 
       {% block page_footer %}
         <footer class="flex items-center gap-2 px-6 py-4 text-xs text-app-muted">
-          <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="" class="brand-logo-footer">
+          <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="" width="1254" height="858" loading="lazy" decoding="async" class="brand-logo-footer">
           {% block footer %}Noivas &amp; Cia{% endblock %}
         </footer>
       {% endblock %}
