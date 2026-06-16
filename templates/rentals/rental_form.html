@@ -728,7 +728,10 @@
         info.className = 'min-w-0';
         const line1 = document.createElement('p');
         line1.className = 'truncate text-sm';
-        line1.innerHTML = `<span class="font-semibold text-app-ink">${p.code}</span> <span class="text-app-ink">${p.text}</span>`;
+        // textContent (not innerHTML) — product fields are untrusted DB data.
+        line1.appendChild(createText('font-semibold text-app-ink', p.code));
+        line1.appendChild(document.createTextNode(' '));
+        line1.appendChild(createText('text-app-ink', p.text));
         const line2 = document.createElement('p');
         line2.className = 'text-xs text-app-muted';
         line2.textContent = `${p.color || '—'} · ${p.size || '—'} · R$ ${p.value}`;
@@ -806,10 +809,20 @@
       if (lastFocus && lastFocus.focus) lastFocus.focus();
     }
 
+    const dialog = browseEl.querySelector('[role="dialog"]');
+
+    function focusableInDialog() {
+      return Array.prototype.filter.call(
+        dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+        function (el) { return el.offsetParent !== null; }
+      );
+    }
+
     // Exposes the opener to attachProductSearch via the outer closure variable.
     openBrowse = function (row) {
       activeRow = row;
-      lastFocus = document.activeElement;
+      const current = document.activeElement;
+      lastFocus = current && current !== document.body ? current : null;
       state.prefix = ''; state.size = ''; state.color = '';
       state.q = ''; state.empty = false; state.page = 1;
       state.date = getIsoDate(document.getElementById('id_pickup_date'));
@@ -844,7 +857,23 @@
       el.addEventListener('click', closeBrowse);
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !browseEl.classList.contains('hidden')) closeBrowse();
+      if (browseEl.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        closeBrowse();
+      } else if (e.key === 'Tab') {
+        // Trap focus within the modal.
+        const items = focusableInDialog();
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        } else if (!dialog.contains(document.activeElement)) {
+          e.preventDefault(); first.focus();
+        }
+      }
     });
   }
 

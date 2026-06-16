@@ -21,6 +21,8 @@ def find_rental_for(product, on_date):
         )
         .exclude(rental__status__in=INACTIVE_RENTAL_STATUSES)
         .select_related('rental', 'rental__customer')
+        # Deterministic pick if a piece is (erroneously) in two active rentals.
+        .order_by('rental__return_date', 'rental__number')
         .first()
     )
     return item.rental if item else None

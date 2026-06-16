@@ -41,7 +41,8 @@ class CategoryListView(CatalogAccessMixin, ListView):
             qs = qs.filter(Q(prefix__icontains=q) | Q(name__icontains=q))
         if only_placeholders:
             qs = qs.filter(is_placeholder=True)
-        return qs
+        # Explicit order so pagination is deterministic (annotate can drop it).
+        return qs.order_by('prefix')
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -375,31 +376,51 @@ class CategoryMergeView(CatalogAccessMixin, View):
 
 # ── JSON search / availability ─────────────────────────────────────────────────
 
+def picker_access(user):
+    """Authenticated staff who can reach the rental or catalog modules.
+
+    The product picker endpoints serve the rental form, so a rentals-only user
+    must be allowed in — requiring the ``catalog`` module would break the rental
+    flow — but an authenticated user with no relevant module cannot enumerate
+    the catalog.
+    """
+    return user.is_authenticated and (
+        user.has_module('rentals') or user.has_module('catalog')
+    )
+
+
+def product_text_filter(q):
+    """Build the shared free-text/code Q filter for product lookups."""
+    q_filter = (
+        Q(description__icontains=q)
+        | Q(description_search__icontains=q)
+        | Q(color__icontains=q)
+        | Q(size__icontains=q)
+        | Q(category__prefix__icontains=q)
+    )
+    code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
+    if code_match:
+        prefix, code = code_match.groups()
+        code_filter = Q(code=int(code))
+        if prefix:
+            code_filter &= Q(category__prefix__iexact=prefix)
+        q_filter |= code_filter
+    return q_filter
+
+
 class ProductSearchView(View):
     """JSON quick-search for product picker in rental item form (R7.03)."""
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
+        if not picker_access(request.user):
             return JsonResponse({'results': []}, status=403)
         q = request.GET.get('q', '').strip()
         code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
         if len(q) < 2 and not code_match:
             return JsonResponse({'results': []})
-        q_filter = (
-            Q(description__icontains=q)
-            | Q(color__icontains=q)
-            | Q(size__icontains=q)
-            | Q(category__prefix__icontains=q)
-        )
-        if code_match:
-            prefix, code = code_match.groups()
-            code_filter = Q(code=int(code))
-            if prefix:
-                code_filter &= Q(category__prefix__iexact=prefix)
-            q_filter |= code_filter
         qs = (
             Product.objects.select_related('category')
-            .filter(q_filter)
+            .filter(product_text_filter(q))
             .order_by('category__prefix', 'code')[:20]
         )
         results = [
@@ -431,7 +452,7 @@ class ProductBrowseView(View):
     INACTIVE_STATUSES = INACTIVE_RENTAL_STATUSES
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
+        if not picker_access(request.user):
             return JsonResponse({'results': []}, status=403)
 
         prefix = request.GET.get('prefix', '').strip()
@@ -457,7 +478,7 @@ class ProductBrowseView(View):
         if not include_empty:
             scoped = scoped.exclude(description='')
         if q:
-            scoped = scoped.filter(self._text_filter(q))
+            scoped = scoped.filter(product_text_filter(q))
 
         categories = list(
             scoped.values('category__prefix', 'category__name')
@@ -534,23 +555,6 @@ class ProductBrowseView(View):
             'facets': {'sizes': sizes, 'colors': colors},
         })
 
-    def _text_filter(self, q):
-        q_filter = (
-            Q(description__icontains=q)
-            | Q(description_search__icontains=q)
-            | Q(color__icontains=q)
-            | Q(size__icontains=q)
-            | Q(category__prefix__icontains=q)
-        )
-        code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
-        if code_match:
-            prefix, code = code_match.groups()
-            code_filter = Q(code=int(code))
-            if prefix:
-                code_filter &= Q(category__prefix__iexact=prefix)
-            q_filter |= code_filter
-        return q_filter
-
     def _rentals_for_page(self, page_items, on_date):
         in_use_ids = [p.pk for p in page_items if getattr(p, 'in_use', False)]
         if not in_use_ids:
@@ -563,6 +567,8 @@ class ProductBrowseView(View):
             )
             .exclude(rental__status__in=self.INACTIVE_STATUSES)
             .select_related('rental', 'rental__customer')
+            # Deterministic: match find_rental_for when a piece overlaps holds.
+            .order_by('rental__return_date', 'rental__number')
         )
         rental_map = {}
         for item in items:
@@ -574,7 +580,7 @@ class ProductAvailabilityJsonView(View):
     """JSON availability check for a product on a given pickup date (R7.04)."""
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
+        if not picker_access(request.user):
             return JsonResponse({'available': False, 'error': 'auth'}, status=403)
         product_id = request.GET.get('product_id', '').strip()
         date_str = request.GET.get('date', '').strip()

@@ -62,6 +62,8 @@ class ProductBrowseViewTests(TestCase):
     def setUpTestData(cls):
         cls.url = reverse('catalog:product_browse')
         cls.user = User.objects.create_user(email='u@b.com', password='Senha12345')
+        # The picker serves the rental form, so rentals access is enough.
+        ModulePermission.objects.create(user=cls.user, module_key='rentals', allowed=True)
         cls.customer = Customer.objects.create(name='Maria')
 
         cls.blazers = Category.objects.create(prefix='BMA', name='Blazer masculino')
@@ -91,6 +93,12 @@ class ProductBrowseViewTests(TestCase):
 
     def test_requires_authentication(self):
         self.client.logout()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_without_module_is_denied(self):
+        outsider = User.objects.create_user(email='out@b.com', password='Senha12345')
+        self.client.force_login(outsider)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 403)
 
