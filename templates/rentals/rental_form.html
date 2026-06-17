@@ -104,6 +104,7 @@
                   <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
                   <p class="product-search-status sr-only" aria-live="polite"></p>
                   <span class="availability-badge hidden text-xs mt-1"></span>
+                  <button type="button" class="open-browse btn btn-secondary mt-2 min-h-9 px-3 py-1.5 text-sm">Buscar com filtros</button>
                   {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
                 </div>
                 {% for field in item_form.visible_fields %}
@@ -198,6 +199,7 @@
         <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
         <p class="product-search-status sr-only" aria-live="polite"></p>
         <span class="availability-badge hidden text-xs mt-1"></span>
+        <button type="button" class="open-browse btn btn-secondary mt-2 min-h-9 px-3 py-1.5 text-sm">Buscar com filtros</button>
       </div>
       {% for field in items.empty_form.visible_fields %}
         {% if field.name != 'DELETE' and field.name != 'product' %}
@@ -216,11 +218,63 @@
 </template>
 {% endif %}
 
+{% if not has_payments %}
+<!-- Faceted product picker modal (overlay) -->
+<div id="product-browse" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-slate-900/50" data-browse-close></div>
+  <div class="relative mx-auto mt-6 flex max-h-[88vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl"
+       role="dialog" aria-modal="true" aria-labelledby="browse-title">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="browse-title" class="text-lg font-semibold text-app-ink">Buscar peça</h2>
+      <button type="button" class="btn btn-secondary min-h-9 px-3 py-1.5" data-browse-close aria-label="Fechar">Fechar</button>
+    </div>
+    <div class="space-y-3 border-b border-slate-200 px-5 py-4">
+      <input type="text" id="browse-q" class="field-input" placeholder="Buscar por código ou descrição…"
+             autocomplete="off" aria-label="Buscar produto">
+      <div>
+        <p class="field-label">Categoria</p>
+        <div id="browse-categories" class="mt-1 flex max-h-24 flex-wrap gap-2 overflow-y-auto"></div>
+      </div>
+      <div id="browse-sizes-wrap" class="hidden">
+        <p class="field-label">Tamanho</p>
+        <div id="browse-sizes" class="mt-1 flex flex-wrap gap-2"></div>
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label class="field-label" for="browse-color">Cor</label>
+          <input type="text" id="browse-color" class="field-input mt-1" placeholder="Filtrar por cor…" autocomplete="off">
+        </div>
+        <div>
+          <label class="field-label" for="browse-date">Disponível em</label>
+          <input type="date" id="browse-date" class="field-input mt-1">
+        </div>
+      </div>
+      <label class="inline-flex items-center gap-2 text-sm text-app-muted">
+        <input type="checkbox" id="browse-empty"> Mostrar peças sem descrição
+      </label>
+    </div>
+    <div id="browse-results" class="min-h-[8rem] flex-1 space-y-2 overflow-y-auto px-5 py-4"></div>
+    <div class="flex items-center justify-between border-t border-slate-200 px-5 py-3">
+      <p id="browse-summary" class="text-sm text-app-muted" aria-live="polite"></p>
+      <div class="flex items-center gap-2">
+        <button type="button" id="browse-prev" class="btn btn-secondary min-h-9 px-3 py-1.5">Anterior</button>
+        <span id="browse-page" class="text-sm text-app-muted"></span>
+        <button type="button" id="browse-next" class="btn btn-secondary min-h-9 px-3 py-1.5">Próxima</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <script>
 (function () {
   const customerSearchUrl = "{% url 'customers:search' %}";
   const productSearchUrl = "{% url 'catalog:product_search' %}";
   const availabilityUrl = "{% url 'catalog:availability_json' %}";
+  const productBrowseUrl = "{% url 'catalog:product_browse' %}";
+
+  // Reassigned by the modal controller below; no-op when the picker is absent.
+  let openBrowse = function () {};
 
   function replaceToken(value, index) {
     return value ? value.replace(/__prefix__/g, index) : value;
@@ -520,17 +574,31 @@
         option.appendChild(createText('ml-2 text-xs text-app-muted', `${product.sub} · R$ ${product.value}`));
       },
       onSelect: function (product) {
-        const label = `${product.code} · ${product.text}`;
-        setHiddenSelectValue(productSelect, product.id, label);
-        searchInput.value = label;
-        checkAvailability(product.id, row, availBadge, pickupDateInput);
-        const valueInput = row.querySelector('input[name$="-value"]');
-        if (valueInput && !valueInput.value) valueInput.value = product.value;
+        applyProductToRow(row, product);
       },
     });
     // Pre-fill from existing selection
     const sel = productSelect.options[productSelect.selectedIndex];
     if (sel && sel.value) searchInput.value = sel.text;
+    // Faceted picker modal trigger
+    const browseBtn = row.querySelector('.open-browse');
+    if (browseBtn) browseBtn.addEventListener('click', function () { openBrowse(row); });
+  }
+
+  // Fill a formset row from a chosen product (shared by autocomplete + modal).
+  function applyProductToRow(row, product) {
+    const productSelect = row.querySelector('select[name$="-product"]');
+    const searchInput = row.querySelector('.product-search-input');
+    const availBadge = row.querySelector('.availability-badge');
+    const pickupDateInput = document.getElementById('id_pickup_date');
+    if (!productSelect) return;
+    const text = product.text || product.description || '';
+    const label = `${product.code} · ${text}`;
+    setHiddenSelectValue(productSelect, product.id, label);
+    if (searchInput) searchInput.value = label;
+    if (availBadge) checkAvailability(product.id, row, availBadge, pickupDateInput);
+    const valueInput = row.querySelector('input[name$="-value"]');
+    if (valueInput && !valueInput.value) valueInput.value = product.value;
   }
 
   function checkAvailability(productId, row, badge, pickupDateInput) {
@@ -572,6 +640,241 @@
         badge.classList.add('text-red-700');
         badge.textContent = 'Não foi possível verificar disponibilidade.';
       });
+  }
+
+  // ── Faceted product picker modal ───────────────────────────────────────────
+  const browseEl = document.getElementById('product-browse');
+  if (browseEl) {
+    const qInput = document.getElementById('browse-q');
+    const colorInput = document.getElementById('browse-color');
+    const dateInput = document.getElementById('browse-date');
+    const emptyToggle = document.getElementById('browse-empty');
+    const catBox = document.getElementById('browse-categories');
+    const sizesWrap = document.getElementById('browse-sizes-wrap');
+    const sizesBox = document.getElementById('browse-sizes');
+    const resultsBox = document.getElementById('browse-results');
+    const summary = document.getElementById('browse-summary');
+    const pageLabel = document.getElementById('browse-page');
+    const prevBtn = document.getElementById('browse-prev');
+    const nextBtn = document.getElementById('browse-next');
+
+    const state = { prefix: '', size: '', color: '', q: '', date: '', empty: false, page: 1 };
+    let activeRow = null;
+    let lastFocus = null;
+    let timer = null;
+    let controller = null;
+    let reqId = 0;
+
+    function getIsoDate(input) {
+      if (!input) return '';
+      return window.NoivasCiaForms && window.NoivasCiaForms.getDateInputIsoValue
+        ? window.NoivasCiaForms.getDateInputIsoValue(input)
+        : input.value;
+    }
+
+    function chip(label, count, active, onClick) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = active
+        ? 'rounded-full bg-rose-600 px-3 py-1 text-sm font-medium text-white'
+        : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-app-ink hover:border-rose-400';
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.textContent = count != null ? `${label} (${count})` : label;
+      btn.addEventListener('click', onClick);
+      return btn;
+    }
+
+    function renderCategories(categories) {
+      catBox.replaceChildren();
+      catBox.appendChild(chip('Todas', null, !state.prefix, function () {
+        state.prefix = ''; state.size = ''; state.page = 1; fetchBrowse();
+      }));
+      categories.forEach(function (c) {
+        const px = c.category__prefix;
+        catBox.appendChild(chip(px, c.n, state.prefix === px, function () {
+          state.prefix = px; state.size = ''; state.page = 1; fetchBrowse();
+        }));
+      });
+    }
+
+    function renderSizes(sizes) {
+      sizesBox.replaceChildren();
+      if (!sizes.length) { sizesWrap.classList.add('hidden'); return; }
+      sizesWrap.classList.remove('hidden');
+      sizesBox.appendChild(chip('Todos', null, !state.size, function () {
+        state.size = ''; state.page = 1; fetchBrowse();
+      }));
+      sizes.forEach(function (s) {
+        sizesBox.appendChild(chip(s.size, s.n, state.size === s.size, function () {
+          state.size = s.size; state.page = 1; fetchBrowse();
+        }));
+      });
+    }
+
+    function renderResults(data) {
+      resultsBox.replaceChildren();
+      if (!data.results.length) {
+        const empty = document.createElement('p');
+        empty.className = 'py-8 text-center text-sm text-app-muted';
+        empty.textContent = 'Nenhuma peça encontrada com esses filtros.';
+        resultsBox.appendChild(empty);
+        return;
+      }
+      data.results.forEach(function (p) {
+        const card = document.createElement('div');
+        card.className = 'flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3';
+
+        const info = document.createElement('div');
+        info.className = 'min-w-0';
+        const line1 = document.createElement('p');
+        line1.className = 'truncate text-sm';
+        // textContent (not innerHTML) — product fields are untrusted DB data.
+        line1.appendChild(createText('font-semibold text-app-ink', p.code));
+        line1.appendChild(document.createTextNode(' '));
+        line1.appendChild(createText('text-app-ink', p.text));
+        const line2 = document.createElement('p');
+        line2.className = 'text-xs text-app-muted';
+        line2.textContent = `${p.color || '—'} · ${p.size || '—'} · R$ ${p.value}`;
+        info.appendChild(line1);
+        info.appendChild(line2);
+
+        if (typeof p.available !== 'undefined') {
+          const badge = document.createElement('p');
+          badge.className = 'mt-1 text-xs ' + (p.available ? 'text-emerald-700' : 'text-red-700');
+          if (p.available) {
+            badge.textContent = '● Livre';
+          } else if (p.rental) {
+            badge.textContent = `● Em uso: #${p.rental.number} (${p.rental.customer}) até ${p.rental.return_date}`;
+          } else {
+            badge.textContent = '● Em uso';
+          }
+          info.appendChild(badge);
+        }
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-primary min-h-9 shrink-0 px-3 py-1.5 text-sm';
+        addBtn.textContent = 'Adicionar';
+        addBtn.addEventListener('click', function () {
+          if (activeRow) applyProductToRow(activeRow, p);
+          closeBrowse();
+        });
+
+        card.appendChild(info);
+        card.appendChild(addBtn);
+        resultsBox.appendChild(card);
+      });
+    }
+
+    function fetchBrowse() {
+      reqId += 1;
+      const currentReq = reqId;
+      if (controller) controller.abort();
+      controller = new AbortController();
+      summary.textContent = 'Buscando…';
+
+      const params = new URLSearchParams();
+      if (state.prefix) params.set('prefix', state.prefix);
+      if (state.size) params.set('size', state.size);
+      if (state.color) params.set('color', state.color);
+      if (state.q) params.set('q', state.q);
+      if (state.date) params.set('date', state.date);
+      if (state.empty) params.set('empty', '1');
+      params.set('page', String(state.page));
+
+      fetch(`${productBrowseUrl}?${params.toString()}`, { signal: controller.signal })
+        .then(function (r) { if (!r.ok) throw new Error('failed'); return r.json(); })
+        .then(function (data) {
+          if (currentReq !== reqId) return;
+          renderCategories(data.categories || []);
+          renderSizes((data.facets && data.facets.sizes) || []);
+          renderResults(data);
+          summary.textContent = `${data.total} peça${data.total === 1 ? '' : 's'}`;
+          pageLabel.textContent = `${data.page}/${data.num_pages}`;
+          prevBtn.disabled = data.page <= 1;
+          nextBtn.disabled = data.page >= data.num_pages;
+          prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+          nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+        })
+        .catch(function (err) {
+          if (err.name === 'AbortError' || currentReq !== reqId) return;
+          summary.textContent = 'Erro ao buscar. Tente novamente.';
+        });
+    }
+
+    function closeBrowse() {
+      browseEl.classList.add('hidden');
+      browseEl.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    const dialog = browseEl.querySelector('[role="dialog"]');
+
+    function focusableInDialog() {
+      return Array.prototype.filter.call(
+        dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+        function (el) { return el.offsetParent !== null; }
+      );
+    }
+
+    // Exposes the opener to attachProductSearch via the outer closure variable.
+    openBrowse = function (row) {
+      activeRow = row;
+      const current = document.activeElement;
+      lastFocus = current && current !== document.body ? current : null;
+      state.prefix = ''; state.size = ''; state.color = '';
+      state.q = ''; state.empty = false; state.page = 1;
+      state.date = getIsoDate(document.getElementById('id_pickup_date'));
+      qInput.value = ''; colorInput.value = ''; emptyToggle.checked = false;
+      dateInput.value = state.date;
+      browseEl.classList.remove('hidden');
+      browseEl.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      fetchBrowse();
+      setTimeout(function () { qInput.focus(); }, 0);
+    };
+
+    function debouncedFetch() {
+      clearTimeout(timer);
+      timer = setTimeout(function () { state.page = 1; fetchBrowse(); }, 300);
+    }
+
+    qInput.addEventListener('input', function () { state.q = qInput.value.trim(); debouncedFetch(); });
+    colorInput.addEventListener('input', function () { state.color = colorInput.value.trim(); debouncedFetch(); });
+    dateInput.addEventListener('change', function () {
+      state.date = getIsoDate(dateInput); state.page = 1; fetchBrowse();
+    });
+    emptyToggle.addEventListener('change', function () {
+      state.empty = emptyToggle.checked; state.page = 1; fetchBrowse();
+    });
+    prevBtn.addEventListener('click', function () {
+      if (state.page > 1) { state.page -= 1; fetchBrowse(); }
+    });
+    nextBtn.addEventListener('click', function () { state.page += 1; fetchBrowse(); });
+
+    browseEl.querySelectorAll('[data-browse-close]').forEach(function (el) {
+      el.addEventListener('click', closeBrowse);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (browseEl.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        closeBrowse();
+      } else if (e.key === 'Tab') {
+        // Trap focus within the modal.
+        const items = focusableInDialog();
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        } else if (!dialog.contains(document.activeElement)) {
+          e.preventDefault(); first.focus();
+        }
+      }
+    });
   }
 
   // Attach to existing item rows

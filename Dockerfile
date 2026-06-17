@@ -6,9 +6,12 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
+COPY tailwind.config.js tailwind.config.js
 COPY static/src/input.css static/src/input.css
 COPY templates/ templates/
 RUN npm run build:css
+# Fail loudly if the build produced no usable stylesheet.
+RUN test -s static/css/output.css
 
 # Stage 2: Python runtime (sem apt-get — psycopg[binary] embute libpq)
 FROM python:3.12-slim
