@@ -17,6 +17,7 @@ from django.views.generic import (
 from billing.services import generate_for_rental, register_payment
 from company.models import Company
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
+from customers.models import _normalize_name
 
 from .forms import RentalCancelForm, RentalForm, RentalItemFormSet
 from .models import Rental, RentalItem
@@ -39,7 +40,8 @@ class RentalListView(RentalAccessMixin, ListView):
         q = self.request.GET.get('q', '').strip()
         status = self.request.GET.get('status', '')
         if q:
-            qs = qs.filter(customer__name__icontains=q)
+            # Hit the accent-normalized, trigram-indexed column on Customer.
+            qs = qs.filter(customer__name_search__icontains=_normalize_name(q))
         if status:
             qs = qs.filter(status=status)
         return qs

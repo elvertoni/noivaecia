@@ -12,7 +12,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 
 from .forms import CustomerForm
-from .models import Customer
+from .models import Customer, _normalize_name
 
 
 def _fmt_cpf(digits):
@@ -46,8 +46,11 @@ class CustomerListView(ModuleAccessMixin, ListView):
 
         if search:
             digits = _digits(search)
+            name_norm = _normalize_name(search)
             q_filter = (
-                Q(name__icontains=search)
+                # name_search is accent-normalized and backed by a trigram GIN
+                # index (customer_name_trgm_idx) — query it, not the raw name.
+                Q(name_search__icontains=name_norm)
                 | Q(phone_home__icontains=search)
                 | Q(phone_mobile__icontains=search)
                 | Q(phone_work__icontains=search)
@@ -87,6 +90,12 @@ class CustomerListView(ModuleAccessMixin, ListView):
         context['cpf_search'] = self.request.GET.get('cpf', '')
         context['active_filter'] = self.request.GET.get('active', '')
         context['total_count'] = context['paginator'].count
+        page_obj = context.get('page_obj')
+        if page_obj is not None:
+            # Bounded window instead of iterating every page (720+ at 18k rows).
+            context['elided_pages'] = context['paginator'].get_elided_page_range(
+                page_obj.number, on_each_side=2, on_ends=1
+            )
         return context
 
 
@@ -263,8 +272,9 @@ class CustomerSearchView(View):
         if len(q) < 2:
             return JsonResponse({'results': []})
         digits = _digits(q)
+        name_norm = _normalize_name(q)
         q_filter = (
-            Q(name__icontains=q)
+            Q(name_search__icontains=name_norm)
             | Q(cpf__icontains=q)
             | Q(rg__icontains=q)
             | Q(phone_home__icontains=q)

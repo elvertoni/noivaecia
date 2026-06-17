@@ -15,6 +15,7 @@ from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from core.models import AuditLog
 
 from rentals.models import RentalItem
+from customers.models import _normalize_name
 
 from .availability import INACTIVE_RENTAL_STATUSES, find_rental_for
 from .forms import CategoryForm, CategoryMergeForm, ProductForm
@@ -391,9 +392,12 @@ def picker_access(user):
 
 def product_text_filter(q):
     """Build the shared free-text/code Q filter for product lookups."""
+    # description_search is accent-normalized and trigram-indexed
+    # (product_desc_trgm_idx); query it with the same normalization so the
+    # term actually matches the stored column and engages the GIN index.
+    q_norm = _normalize_name(q)
     q_filter = (
-        Q(description__icontains=q)
-        | Q(description_search__icontains=q)
+        Q(description_search__icontains=q_norm)
         | Q(color__icontains=q)
         | Q(size__icontains=q)
         | Q(category__prefix__icontains=q)

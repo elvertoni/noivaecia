@@ -143,10 +143,12 @@
              class="pagination-page">Anterior</a>
         {% endif %}
 
-        {% for num in page_obj.paginator.page_range %}
-          {% if num == page_obj.number %}
+        {% for num in elided_pages %}
+          {% if num == page_obj.paginator.ELLIPSIS %}
+            <span class="pagination-page text-slate-400">{{ num }}</span>
+          {% elif num == page_obj.number %}
             <span class="pagination-page bg-brand-600 text-white">{{ num }}</span>
-          {% elif num >= page_obj.number|add:"-3" and num <= page_obj.number|add:"3" %}
+          {% else %}
             <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ num }}"
                class="pagination-page">{{ num }}</a>
           {% endif %}
