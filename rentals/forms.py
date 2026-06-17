@@ -176,6 +176,7 @@ class RentalItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.processed_proof_photo = None
+        self.clear_proof_photo = False
         _style(self)
         # Hidden select populated by the AJAX product search; keep only the selected
         # product in the queryset to avoid rendering thousands of options per row.
@@ -198,6 +199,9 @@ class RentalItemForm(forms.ModelForm):
 
     def clean_proof_photo_upload(self):
         uploaded_file = self.cleaned_data.get('proof_photo_upload')
+        if uploaded_file is False:
+            self.clear_proof_photo = True
+            return False
         if not uploaded_file:
             return uploaded_file
         self.processed_proof_photo = process_proof_photo(uploaded_file)
@@ -205,7 +209,18 @@ class RentalItemForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        if self.processed_proof_photo:
+        if getattr(self, 'clear_proof_photo', False):
+            if instance.proof_photo:
+                instance.proof_photo.delete(save=False)
+            instance.proof_photo = ''
+            instance.proof_photo_content_type = ''
+            instance.proof_photo_filename = ''
+            instance.proof_photo_size = 0
+            instance.proof_photo_width = 0
+            instance.proof_photo_height = 0
+        elif self.processed_proof_photo:
+            if instance.proof_photo:
+                instance.proof_photo.delete(save=False)
             instance.proof_photo = self.processed_proof_photo['file']
             instance.proof_photo_content_type = self.processed_proof_photo['content_type']
             instance.proof_photo_filename = self.processed_proof_photo['filename']

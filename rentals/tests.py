@@ -113,6 +113,66 @@ class RentalCreateFlowTests(TestCase):
         # Proof photo is served as a streaming FileResponse.
         self.assertGreater(len(b''.join(response.streaming_content)), 0)
 
+    def test_clear_rental_item_proof_photo(self):
+        import os
+        # First, create a rental with an item that has a photo
+        rental = Rental.objects.create(
+            number=5,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+            penalty_value=Decimal('0'),
+        )
+        item = RentalItem.objects.create(
+            rental=rental,
+            product=self.product,
+            description='Branco M',
+            value=Decimal('300'),
+        )
+        # Save a file to proof_photo
+        item.proof_photo.save('comprovante.jpg', make_uploaded_image())
+        item.proof_photo_content_type = 'image/jpeg'
+        item.proof_photo_filename = 'comprovante.jpg'
+        item.proof_photo_size = 100
+        item.proof_photo_width = 100
+        item.proof_photo_height = 100
+        item.save()
+
+        self.assertTrue(item.has_proof_photo)
+        file_path = item.proof_photo.path
+        self.assertTrue(os.path.exists(file_path))
+
+        # Now update the rental and clear the photo
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-15',
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '1',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-id': item.pk,
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300',
+            'items-0-proof_photo_upload-clear': 'on',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.assertFalse(item.has_proof_photo)
+        self.assertEqual(item.proof_photo.name, '')
+        self.assertEqual(item.proof_photo_size, 0)
+        self.assertEqual(item.proof_photo_width, 0)
+        self.assertEqual(item.proof_photo_height, 0)
+        self.assertEqual(item.proof_photo_content_type, '')
+        self.assertEqual(item.proof_photo_filename, '')
+        self.assertFalse(os.path.exists(file_path))
+
     def test_rental_requires_module_permission(self):
         other = User.objects.create_user(email='no@b.com', password='Senha12345')
         self.client.force_login(other)
