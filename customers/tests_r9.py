@@ -58,7 +58,10 @@ class CustomerListSearchTests(TestCase):
         self.url = reverse('customers:list')
         self.c1 = _make_customer(name='Ana Lima', cpf='111.000.000-00', rg='RG999',
                                  phone_home='(11)2222-3333', phone_mobile='(11)99999-4444')
-        self.c2 = _make_customer(name='Bruno Costa', legacy_id=42)
+        # Explicit non-colliding digits: the default mobile contains "999",
+        # which would otherwise match the RG-digit search below by phone.
+        self.c2 = _make_customer(name='Bruno Costa', legacy_id=42,
+                                 phone_home='(11)2000-1000', phone_mobile='(11)98888-7777')
 
     def test_search_by_name(self):
         r = self.client.get(self.url, {'q': 'Ana'})

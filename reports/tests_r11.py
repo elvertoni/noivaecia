@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -119,7 +120,8 @@ class ReportQueryPerformanceTests(TestCase):
             rental=rental,
             product=self.product,
             value=Decimal('100'),
-            proof_photo=b'large-binary',
+            # proof_photo is a FileField — give it a named file, not raw bytes.
+            proof_photo=ContentFile(b'large-binary', name='proof.jpg'),
             proof_photo_size=12,
         )
         return rental
