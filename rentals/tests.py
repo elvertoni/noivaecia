@@ -110,7 +110,8 @@ class RentalCreateFlowTests(TestCase):
         response = self.client.get(f'/locacoes/itens/{item.pk}/foto/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
-        self.assertGreater(len(response.content), 0)
+        # Proof photo is served as a streaming FileResponse.
+        self.assertGreater(len(b''.join(response.streaming_content)), 0)
 
     def test_rental_requires_module_permission(self):
         other = User.objects.create_user(email='no@b.com', password='Senha12345')
