@@ -67,7 +67,9 @@ class CustomerListView(ModuleAccessMixin, ListView):
                 if len(digits) == 11:
                     q_filter |= Q(cpf=_fmt_cpf(digits))
                 elif len(digits) <= 10:
-                    q_filter |= Q(legacy_id=int(digits))
+                    val = int(digits)
+                    if val <= 2147483647:
+                        q_filter |= Q(legacy_id=val)
             queryset = queryset.filter(q_filter)
 
         if cpf_q:

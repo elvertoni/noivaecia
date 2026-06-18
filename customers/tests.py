@@ -39,6 +39,13 @@ class CustomerCrudTests(TestCase):
         self.assertContains(response, 'Ana Souza')
         self.assertNotContains(response, 'Carlos Lima')
 
+    def test_search_large_integer_overflow_protection(self):
+        # A 10-digit number that overflows a 32-bit signed integer (e.g. 9999999999)
+        # Should not crash the server and return a successful empty list
+        response = self.client.get('/clientes/?q=9999999999')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Ana Souza')
+
 
 class CustomerLegacyFieldTests(TestCase):
     """R3.01, R3.02 — legacy metadata and placeholder flag on Customer."""

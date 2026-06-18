@@ -17,7 +17,7 @@ class GenerateReceivablesForm(forms.Form):
     )
     first_due_date = forms.DateField(
         label='Primeiro vencimento', required=False,
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
 
@@ -31,7 +31,7 @@ class PaymentForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
 
@@ -45,7 +45,7 @@ class ReceivablePayForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(
@@ -87,7 +87,7 @@ class ManualMovementForm(forms.Form):
 
     date = forms.DateField(
         label='Data',
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         initial=date_cls.today,
         input_formats=DATE_INPUT_FORMATS,
     )
@@ -123,7 +123,7 @@ class MultiPayForm(forms.Form):
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(

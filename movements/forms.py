@@ -11,7 +11,7 @@ class PickupForm(forms.ModelForm):
     class Meta:
         model = Pickup
         fields = ('pickup_date',)
-        widgets = {'pickup_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy())}
+        widgets = {'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -41,14 +41,14 @@ class ReturnForm(forms.ModelForm):
     )
     payment_date = forms.DateField(
         label='Data do pagamento', required=False,
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
 
     class Meta:
         model = Return
         fields = ('return_date',)
-        widgets = {'return_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy())}
+        widgets = {'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -92,55 +92,114 @@
 
         <div id="item-forms" class="mt-4 space-y-4">
           {% for item_form in items %}
-            <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
               {{ item_form.id }}
-              <div class="mb-3 flex items-center justify-between gap-3">
+              
+              <!-- Shared Top Bar (Always Visible) -->
+              <div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
                 <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
-                <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600" for="{{ item_form.DELETE.id_for_label }}">
-                  {{ item_form.DELETE }} Remover
-                </label>
-              </div>
-
-              <!-- Product field with search widget (R7.03/R7.04) -->
-              <div class="field-group product-search-field">
-                <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
-                {{ item_form.product }}
-                <div class="relative">
-                  <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input"
-                         placeholder="Buscar produto por código ou descrição…"
-                         autocomplete="off"
-                         data-field-id="{{ item_form.product.id_for_label }}"
-                         role="combobox"
-                         aria-autocomplete="list"
-                         aria-expanded="false">
-                  <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
-                </div>
-                <p class="product-search-status sr-only" aria-live="polite"></p>
-                <div class="mt-1.5 flex items-center justify-between gap-2">
-                  <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
-                </div>
-                <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
-                {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
-              </div>
-
-              <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div class="field-group sm:col-span-2">
-                  <label class="field-label" for="{{ item_form.description.id_for_label }}">{{ item_form.description.label }}</label>
-                  {{ item_form.description }}
-                  {% if item_form.description.errors %}<p class="field-error">{{ item_form.description.errors|striptags }}</p>{% endif %}
-                </div>
-                <div class="field-group">
-                  <label class="field-label" for="{{ item_form.value.id_for_label }}">{{ item_form.value.label }}</label>
-                  {{ item_form.value }}
-                  {% if item_form.value.errors %}<p class="field-error">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                <div class="flex items-center gap-3">
+                  <!-- Concluir (Done) button, only shown if expanded and is saved -->
+                  {% if item_form.instance.pk %}
+                    <button type="button" class="btn-concluir-item text-sm font-medium text-emerald-600 hover:underline hidden"
+                            onclick="toggleItemForm(this.closest('.item-form'), false)">
+                      Concluir
+                    </button>
+                  {% endif %}
+                  <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600 font-medium cursor-pointer" for="{{ item_form.DELETE.id_for_label }}">
+                    {{ item_form.DELETE }} Remover
+                  </label>
                 </div>
               </div>
 
-              <div class="field-group mt-3">
-                <label class="field-label" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
-                {{ item_form.proof_photo_upload }}
-                {% if item_form.proof_photo_upload.help_text %}<p class="field-help">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
-                {% if item_form.proof_photo_upload.errors %}<p class="field-error">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+              <!-- Collapsed Summary Card (Clickable to edit) -->
+              <div class="item-summary-card flex items-center justify-between py-2 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors {% if not item_form.instance.pk or item_form.errors %}hidden{% endif %}"
+                   onclick="toggleItemForm(this.closest('.item-form'), true)">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                    {% if item_form.instance.proof_photo %}
+                      <img src="{% url 'rentals:item_photo' item_form.instance.pk %}"
+                           alt="Foto"
+                           class="h-full w-full rounded-lg object-cover">
+                    {% else %}
+                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                      </svg>
+                    {% endif %}
+                  </div>
+                  <div class="min-w-0">
+                    <p class="font-medium text-app-ink text-sm truncate summary-product-title">
+                      {% if item_form.instance.product %}
+                        {{ item_form.instance.product.category.prefix }}{{ item_form.instance.product.code }} · {{ item_form.instance.product.description|default:'Sem descrição' }}
+                      {% else %}
+                        Item sem produto selecionado
+                      {% endif %}
+                    </p>
+                    <p class="text-xs text-app-muted truncate summary-product-details">
+                      {% if item_form.instance.description %}
+                        Obs: {{ item_form.instance.description }}
+                      {% else %}
+                        Sem observações adicionais
+                      {% endif %}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 shrink-0 ml-4">
+                  <span class="text-sm font-semibold text-app-ink summary-product-value">
+                    R$ {{ item_form.instance.value|default:'0,00' }}
+                  </span>
+                  <button type="button" class="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100 transition-colors"
+                          title="Editar item">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Detailed Edit Fields -->
+              <div class="item-edit-fields mt-3 space-y-3 {% if item_form.instance.pk and not item_form.errors %}hidden{% endif %}">
+                <!-- Product field with search widget (R7.03/R7.04) -->
+                <div class="field-group product-search-field">
+                  <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
+                  {{ item_form.product }}
+                  <div class="relative">
+                    <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input"
+                           placeholder="Buscar produto por código ou descrição…"
+                           autocomplete="off"
+                           data-field-id="{{ item_form.product.id_for_label }}"
+                           role="combobox"
+                           aria-autocomplete="list"
+                           aria-expanded="false">
+                    <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+                  </div>
+                  <p class="product-search-status sr-only" aria-live="polite"></p>
+                  <div class="mt-1.5 flex items-center justify-between gap-2">
+                    <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
+                  </div>
+                  <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
+                  {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                </div>
+
+                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div class="field-group sm:col-span-2">
+                    <label class="field-label" for="{{ item_form.description.id_for_label }}">{{ item_form.description.label }}</label>
+                    {{ item_form.description }}
+                    {% if item_form.description.errors %}<p class="field-error">{{ item_form.description.errors|striptags }}</p>{% endif %}
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="{{ item_form.value.id_for_label }}">{{ item_form.value.label }}</label>
+                    {{ item_form.value }}
+                    {% if item_form.value.errors %}<p class="field-error">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                  </div>
+                </div>
+
+                <div class="field-group mt-3">
+                  <label class="field-label" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
+                  {{ item_form.proof_photo_upload }}
+                  {% if item_form.proof_photo_upload.help_text %}<p class="field-help">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
+                  {% if item_form.proof_photo_upload.errors %}<p class="field-error">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+                </div>
               </div>
             </div>
           {% endfor %}
@@ -206,49 +265,86 @@
 {% if not has_payments %}
 <template id="empty-form">
   {% with f=items.empty_form %}
-  <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+  <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
     {{ f.id }}
-    <div class="mb-3 flex items-center justify-between gap-3">
+    
+    <!-- Shared Top Bar (Always Visible) -->
+    <div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
       <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
-      <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600" for="{{ f.DELETE.id_for_label }}">
-        {{ f.DELETE }} Remover
-      </label>
-    </div>
-
-    <div class="field-group product-search-field">
-      <label class="field-label" for="{{ f.product.id_for_label }}-search">Produto</label>
-      {{ f.product }}
-      <div class="relative">
-        <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input"
-               placeholder="Buscar produto por código ou descrição…"
-               autocomplete="off"
-               role="combobox"
-               aria-autocomplete="list"
-               aria-expanded="false">
-        <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
-      </div>
-      <p class="product-search-status sr-only" aria-live="polite"></p>
-      <div class="mt-1.5 flex items-center justify-between gap-2">
-        <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
-      </div>
-      <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
-    </div>
-
-    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <div class="field-group sm:col-span-2">
-        <label class="field-label" for="{{ f.description.id_for_label }}">{{ f.description.label }}</label>
-        {{ f.description }}
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="{{ f.value.id_for_label }}">{{ f.value.label }}</label>
-        {{ f.value }}
+      <div class="flex items-center gap-3">
+        <!-- Concluir (Done) button, shown after product is selected -->
+        <button type="button" class="btn-concluir-item text-sm font-medium text-emerald-600 hover:underline hidden"
+                onclick="toggleItemForm(this.closest('.item-form'), false)">
+          Concluir
+        </button>
+        <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600 font-medium cursor-pointer" for="{{ f.DELETE.id_for_label }}">
+          {{ f.DELETE }} Remover
+        </label>
       </div>
     </div>
 
-    <div class="field-group mt-3">
-      <label class="field-label" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
-      {{ f.proof_photo_upload }}
-      {% if f.proof_photo_upload.help_text %}<p class="field-help">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+    <!-- Collapsed Summary Card (Starts hidden for new item) -->
+    <div class="item-summary-card flex items-center justify-between py-2 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors hidden"
+         onclick="toggleItemForm(this.closest('.item-form'), true)">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="font-medium text-app-ink text-sm truncate summary-product-title">Item sem produto selecionado</p>
+          <p class="text-xs text-app-muted truncate summary-product-details">Sem observações adicionais</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 shrink-0 ml-4">
+        <span class="text-sm font-semibold text-app-ink summary-product-value">R$ 0,00</span>
+        <button type="button" class="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100 transition-colors"
+                title="Editar item">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Detailed Edit Fields (Starts expanded) -->
+    <div class="item-edit-fields mt-3 space-y-3">
+      <div class="field-group product-search-field">
+        <label class="field-label" for="{{ f.product.id_for_label }}-search">Produto</label>
+        {{ f.product }}
+        <div class="relative">
+          <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input"
+                 placeholder="Buscar produto por código ou descrição…"
+                 autocomplete="off"
+                 role="combobox"
+                 aria-autocomplete="list"
+                 aria-expanded="false">
+          <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+        </div>
+        <p class="product-search-status sr-only" aria-live="polite"></p>
+        <div class="mt-1.5 flex items-center justify-between gap-2">
+          <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
+        </div>
+        <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="field-group sm:col-span-2">
+          <label class="field-label" for="{{ f.description.id_for_label }}">{{ f.description.label }}</label>
+          {{ f.description }}
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ f.value.id_for_label }}">{{ f.value.label }}</label>
+          {{ f.value }}
+        </div>
+      </div>
+
+      <div class="field-group mt-3">
+        <label class="field-label" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
+        {{ f.proof_photo_upload }}
+        {% if f.proof_photo_upload.help_text %}<p class="field-help">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+      </div>
     </div>
   </div>
   {% endwith %}
@@ -539,6 +635,99 @@
   const container = document.getElementById('item-forms');
   const tpl = document.getElementById('empty-form');
 
+  function updateSummaryPreview(row) {
+    const summaryCard = row.querySelector('.item-summary-card');
+    if (!summaryCard) return;
+
+    const productSelect = row.querySelector('select[name$="-product"]');
+    const searchInput = row.querySelector('.product-search-input');
+    const descInput = row.querySelector('input[name$="-description"]');
+    const valueInput = row.querySelector('input[name$="-value"]');
+
+    const titleEl = summaryCard.querySelector('.summary-product-title');
+    const descEl = summaryCard.querySelector('.summary-product-details');
+    const valueEl = summaryCard.querySelector('.summary-product-value');
+
+    // Title
+    if (titleEl) {
+      if (searchInput && searchInput.value.trim()) {
+        titleEl.textContent = searchInput.value;
+      } else if (productSelect && productSelect.selectedIndex >= 0 && productSelect.options[productSelect.selectedIndex].text) {
+        titleEl.textContent = productSelect.options[productSelect.selectedIndex].text;
+      } else {
+        titleEl.textContent = "Item sem produto selecionado";
+      }
+    }
+
+    // Description
+    if (descEl) {
+      if (descInput && descInput.value.trim()) {
+        descEl.textContent = `Obs: ${descInput.value}`;
+      } else {
+        descEl.textContent = "Sem observações adicionais";
+      }
+    }
+
+    // Value
+    if (valueEl) {
+      if (valueInput && valueInput.value.trim()) {
+        const val = parseFloat(valueInput.value.replace(',', '.')) || 0;
+        valueEl.textContent = `R$ ${val.toFixed(2).replace('.', ',')}`;
+      } else {
+        valueEl.textContent = "R$ 0,00";
+      }
+    }
+
+    // Update Concluir button visibility
+    const hasProduct = productSelect && productSelect.value;
+    const concluirBtn = row.querySelector('.btn-concluir-item');
+    if (concluirBtn) {
+      if (hasProduct) concluirBtn.classList.remove('hidden');
+      else concluirBtn.classList.add('hidden');
+    }
+  }
+
+  window.toggleItemForm = function (row, expand) {
+    const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (del && del.checked) return;
+
+    const summaryCard = row.querySelector('.item-summary-card');
+    const editFields = row.querySelector('.item-edit-fields');
+    const concluirBtn = row.querySelector('.btn-concluir-item');
+
+    if (!summaryCard || !editFields) return;
+
+    if (expand) {
+      summaryCard.classList.add('hidden');
+      editFields.classList.remove('hidden');
+      
+      const productSelect = row.querySelector('select[name$="-product"]');
+      if (concluirBtn && productSelect && productSelect.value) {
+        concluirBtn.classList.remove('hidden');
+      }
+      
+      const searchInput = row.querySelector('.product-search-input');
+      if (searchInput && !searchInput.value) {
+        searchInput.focus();
+      }
+    } else {
+      const productSelect = row.querySelector('select[name$="-product"]');
+      if (!productSelect || !productSelect.value) {
+        const searchInput = row.querySelector('.product-search-input');
+        if (searchInput) {
+          searchInput.classList.add('border-red-500');
+          searchInput.focus();
+          setTimeout(() => searchInput.classList.remove('border-red-500'), 1500);
+        }
+        return;
+      }
+      updateSummaryPreview(row);
+      summaryCard.classList.remove('hidden');
+      editFields.classList.add('hidden');
+      if (concluirBtn) concluirBtn.classList.add('hidden');
+    }
+  };
+
   // Number the visible (non-removed) item cards as "Item 1", "Item 2"…
   function renumberItems() {
     if (!container) return;
@@ -546,14 +735,40 @@
     container.querySelectorAll('.item-form').forEach(function (row) {
       const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
       const label = row.querySelector('.item-index');
+      const summaryCard = row.querySelector('.item-summary-card');
+      const editFields = row.querySelector('.item-edit-fields');
+      const titleEl = row.querySelector('.summary-product-title');
+      const concluirBtn = row.querySelector('.btn-concluir-item');
+
       if (del && del.checked) {
-        row.classList.add('opacity-50');
+        row.classList.add('opacity-40');
         if (label) label.textContent = 'Item removido';
+        if (summaryCard) {
+          summaryCard.classList.remove('hidden');
+          summaryCard.style.pointerEvents = 'none';
+        }
+        if (editFields) editFields.classList.add('hidden');
+        if (titleEl) titleEl.style.textDecoration = 'line-through';
+        if (concluirBtn) concluirBtn.classList.add('hidden');
         return;
       }
-      row.classList.remove('opacity-50');
+
+      row.classList.remove('opacity-40');
       n += 1;
       if (label) label.textContent = `Item ${n}`;
+      if (summaryCard) {
+        summaryCard.style.pointerEvents = '';
+        if (editFields && editFields.classList.contains('hidden')) {
+          summaryCard.classList.remove('hidden');
+        } else {
+          summaryCard.classList.add('hidden');
+          if (concluirBtn) {
+            const productSelect = row.querySelector('select[name$="-product"]');
+            if (productSelect && productSelect.value) concluirBtn.classList.remove('hidden');
+          }
+        }
+      }
+      if (titleEl) titleEl.style.textDecoration = '';
     });
   }
 
@@ -584,6 +799,13 @@
     container.addEventListener('change', function (event) {
       if (event.target.matches('input[type="checkbox"][name$="-DELETE"]')) {
         renumberItems();
+      }
+    });
+    // Update summary preview dynamically when typing description or value
+    container.addEventListener('input', function (event) {
+      if (event.target.matches('input[name$="-description"]') || event.target.matches('input[name$="-value"]')) {
+        const row = event.target.closest('.item-form');
+        if (row) updateSummaryPreview(row);
       }
     });
   }
@@ -673,6 +895,10 @@
     if (availBadge) checkAvailability(product.id, row, availBadge, pickupDateInput);
     const valueInput = row.querySelector('input[name$="-value"]');
     if (valueInput && !valueInput.value) valueInput.value = product.value;
+
+    const concluirBtn = row.querySelector('.btn-concluir-item');
+    if (concluirBtn) concluirBtn.classList.remove('hidden');
+    updateSummaryPreview(row);
   }
 
   // Alert-box state classes for the availability badge.
@@ -970,8 +1196,11 @@
     });
   }
 
-  // Attach to existing item rows
-  document.querySelectorAll('.item-form').forEach(attachProductSearch);
+  // Attach to existing item rows and initialize previews
+  document.querySelectorAll('.item-form').forEach(function (row) {
+    attachProductSearch(row);
+    updateSummaryPreview(row);
+  });
   renumberItems();
 
   // Re-verify every selected product when the pickup date changes, so the

@@ -86,7 +86,7 @@ class RentalForm(forms.ModelForm):
     )
     first_due_date = forms.DateField(
         label='1ª data de vencimento', required=False,
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
         help_text='Padrão: data de retorno.',
     )
@@ -107,7 +107,7 @@ class RentalForm(forms.ModelForm):
     )
     down_payment_date = forms.DateField(
         label='Data da entrada', required=False,
-        widget=forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+        widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
 
@@ -115,8 +115,8 @@ class RentalForm(forms.ModelForm):
         model = Rental
         fields = ('customer', 'use_for', 'pickup_date', 'return_date', 'penalty_value', 'notes')
         widgets = {
-            'pickup_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
-            'return_date': forms.DateInput(attrs=DATE_INPUT_ATTRS.copy()),
+            'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
+            'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         }
 
     def __init__(self, *args, **kwargs):
@@ -237,6 +237,15 @@ RentalItemFormSet = forms.inlineformset_factory(
     RentalItem,
     form=RentalItemForm,
     extra=1,
+    can_delete=True,
+)
+
+
+RentalItemEditFormSet = forms.inlineformset_factory(
+    Rental,
+    RentalItem,
+    form=RentalItemForm,
+    extra=0,
     can_delete=True,
 )
 

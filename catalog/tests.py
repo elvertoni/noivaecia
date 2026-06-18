@@ -188,3 +188,23 @@ class ModulePermissionAccessTests(TestCase):
         perm.allowed = False
         perm.save()
         self.assertEqual(self.client.get('/catalogo/produtos/').status_code, 403)
+
+
+class ProductOverflowTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='u@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='catalog', allowed=True)
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        self.client.force_login(self.user)
+
+    def test_product_list_code_overflow_protection(self):
+        # A code value that overflows 32-bit signed integer (9999999999)
+        response = self.client.get('/catalogo/produtos/?code=9999999999')
+        self.assertEqual(response.status_code, 200)
+
+    def test_product_availability_json_overflow_protection(self):
+        # product_id value that overflows 32-bit signed integer (9999999999)
+        url = reverse('catalog:availability_json')
+        response = self.client.get(f'{url}?product_id=9999999999&date=2026-06-18')
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(response.content, {'available': False, 'error': 'not_found'})

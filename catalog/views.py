@@ -122,7 +122,11 @@ class ProductListView(CatalogAccessMixin, ListView):
             qs = qs.filter(category__prefix__icontains=prefix)
         if code:
             try:
-                qs = qs.filter(code=int(code))
+                val = int(code)
+                if val > 2147483647:
+                    qs = qs.none()
+                else:
+                    qs = qs.filter(code=val)
             except ValueError:
                 qs = qs.none()
         if description:
@@ -595,7 +599,10 @@ class ProductAvailabilityJsonView(View):
         except ValueError:
             return JsonResponse({'available': True})
         try:
-            product = Product.objects.select_related('category').get(pk=int(product_id))
+            val = int(product_id)
+            if val > 2147483647:
+                return JsonResponse({'available': False, 'error': 'not_found'})
+            product = Product.objects.select_related('category').get(pk=val)
         except (Product.DoesNotExist, ValueError):
             return JsonResponse({'available': False, 'error': 'not_found'})
         rental = find_rental_for(product, on_date)

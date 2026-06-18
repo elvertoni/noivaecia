@@ -20,7 +20,7 @@ from company.models import Company
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from customers.models import _normalize_name
 
-from .forms import RentalCancelForm, RentalForm, RentalItemFormSet
+from .forms import RentalCancelForm, RentalForm, RentalItemFormSet, RentalItemEditFormSet
 from .models import Rental, RentalItem
 
 
@@ -268,13 +268,13 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         context['has_payments'] = has_payments
         if 'items' not in context:
             if self.request.POST:
-                context['items'] = RentalItemFormSet(
+                context['items'] = RentalItemEditFormSet(
                     self.request.POST,
                     self.request.FILES,
                     instance=self.object,
                 )
             else:
-                context['items'] = RentalItemFormSet(instance=self.object)
+                context['items'] = RentalItemEditFormSet(instance=self.object)
         return context
 
     def form_valid(self, form):

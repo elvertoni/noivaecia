@@ -52,8 +52,12 @@ def _apply_rental_filters(
         needs_distinct = True
     if code:
         try:
-            qs = qs.filter(items__product__code=int(code))
-            needs_distinct = True
+            val = int(code)
+            if val > 2147483647:
+                qs = qs.none()
+            else:
+                qs = qs.filter(items__product__code=val)
+                needs_distinct = True
         except ValueError:
             qs = qs.none()
     if needs_distinct:
