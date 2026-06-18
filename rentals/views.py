@@ -15,12 +15,46 @@ from django.views.generic import (
 )
 
 from billing.services import generate_for_rental, register_payment
+from catalog.availability import find_overlapping_rental
 from company.models import Company
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from customers.models import _normalize_name
 
 from .forms import RentalCancelForm, RentalForm, RentalItemFormSet
 from .models import Rental, RentalItem
+
+
+def check_item_availability(items, pickup_date, return_date, exclude_rental_id=None):
+    """Return PT-BR conflict messages for items double-booked in the window (R7.04).
+
+    Skips deleted/empty rows. A product already held by another active rental
+    whose dates overlap [pickup_date, return_date] is flagged so the rental can
+    never be saved over a live booking.
+    """
+    if not (pickup_date and return_date):
+        return []
+    conflicts = []
+    seen = set()
+    for item_form in items.forms:
+        if not getattr(item_form, 'cleaned_data', None):
+            continue
+        if item_form.cleaned_data.get('DELETE'):
+            continue
+        product = item_form.cleaned_data.get('product')
+        if not product or product.pk in seen:
+            continue
+        seen.add(product.pk)
+        clash = find_overlapping_rental(
+            product, pickup_date, return_date, exclude_rental_id=exclude_rental_id,
+        )
+        if clash:
+            conflicts.append(
+                f'A peça {product.category.prefix}{product.code} '
+                f'({product.description or "sem descrição"}) já está alocada na '
+                f'locação #{clash.number} de {clash.customer.name} '
+                f'({clash.pickup_date:%d/%m/%Y} a {clash.return_date:%d/%m/%Y}).'
+            )
+    return conflicts
 
 
 class RentalAccessMixin(ModuleAccessMixin):
@@ -52,6 +86,35 @@ class RentalListView(RentalAccessMixin, ListView):
         ctx['status_filter'] = self.request.GET.get('status', '')
         ctx['status_choices'] = Rental.Status.choices
         return ctx
+
+
+# ── Add item by rental number ───────────────────────────────────────────────
+
+class RentalAddItemEntryView(RentalAccessMixin, View):
+    """Resolve a typed rental number and jump straight to adding items (R7.03).
+
+    Lets staff reopen an existing contract by its number to append another piece
+    without scrolling the list. Lands on the edit screen with the item section
+    expanded (``?add=1``).
+    """
+
+    def get(self, request, *args, **kwargs):
+        raw = (request.GET.get('number') or '').strip().lstrip('#')
+        if not raw.isdigit():
+            messages.error(request, 'Informe um número de locação válido.')
+            return redirect('rentals:list')
+        rental = Rental.objects.filter(number=int(raw)).only('pk', 'number', 'status').first()
+        if not rental:
+            messages.error(request, f'Locação #{raw} não encontrada.')
+            return redirect('rentals:list')
+        if rental.status in (Rental.Status.CANCELLED, Rental.Status.RETURNED):
+            messages.error(
+                request,
+                f'A locação #{rental.number} está '
+                f'{rental.get_status_display().lower()} e não aceita novos itens.',
+            )
+            return redirect(rental.get_absolute_url())
+        return redirect(f"{reverse('rentals:update', args=[rental.pk])}?add=1")
 
 
 # ── Detail ────────────────────────────────────────────────────────────────────
@@ -126,6 +189,20 @@ class RentalCreateView(RentalAccessMixin, CreateView):
         context = self.get_context_data()
         items = context['items']
         if not items.is_valid():
+            return self.form_invalid(form)
+
+        conflicts = check_item_availability(
+            items,
+            form.cleaned_data.get('pickup_date'),
+            form.cleaned_data.get('return_date'),
+        )
+        if conflicts:
+            for message in conflicts:
+                form.add_error(None, message)
+            messages.error(
+                self.request,
+                'Há peças já alocadas para o período. Revise os itens em destaque.',
+            )
             return self.form_invalid(form)
 
         with transaction.atomic():
@@ -213,6 +290,21 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             return self.form_invalid(form)
 
         if not items.is_valid():
+            return self.form_invalid(form)
+
+        conflicts = check_item_availability(
+            items,
+            form.cleaned_data.get('pickup_date'),
+            form.cleaned_data.get('return_date'),
+            exclude_rental_id=self.object.pk,
+        )
+        if conflicts:
+            for message in conflicts:
+                form.add_error(None, message)
+            messages.error(
+                self.request,
+                'Há peças já alocadas para o período. Revise os itens em destaque.',
+            )
             return self.form_invalid(form)
 
         with transaction.atomic():

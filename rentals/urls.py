@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    RentalAddItemEntryView,
     RentalCancelView,
     RentalContractView,
     RentalCreateView,
@@ -16,6 +17,7 @@ app_name = 'rentals'
 urlpatterns = [
     path('', RentalListView.as_view(), name='list'),
     path('nova/', RentalCreateView.as_view(), name='create'),
+    path('adicionar-item/', RentalAddItemEntryView.as_view(), name='add_item_entry'),
     path('itens/<int:pk>/foto/', RentalItemProofPhotoView.as_view(), name='item_photo'),
     path('<int:pk>/', RentalDetailView.as_view(), name='detail'),
     path('<int:pk>/editar/', RentalUpdateView.as_view(), name='update'),

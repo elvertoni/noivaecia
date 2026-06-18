@@ -236,7 +236,7 @@ RentalItemFormSet = forms.inlineformset_factory(
     Rental,
     RentalItem,
     form=RentalItemForm,
-    extra=3,
+    extra=1,
     can_delete=True,
 )
 

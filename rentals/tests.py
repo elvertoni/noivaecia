@@ -300,3 +300,70 @@ class RentalDeleteViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Rental.objects.filter(pk=rental.pk).exists())
+
+
+class RentalItemAvailabilityTests(TestCase):
+    """Server-side double-booking guard + add-item-by-number entry (R7.03/R7.04)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='u@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name='Maria')
+        self.other_customer = Customer.objects.create(name='Joana')
+        cat = Category.objects.create(prefix='VN', name='Vestidos')
+        self.product = Product.objects.create(category=cat, code=1, description='A', value=300)
+        # Existing active rental holding the product over an overlapping window.
+        self.existing = Rental.objects.create(
+            number=50, customer=self.other_customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        )
+        RentalItem.objects.create(rental=self.existing, product=self.product, value=Decimal('300'))
+
+    def _create_payload(self, pickup, return_d):
+        return {
+            'customer': self.customer.pk,
+            'pickup_date': pickup,
+            'return_date': return_d,
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': '',
+            'items-0-value': '300',
+            'items-0-DELETE': '',
+        }
+
+    def test_overlapping_booking_is_blocked(self):
+        response = self.client.post(
+            '/locacoes/nova/', self._create_payload('2026-06-12', '2026-06-18')
+        )
+        self.assertEqual(response.status_code, 200)  # re-rendered, not saved
+        self.assertContains(response, 'já está alocada na locação #50')
+        self.assertEqual(Rental.objects.exclude(pk=self.existing.pk).count(), 0)
+
+    def test_non_overlapping_booking_is_allowed(self):
+        response = self.client.post(
+            '/locacoes/nova/', self._create_payload('2026-07-01', '2026-07-05')
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Rental.objects.exclude(pk=self.existing.pk).count(), 1)
+
+    def test_add_item_entry_redirects_to_update(self):
+        response = self.client.get(
+            reverse('rentals:add_item_entry'), {'number': '50'}
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('rentals:update', args=[self.existing.pk])}?add=1",
+            fetch_redirect_response=False,
+        )
+
+    def test_add_item_entry_unknown_number_redirects_to_list(self):
+        response = self.client.get(
+            reverse('rentals:add_item_entry'), {'number': '9999'}
+        )
+        self.assertRedirects(response, reverse('rentals:list'))

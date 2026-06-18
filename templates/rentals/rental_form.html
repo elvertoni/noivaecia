@@ -74,27 +74,39 @@
 
       <!-- Items -->
       {% if not has_payments %}
-      <div>
-        <div class="flex items-center justify-between">
-          <h2 class="section-title">Itens</h2>
-          <button type="button" id="add-item" class="btn btn-secondary min-h-9 px-3 py-1.5">Adicionar item</button>
+      <div id="itens">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="section-title">Itens da locação</h2>
+            <p class="field-help mt-0.5">Busque cada peça pelo código ou descrição. A disponibilidade na data de retirada é verificada automaticamente.</p>
+          </div>
+          <button type="button" id="add-item" class="btn btn-primary min-h-9 shrink-0 px-3 py-1.5">+ Adicionar item</button>
         </div>
 
         {{ items.management_form }}
         {% if items.non_form_errors %}
-          <div class="mt-2 alert alert-error">{{ items.non_form_errors }}</div>
+          <div class="mt-2 alert alert-error">
+            {% for error in items.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+          </div>
         {% endif %}
 
-        <div id="item-forms" class="mt-4 space-y-3">
+        <div id="item-forms" class="mt-4 space-y-4">
           {% for item_form in items %}
-            <div class="item-form rounded-xl border border-slate-200 p-4">
+            <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               {{ item_form.id }}
-              <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-                <!-- Product field with search widget (R7.03/R7.04) -->
-                <div class="field-group md:col-span-2 product-search-field">
-                  <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
-                  {{ item_form.product }}
-                  <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input mt-1"
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
+                <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600" for="{{ item_form.DELETE.id_for_label }}">
+                  {{ item_form.DELETE }} Remover
+                </label>
+              </div>
+
+              <!-- Product field with search widget (R7.03/R7.04) -->
+              <div class="field-group product-search-field">
+                <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
+                {{ item_form.product }}
+                <div class="relative">
+                  <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input"
                          placeholder="Buscar produto por código ou descrição…"
                          autocomplete="off"
                          data-field-id="{{ item_form.product.id_for_label }}"
@@ -102,25 +114,34 @@
                          aria-autocomplete="list"
                          aria-expanded="false">
                   <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
-                  <p class="product-search-status sr-only" aria-live="polite"></p>
-                  <span class="availability-badge hidden text-xs mt-1"></span>
-                  <button type="button" class="open-browse btn btn-secondary mt-2 min-h-9 px-3 py-1.5 text-sm">Buscar com filtros</button>
-                  {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
                 </div>
-                {% for field in item_form.visible_fields %}
-                  {% if field.name != 'DELETE' and field.name != 'product' %}
-                    <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
-                      <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                      {{ field }}
-                      {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-                      {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-                    </div>
-                  {% endif %}
-                {% endfor %}
+                <p class="product-search-status sr-only" aria-live="polite"></p>
+                <div class="mt-1.5 flex items-center justify-between gap-2">
+                  <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
+                </div>
+                <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
+                {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
               </div>
-              <label class="touch-target mt-3 inline-flex items-center gap-2 text-sm text-app-muted" for="{{ item_form.DELETE.id_for_label }}">
-                {{ item_form.DELETE }} Remover este item
-              </label>
+
+              <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="field-group sm:col-span-2">
+                  <label class="field-label" for="{{ item_form.description.id_for_label }}">{{ item_form.description.label }}</label>
+                  {{ item_form.description }}
+                  {% if item_form.description.errors %}<p class="field-error">{{ item_form.description.errors|striptags }}</p>{% endif %}
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="{{ item_form.value.id_for_label }}">{{ item_form.value.label }}</label>
+                  {{ item_form.value }}
+                  {% if item_form.value.errors %}<p class="field-error">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                </div>
+              </div>
+
+              <div class="field-group mt-3">
+                <label class="field-label" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
+                {{ item_form.proof_photo_upload }}
+                {% if item_form.proof_photo_upload.help_text %}<p class="field-help">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
+                {% if item_form.proof_photo_upload.errors %}<p class="field-error">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+              </div>
             </div>
           {% endfor %}
         </div>
@@ -184,37 +205,53 @@
 
 {% if not has_payments %}
 <template id="empty-form">
-  <div class="item-form rounded-xl border border-slate-200 p-4">
-    <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-      <!-- product placeholder, injected by JS -->
-      <div class="field-group md:col-span-2 product-search-field">
-        <label class="field-label" for="{{ items.empty_form.product.id_for_label }}-search">Produto</label>
-        {% with f=items.empty_form %}{{ f.product }}{% endwith %}
-        <input type="text" id="{{ items.empty_form.product.id_for_label }}-search" class="product-search-input field-input mt-1"
+  {% with f=items.empty_form %}
+  <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    {{ f.id }}
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
+      <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600" for="{{ f.DELETE.id_for_label }}">
+        {{ f.DELETE }} Remover
+      </label>
+    </div>
+
+    <div class="field-group product-search-field">
+      <label class="field-label" for="{{ f.product.id_for_label }}-search">Produto</label>
+      {{ f.product }}
+      <div class="relative">
+        <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input"
                placeholder="Buscar produto por código ou descrição…"
                autocomplete="off"
                role="combobox"
                aria-autocomplete="list"
                aria-expanded="false">
         <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
-        <p class="product-search-status sr-only" aria-live="polite"></p>
-        <span class="availability-badge hidden text-xs mt-1"></span>
-        <button type="button" class="open-browse btn btn-secondary mt-2 min-h-9 px-3 py-1.5 text-sm">Buscar com filtros</button>
       </div>
-      {% for field in items.empty_form.visible_fields %}
-        {% if field.name != 'DELETE' and field.name != 'product' %}
-          <div class="field-group {% if field.name == 'proof_photo_upload' %}md:col-span-4{% endif %}">
-            <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-          </div>
-        {% endif %}
-      {% endfor %}
+      <p class="product-search-status sr-only" aria-live="polite"></p>
+      <div class="mt-1.5 flex items-center justify-between gap-2">
+        <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
+      </div>
+      <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
     </div>
-    <label class="touch-target mt-3 inline-flex items-center gap-2 text-sm text-app-muted" for="{{ items.empty_form.DELETE.id_for_label }}">
-      {{ items.empty_form.DELETE }} Remover este item
-    </label>
+
+    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div class="field-group sm:col-span-2">
+        <label class="field-label" for="{{ f.description.id_for_label }}">{{ f.description.label }}</label>
+        {{ f.description }}
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="{{ f.value.id_for_label }}">{{ f.value.label }}</label>
+        {{ f.value }}
+      </div>
+    </div>
+
+    <div class="field-group mt-3">
+      <label class="field-label" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
+      {{ f.proof_photo_upload }}
+      {% if f.proof_photo_upload.help_text %}<p class="field-help">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+    </div>
   </div>
+  {% endwith %}
 </template>
 {% endif %}
 
@@ -501,16 +538,53 @@
   const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
   const container = document.getElementById('item-forms');
   const tpl = document.getElementById('empty-form');
+
+  // Number the visible (non-removed) item cards as "Item 1", "Item 2"…
+  function renumberItems() {
+    if (!container) return;
+    let n = 0;
+    container.querySelectorAll('.item-form').forEach(function (row) {
+      const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      const label = row.querySelector('.item-index');
+      if (del && del.checked) {
+        row.classList.add('opacity-50');
+        if (label) label.textContent = 'Item removido';
+        return;
+      }
+      row.classList.remove('opacity-50');
+      n += 1;
+      if (label) label.textContent = `Item ${n}`;
+    });
+  }
+
+  function addItemRow(focus) {
+    if (!tpl || !totalForms || !container) return null;
+    const index = parseInt(totalForms.value, 10);
+    const fragment = tpl.content.cloneNode(true);
+    updateFormsetFragment(fragment, index);
+    container.appendChild(fragment);
+    totalForms.value = index + 1;
+    const row = container.lastElementChild;
+    markRentalDateInputs(row);
+    attachProductSearch(row);
+    renumberItems();
+    if (focus) {
+      const input = row.querySelector('.product-search-input');
+      if (input) input.focus();
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return row;
+  }
+
   if (tpl && totalForms && container) {
     document.getElementById('add-item').addEventListener('click', function () {
-      const index = parseInt(totalForms.value, 10);
-      const fragment = tpl.content.cloneNode(true);
-      updateFormsetFragment(fragment, index);
-      container.appendChild(fragment);
-      totalForms.value = index + 1;
-      const row = container.lastElementChild;
-      markRentalDateInputs(row);
-      attachProductSearch(row);
+      addItemRow(true);
+    });
+    // Re-number when an item is toggled for removal.
+    container.addEventListener('change', function (event) {
+      if (event.target.matches('input[type="checkbox"][name$="-DELETE"]')) {
+        renumberItems();
+      }
     });
   }
 
@@ -601,20 +675,39 @@
     if (valueInput && !valueInput.value) valueInput.value = product.value;
   }
 
+  // Alert-box state classes for the availability badge.
+  const BADGE_STATES = {
+    checking: 'border-slate-200 bg-slate-50 text-app-muted',
+    free: 'border-emerald-200 bg-emerald-50 text-emerald-700 font-medium',
+    busy: 'border-red-300 bg-red-50 text-red-700 font-semibold',
+    error: 'border-amber-200 bg-amber-50 text-amber-800',
+  };
+  const ALL_BADGE_CLASSES = Object.values(BADGE_STATES).join(' ').split(' ');
+
+  function setBadge(badge, state, text) {
+    badge.classList.remove('hidden', ...ALL_BADGE_CLASSES);
+    badge.classList.add(...BADGE_STATES[state].split(' '));
+    badge.textContent = text;
+  }
+
   function checkAvailability(productId, row, badge, pickupDateInput) {
     const d = window.NoivasCiaForms && window.NoivasCiaForms.getDateInputIsoValue
       ? window.NoivasCiaForms.getDateInputIsoValue(pickupDateInput)
       : (pickupDateInput ? pickupDateInput.value : '');
-    if (!productId || !d) return;
+    if (!productId || !d) {
+      // No pickup date yet — can't verify; prompt the user instead of staying silent.
+      if (productId && badge) {
+        setBadge(badge, 'error', 'Informe a data de retirada para verificar a disponibilidade.');
+      }
+      return;
+    }
 
     row._availabilityRequestId = (row._availabilityRequestId || 0) + 1;
     const currentRequestId = row._availabilityRequestId;
     if (row._availabilityController) row._availabilityController.abort();
     row._availabilityController = new AbortController();
 
-    badge.classList.remove('hidden', 'text-emerald-700', 'text-red-700');
-    badge.classList.add('text-app-muted');
-    badge.textContent = 'Verificando disponibilidade...';
+    setBadge(badge, 'checking', 'Verificando disponibilidade…');
 
     fetch(`${availabilityUrl}?product_id=${encodeURIComponent(productId)}&date=${encodeURIComponent(d)}`, {
       signal: row._availabilityController.signal,
@@ -625,20 +718,20 @@
       })
       .then(function (data) {
         if (currentRequestId !== row._availabilityRequestId) return;
-        badge.classList.remove('text-app-muted', 'text-emerald-700', 'text-red-700');
         if (data.available) {
-          badge.textContent = 'Disponível';
-          badge.classList.add('text-emerald-700');
+          setBadge(badge, 'free', '✓ Peça disponível para a data de retirada.');
         } else {
-          badge.textContent = `Em uso: locação #${data.rental_number} (${data.customer}) até ${data.return_date}`;
-          badge.classList.add('text-red-700');
+          setBadge(
+            badge,
+            'busy',
+            `⚠ Peça já alocada na locação #${data.rental_number} (${data.customer}) até ${data.return_date}. ` +
+            'Confirme antes de salvar para não duplicar a reserva.'
+          );
         }
       })
       .catch(function (error) {
         if (error.name === 'AbortError' || currentRequestId !== row._availabilityRequestId) return;
-        badge.classList.remove('text-app-muted', 'text-emerald-700');
-        badge.classList.add('text-red-700');
-        badge.textContent = 'Não foi possível verificar disponibilidade.';
+        setBadge(badge, 'error', 'Não foi possível verificar a disponibilidade.');
       });
   }
 
@@ -879,6 +972,33 @@
 
   // Attach to existing item rows
   document.querySelectorAll('.item-form').forEach(attachProductSearch);
+  renumberItems();
+
+  // Re-verify every selected product when the pickup date changes, so the
+  // availability warnings never go stale after the user edits the date.
+  function recheckAllAvailability() {
+    const pickupDateInput = document.getElementById('id_pickup_date');
+    document.querySelectorAll('.item-form').forEach(function (row) {
+      const productSelect = row.querySelector('select[name$="-product"]');
+      const badge = row.querySelector('.availability-badge');
+      if (productSelect && productSelect.value && badge) {
+        checkAvailability(productSelect.value, row, badge, pickupDateInput);
+      }
+    });
+  }
+  const pickupInput = document.getElementById('id_pickup_date');
+  if (pickupInput) {
+    pickupInput.addEventListener('change', recheckAllAvailability);
+  }
+
+  // Deep-link from "Adicionar item à locação nº" (?add=1): expand the items
+  // section, add a fresh row, and drop the cursor in its product search.
+  if (new URLSearchParams(window.location.search).get('add') === '1') {
+    const section = document.getElementById('itens');
+    if (section) {
+      addItemRow(true);
+    }
+  }
 })();
 </script>
 {% endblock %}

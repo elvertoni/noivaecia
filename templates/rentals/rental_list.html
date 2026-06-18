@@ -9,9 +9,19 @@
       <h1 class="page-title">Locações</h1>
       <p class="page-description">Contratos de locação.</p>
     </div>
-    <a href="{% url 'rentals:create' %}" class="btn btn-primary">
-      Nova locação
-    </a>
+    <div class="flex flex-wrap items-end gap-2">
+      <form method="get" action="{% url 'rentals:add_item_entry' %}" class="flex items-end gap-2">
+        <div class="field-group">
+          <label class="field-label" for="add-item-number">Adicionar item à locação nº</label>
+          <input type="number" name="number" id="add-item-number" min="1"
+                 class="field-input w-32" placeholder="Ex.: 1024" inputmode="numeric">
+        </div>
+        <button type="submit" class="btn btn-secondary">Adicionar item</button>
+      </form>
+      <a href="{% url 'rentals:create' %}" class="btn btn-primary">
+        Nova locação
+      </a>
+    </div>
   </div>
 
   <form method="get" class="panel p-4 flex flex-wrap gap-3 items-end">
