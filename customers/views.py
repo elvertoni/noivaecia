@@ -2,6 +2,7 @@ import re
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -172,6 +173,7 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
     model = Customer
     template_name = 'customers/customer_detail.html'
     context_object_name = 'customer'
+    rentals_paginate_by = 25
 
     def get_context_data(self, **kwargs):
         from decimal import Decimal
@@ -208,6 +210,15 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
                 Q(items__product__description__icontains=product_q)
                 | Q(items__product__category__prefix__icontains=product_q)
             ).distinct()
+        rentals_paginator = Paginator(rentals_qs, self.rentals_paginate_by)
+        rentals_page = rentals_paginator.get_page(self.request.GET.get('rental_page'))
+        rentals_count = rentals_paginator.count
+
+        rental_query = self.request.GET.copy()
+        rental_query.pop('rental_page', None)
+        rental_querystring = rental_query.urlencode()
+        if rental_querystring:
+            rental_querystring += '&'
 
         # Receivables
         receivables_qs = (
@@ -241,7 +252,11 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         )
 
         ctx.update({
-            'rentals': rentals_qs,
+            'rentals': rentals_page.object_list,
+            'rentals_count': rentals_count,
+            'rentals_page_obj': rentals_page,
+            'rentals_is_paginated': rentals_page.has_other_pages(),
+            'rental_page_querystring': rental_querystring,
             'receivables': receivables_qs,
             'payments': payments_qs,
             'total_rented': total_rented,

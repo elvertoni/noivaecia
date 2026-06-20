@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import Pickup, Return
 
@@ -25,7 +25,7 @@ class ReturnForm(forms.ModelForm):
     payment_amount = forms.DecimalField(
         label='Valor recebido agora', required=False, min_value=Decimal('0'),
         decimal_places=2, max_digits=10,
-        widget=forms.NumberInput(attrs={'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     payment_method = forms.ChoiceField(
         label='Forma de pagamento', required=False,

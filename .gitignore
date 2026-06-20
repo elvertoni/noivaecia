@@ -6,8 +6,14 @@ venv/
 
 # Django
 db.sqlite3
+db.sqlite3.zip
 /staticfiles/
 /var/
+/media/
+
+# Local archives / binaries
+*.tgz
+legado.jpeg
 
 # Node / Tailwind
 node_modules/

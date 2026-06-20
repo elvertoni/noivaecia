@@ -51,7 +51,7 @@
   </form>
 
   <!-- Table -->
-  <div class="table-shell">
+  <div class="table-shell hidden md:block">
     <table class="data-table">
       <thead>
         <tr>
@@ -104,15 +104,70 @@
     </table>
   </div>
 
+  <div class="space-y-3 md:hidden">
+    {% for row in rows %}
+      <article class="rounded-xl border {% if row.days_overdue > 0 %}border-red-200 bg-red-50{% else %}border-app-border bg-app-surface{% endif %} p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <a href="{% url 'billing:customer_receivables' row.obj.rental.customer_id %}" class="text-link text-base">
+              {{ row.obj.rental.customer.name }}
+            </a>
+            <p class="mt-1 text-sm text-slate-700">
+              Locação <a href="{% url 'rentals:detail' row.obj.rental_id %}" class="text-link">#{{ row.obj.rental.number }}</a>
+            </p>
+          </div>
+          <div class="shrink-0 text-right">
+            {% if row.days_overdue > 0 %}
+              <span class="badge badge-danger">{{ row.days_overdue }}d</span>
+            {% elif row.obj.is_paid %}
+              <span class="badge badge-success">Quitado</span>
+            {% else %}
+              <span class="badge badge-info">Em aberto</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Vencimento</dt>
+            <dd class="mt-1 text-slate-900">{{ row.obj.due_date|date:'d/m/Y' }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Valor</dt>
+            <dd class="mt-1 text-slate-900">R$ {{ row.obj.amount|floatformat:2 }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Pago</dt>
+            <dd class="mt-1 text-slate-900">R$ {{ row.obj.paid_amount|floatformat:2 }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Saldo</dt>
+            <dd class="mt-1 font-semibold text-slate-900">R$ {{ row.obj.balance|floatformat:2 }}</dd>
+          </div>
+          <div class="col-span-2 border-t border-slate-200 pt-3">
+            <dt class="text-xs font-medium text-slate-600">Total com juros</dt>
+            <dd class="mt-1 text-base font-semibold text-app-ink">R$ {{ row.total_with_interest|floatformat:2 }}</dd>
+          </div>
+        </dl>
+
+        {% if not row.obj.is_paid %}
+          <a href="{% url 'billing:pay_receivable' row.obj.pk %}" class="btn btn-primary mt-4 w-full">Baixar título</a>
+        {% endif %}
+      </article>
+    {% empty %}
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhum título encontrado.</div>
+    {% endfor %}
+  </div>
+
   {% if is_paginated %}
   <div class="flex items-center justify-between text-sm text-app-muted">
     <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
     <div class="flex gap-2">
       {% if page_obj.has_previous %}
-        <a href="?{% for k, v in filters.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="btn btn-secondary">Anterior</a>
+        <a href="{% querystring page=page_obj.previous_page_number %}" class="btn btn-secondary">Anterior</a>
       {% endif %}
       {% if page_obj.has_next %}
-        <a href="?{% for k, v in filters.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="btn btn-secondary">Próxima</a>
+        <a href="{% querystring page=page_obj.next_page_number %}" class="btn btn-secondary">Próxima</a>
       {% endif %}
     </div>
   </div>

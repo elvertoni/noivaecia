@@ -9,7 +9,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import FormView, ListView, TemplateView, View
 
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
-from customers.models import Customer
+from company.models import Company
+from customers.models import Customer, _normalize_name
 from rentals.models import Rental
 
 from .forms import (
@@ -22,10 +23,9 @@ from .forms import (
 )
 from .models import CashAccount, FinancialMovement, Payment, Receivable
 from .services import (
-    compute_interest,
-    days_overdue,
     financial_kpis,
     generate_for_rental,
+    interest_breakdown,
     reconcile_financial,
     register_payment,
     reverse_payment,
@@ -82,7 +82,7 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
 
         q = self.request.GET.get('q', '').strip()
         if q:
-            qs = qs.filter(rental__customer__name__icontains=q)
+            qs = qs.filter(rental__customer__name_search__icontains=_normalize_name(q))
 
         rental_number = self.request.GET.get('locacao', '').strip()
         if rental_number.isdigit():
@@ -92,12 +92,9 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        company = Company.load()
         rows = [
-            {
-                'obj': rec,
-                'total_with_interest': total_with_interest(rec),
-                'days_overdue': days_overdue(rec),
-            }
+            {'obj': rec, **interest_breakdown(rec, company=company)}
             for rec in context['receivables']
         ]
         context['rows'] = rows
@@ -121,27 +118,27 @@ class CustomerReceivableView(BillingAccessMixin, TemplateView):
         if customer_pk:
             customer = get_object_or_404(Customer, pk=customer_pk)
         elif q:
-            customer_results = Customer.objects.filter(name__icontains=q).order_by('name')[:20]
+            customer_results = Customer.objects.filter(name_search__icontains=_normalize_name(q)).order_by('name')[:20]
 
         receivable_rows = []
         total_balance = Decimal('0')
         total_with_int = Decimal('0')
 
         if customer:
+            company = Company.load()
             recs = (
                 Receivable.objects.filter(rental__customer=customer, balance__gt=0)
                 .select_related('rental')
                 .order_by('due_date')
             )
             for rec in recs:
-                twi = total_with_interest(rec)
+                breakdown = interest_breakdown(rec, company=company)
                 receivable_rows.append({
                     'obj': rec,
-                    'total_with_interest': twi,
-                    'days_overdue': days_overdue(rec),
+                    **breakdown,
                 })
                 total_balance += rec.balance
-                total_with_int += twi
+                total_with_int += breakdown['total_with_interest']
 
         context.update({
             'customer': customer,
@@ -170,30 +167,32 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_initial(self):
+        company = Company.load()
+        breakdown = interest_breakdown(self.receivable, company=company)
         return {
-            'amount': total_with_interest(self.receivable),
+            'amount': breakdown['total_with_interest'],
             'payment_date': date_cls.today(),
-            'interest_amount': compute_interest(self.receivable),
+            'interest_amount': breakdown['interest'],
         }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        company = Company.load()
+        breakdown = interest_breakdown(self.receivable, company=company)
         context.update({
             'receivable': self.receivable,
-            'total_with_interest': total_with_interest(self.receivable),
-            'interest': compute_interest(self.receivable),
-            'days_overdue': days_overdue(self.receivable),
+            **breakdown,
         })
         return context
 
     def form_valid(self, form):
         amount = form.cleaned_data['amount']
-        balance = self.receivable.balance
+        expected_total = total_with_interest(self.receivable, company=Company.load())
 
-        if amount > balance and not form.cleaned_data.get('confirm_overpayment'):
+        if amount > expected_total and not form.cleaned_data.get('confirm_overpayment'):
             form.add_error(
                 'confirm_overpayment',
-                f'Valor acima do saldo (R$ {balance:.2f}). Marque para confirmar.'
+                f'Valor acima do total com juros (R$ {expected_total:.2f}). Marque para confirmar.'
             )
             return self.form_invalid(form)
 
@@ -239,12 +238,12 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         )
         rows = []
         total_balance = Decimal('0')
+        company = Company.load()
         for rec in recs:
-            twi = total_with_interest(rec)
+            breakdown = interest_breakdown(rec, company=company)
             rows.append({
                 'obj': rec,
-                'total_with_interest': twi,
-                'days_overdue': days_overdue(rec),
+                **breakdown,
             })
             total_balance += rec.balance
         context.update({
@@ -362,7 +361,7 @@ class CashMovementListView(BillingAccessMixin, ListView):
 
         q = self.request.GET.get('q', '').strip()
         if q:
-            qs = qs.filter(customer__name__icontains=q)
+            qs = qs.filter(customer__name_search__icontains=_normalize_name(q))
 
         return qs
 
@@ -405,7 +404,7 @@ class ManualCashMovementView(BillingAccessMixin, ActionRequiredMixin, FormView):
         customer = None
         name = form.cleaned_data.get('customer_name', '').strip()
         if name:
-            customer = CustomerModel.objects.filter(name__icontains=name).first()
+            customer = CustomerModel.objects.filter(name_search__icontains=_normalize_name(name)).first()
 
         movement = FinancialMovement.objects.create(
             date=form.cleaned_data['date'],
@@ -457,7 +456,7 @@ class PaymentReportView(BillingAccessMixin, ListView):
 
         q = self.request.GET.get('q', '').strip()
         if q:
-            qs = qs.filter(customer__name__icontains=q)
+            qs = qs.filter(customer__name_search__icontains=_normalize_name(q))
 
         return qs
 
@@ -593,11 +592,9 @@ class ReceivableListView(BillingAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        company = Company.load()
         rows = [
-            {
-                'obj': rec,
-                'total_with_interest': total_with_interest(rec),
-            }
+            {'obj': rec, **interest_breakdown(rec, company=company)}
             for rec in context['receivables']
         ]
         context['rows'] = rows

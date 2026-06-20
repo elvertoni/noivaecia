@@ -110,10 +110,10 @@
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}
-          <a href="?prefix={{ prefix }}&code={{ code }}&description={{ description }}&color={{ color }}&size={{ size }}{% if only_placeholder %}&placeholder=1{% endif %}{% if only_duplicate %}&duplicate=1{% endif %}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+          <a href="{% querystring page=page_obj.previous_page_number %}" class="pagination-page">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a href="?prefix={{ prefix }}&code={{ code }}&description={{ description }}&color={{ color }}&size={{ size }}{% if only_placeholder %}&placeholder=1{% endif %}{% if only_duplicate %}&duplicate=1{% endif %}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+          <a href="{% querystring page=page_obj.next_page_number %}" class="pagination-page">Próxima</a>
         {% endif %}
       </div>
     </div>

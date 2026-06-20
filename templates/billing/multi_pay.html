@@ -23,8 +23,9 @@
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {% for field in form %}
               <div class="field-group">
-                <label class="field-label">{{ field.label }}</label>
+                <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
+                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
                 {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
               </div>
             {% endfor %}
@@ -55,7 +56,12 @@
                   {% for row in receivable_rows %}
                     <tr>
                       <td>
-                        <input type="checkbox" name="receivable_ids" value="{{ row.obj.pk }}" class="receivable-check">
+                        <input
+                          type="checkbox"
+                          name="receivable_ids"
+                          value="{{ row.obj.pk }}"
+                          class="receivable-check"
+                          aria-label="Selecionar título da locação #{{ row.obj.rental.number }}, vencimento {{ row.obj.due_date|date:'d/m/Y' }}, saldo R$ {{ row.obj.balance|floatformat:2 }}">
                       </td>
                       <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
                       <td>#{{ row.obj.rental.number }}</td>

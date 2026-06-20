@@ -33,7 +33,7 @@
              autocomplete="off">
       <button type="submit" class="btn btn-primary">Buscar</button>
       {% if search or cpf_search %}
-        <a href="?{% if active_filter %}active={{ active_filter }}{% endif %}" class="btn btn-secondary">Limpar</a>
+        <a href="{% querystring q=None cpf=None page=None %}" class="btn btn-secondary">Limpar</a>
       {% endif %}
     </form>
 
@@ -54,15 +54,15 @@
     {# Linha 3 — filtros de status #}
     <div class="flex items-center gap-4 text-sm">
       <span class="text-slate-500">Mostrar:</span>
-      <a href="?q={{ search }}&cpf={{ cpf_search }}"
+      <a href="{% querystring active=None page=None %}"
          class="touch-target inline-flex items-center {% if active_filter == '' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Todos
       </a>
-      <a href="?active=1&q={{ search }}&cpf={{ cpf_search }}"
+      <a href="{% querystring active='1' page=None %}"
          class="touch-target inline-flex items-center {% if active_filter == '1' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Ativos
       </a>
-      <a href="?active=0&q={{ search }}&cpf={{ cpf_search }}"
+      <a href="{% querystring active='0' page=None %}"
          class="touch-target inline-flex items-center {% if active_filter == '0' %}font-semibold text-brand-600{% else %}text-link{% endif %}">
         Inativos
       </a>
@@ -137,9 +137,9 @@
       </span>
       <div class="flex items-center gap-1">
         {% if page_obj.has_previous %}
-          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page=1"
+          <a href="{% querystring page=1 %}"
              class="pagination-page">«</a>
-          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.previous_page_number }}"
+          <a href="{% querystring page=page_obj.previous_page_number %}"
              class="pagination-page">Anterior</a>
         {% endif %}
 
@@ -149,15 +149,15 @@
           {% elif num == page_obj.number %}
             <span class="pagination-page bg-brand-600 text-white">{{ num }}</span>
           {% else %}
-            <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ num }}"
+            <a href="{% querystring page=num %}"
                class="pagination-page">{{ num }}</a>
           {% endif %}
         {% endfor %}
 
         {% if page_obj.has_next %}
-          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.next_page_number }}"
+          <a href="{% querystring page=page_obj.next_page_number %}"
              class="pagination-page">Próxima</a>
-          <a href="?active={{ active_filter }}&q={{ search }}&cpf={{ cpf_search }}&page={{ page_obj.paginator.num_pages }}"
+          <a href="{% querystring page=page_obj.paginator.num_pages %}"
              class="pagination-page">»</a>
         {% endif %}
       </div>

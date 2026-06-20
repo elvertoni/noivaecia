@@ -367,3 +367,178 @@ class RentalItemAvailabilityTests(TestCase):
             reverse('rentals:add_item_entry'), {'number': '9999'}
         )
         self.assertRedirects(response, reverse('rentals:list'))
+
+
+class RentalItemEditingTests(TestCase):
+    """Item loading / persistence rules on the rental edit screen."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(email='edit@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name='Maria')
+        cat = Category.objects.create(prefix='VN', name='Vestidos')
+        self.p1 = Product.objects.create(category=cat, code=1, description='A', value=300)
+        self.p2 = Product.objects.create(category=cat, code=2, description='B', value=150)
+        self.p3 = Product.objects.create(category=cat, code=3, description='C', value=200)
+
+    def _rental_with_items(self, products, number=100):
+        rental = Rental.objects.create(
+            number=number, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            penalty_value=Decimal('0'),
+        )
+        items = [
+            RentalItem.objects.create(rental=rental, product=p, value=p.value)
+            for p in products
+        ]
+        return rental, items
+
+    def _base_payload(self, **extra):
+        data = {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-15',
+            'penalty_value': '0',
+            'notes': '',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+        }
+        data.update(extra)
+        return data
+
+    def test_three_item_rental_loads_exactly_three_forms(self):
+        rental, _ = self._rental_with_items([self.p1, self.p2, self.p3])
+        response = self.client.get(f'/locacoes/{rental.pk}/editar/')
+        self.assertEqual(response.status_code, 200)
+        items = response.context['items']
+        self.assertEqual(items.initial_form_count(), 3)
+        # extra=0 → no blank trailing form is rendered.
+        self.assertEqual(len(items.forms), 3)
+
+    def test_blank_appended_form_creates_no_record(self):
+        rental, items = self._rental_with_items([self.p1])
+        item = items[0]
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', self._base_payload(
+            **{
+                'items-TOTAL_FORMS': '2',
+                'items-INITIAL_FORMS': '1',
+                'items-0-id': item.pk,
+                'items-0-product': self.p1.pk,
+                'items-0-description': 'A',
+                'items-0-value': '300',
+                'items-0-DELETE': '',
+                # Second form left entirely blank — must be ignored.
+                'items-1-id': '',
+                'items-1-product': '',
+                'items-1-description': '',
+                'items-1-value': '',
+                'items-1-DELETE': '',
+            }
+        ))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(rental.items.count(), 1)
+
+    def test_duplicate_product_is_blocked(self):
+        data = {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '2026-07-01',
+            'return_date': '2026-07-05',
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '2',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.p1.pk,
+            'items-0-description': '',
+            'items-0-value': '300',
+            'items-0-DELETE': '',
+            'items-1-product': self.p1.pk,
+            'items-1-description': '',
+            'items-1-value': '300',
+            'items-1-DELETE': '',
+        }
+        response = self.client.post('/locacoes/nova/', data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'já foi adicionada')
+        self.assertEqual(Rental.objects.count(), 0)
+
+    def test_preexisting_duplicate_product_stays_editable(self):
+        # Legacy rentals may already hold the same product twice; editing them
+        # must still save (only *new* duplicates are blocked).
+        rental, items = self._rental_with_items([self.p1, self.p1], number=120)
+        a, b = items
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', self._base_payload(
+            **{
+                'items-TOTAL_FORMS': '2',
+                'items-INITIAL_FORMS': '2',
+                'items-0-id': a.pk,
+                'items-0-product': self.p1.pk,
+                'items-0-value': '300',
+                'items-0-DELETE': '',
+                'items-1-id': b.pk,
+                'items-1-product': self.p1.pk,
+                'items-1-value': '300',
+                'items-1-DELETE': '',
+            }
+        ))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(rental.items.count(), 2)
+
+    def test_remove_intermediate_item_preserves_other_ids(self):
+        rental, items = self._rental_with_items([self.p1, self.p2, self.p3])
+        first, middle, last = items
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', self._base_payload(
+            **{
+                'items-TOTAL_FORMS': '3',
+                'items-INITIAL_FORMS': '3',
+                'items-0-id': first.pk,
+                'items-0-product': self.p1.pk,
+                'items-0-value': '300',
+                'items-0-DELETE': '',
+                'items-1-id': middle.pk,
+                'items-1-product': self.p2.pk,
+                'items-1-value': '150',
+                'items-1-DELETE': 'on',
+                'items-2-id': last.pk,
+                'items-2-product': self.p3.pk,
+                'items-2-value': '200',
+                'items-2-DELETE': '',
+            }
+        ))
+        self.assertEqual(response.status_code, 302)
+        remaining = list(rental.items.order_by('pk').values_list('pk', flat=True))
+        self.assertEqual(remaining, [first.pk, last.pk])
+        self.assertFalse(RentalItem.objects.filter(pk=middle.pk).exists())
+
+    def test_blank_unsaved_row_not_rendered_after_validation_error(self):
+        # return_date <= pickup_date forces a header error; a trailing blank
+        # item row in the POST must NOT be re-rendered.
+        data = {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '2026-07-05',
+            'return_date': '2026-07-01',  # invalid: before pickup
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '2',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.p1.pk,
+            'items-0-description': 'A',
+            'items-0-value': '300',
+            'items-0-DELETE': '',
+            'items-1-product': '',
+            'items-1-description': '',
+            'items-1-value': '',
+            'items-1-DELETE': '',
+        }
+        response = self.client.post('/locacoes/nova/', data)
+        self.assertEqual(response.status_code, 200)
+        # Filled row 0 is re-rendered; blank row 1 is suppressed.
+        self.assertContains(response, 'name="items-0-product"')
+        self.assertNotContains(response, 'name="items-1-product"')

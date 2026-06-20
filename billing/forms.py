@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import CashAccount, FinancialMovement, Payment
 
@@ -27,7 +27,7 @@ class PaymentForm(forms.Form):
 
     value = forms.DecimalField(
         label='Valor pago', min_value=0, max_digits=10, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
@@ -41,7 +41,7 @@ class ReceivablePayForm(forms.Form):
 
     amount = forms.DecimalField(
         label='Valor pago', min_value=0, max_digits=10, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
@@ -57,12 +57,12 @@ class ReceivablePayForm(forms.Form):
     interest_amount = forms.DecimalField(
         label='Juros', min_value=0, max_digits=10, decimal_places=2,
         required=False, initial=0,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     discount_amount = forms.DecimalField(
         label='Desconto', min_value=0, max_digits=10, decimal_places=2,
         required=False, initial=0,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     notes = forms.CharField(
         label='Observações', required=False,
@@ -102,7 +102,7 @@ class ManualMovementForm(forms.Form):
     )
     amount = forms.DecimalField(
         label='Valor', min_value=Decimal('0.01'), max_digits=10, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     description = forms.CharField(
         label='Histórico', max_length=500,
@@ -119,7 +119,7 @@ class MultiPayForm(forms.Form):
 
     total_amount = forms.DecimalField(
         label='Valor total a pagar', min_value=0, max_digits=10, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'step': '0.01'}),
+        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do pagamento',
@@ -136,3 +136,4 @@ class MultiPayForm(forms.Form):
         label='Observações', required=False,
         widget=forms.Textarea(attrs={'class': INPUT_CLASS, 'rows': 2}),
     )
+

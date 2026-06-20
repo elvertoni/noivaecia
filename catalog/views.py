@@ -17,7 +17,7 @@ from core.models import AuditLog
 from rentals.models import RentalItem
 from customers.models import _normalize_name
 
-from .availability import INACTIVE_RENTAL_STATUSES, find_rental_for
+from .availability import INACTIVE_RENTAL_STATUSES, find_overlapping_rental, find_rental_for
 from .forms import CategoryForm, CategoryMergeForm, ProductForm
 from .models import Category, Product
 
@@ -130,7 +130,7 @@ class ProductListView(CatalogAccessMixin, ListView):
             except ValueError:
                 qs = qs.none()
         if description:
-            qs = qs.filter(description__icontains=description)
+            qs = qs.filter(description_search__icontains=_normalize_name(description))
         if color:
             qs = qs.filter(color__icontains=color)
         if size:
@@ -468,18 +468,23 @@ class ProductBrowseView(View):
         color = request.GET.get('color', '').strip()
         q = request.GET.get('q', '').strip()
         date_str = request.GET.get('date', '').strip()
+        pickup_date_str = request.GET.get('pickup_date', '').strip() or date_str
+        return_date_str = request.GET.get('return_date', '').strip() or pickup_date_str
         include_empty = request.GET.get('empty') == '1'
         try:
             page = max(1, int(request.GET.get('page', '1')))
         except (TypeError, ValueError):
             page = 1
 
-        on_date = None
-        if date_str:
+        pickup_date = None
+        return_date = None
+        if pickup_date_str and return_date_str:
             try:
-                on_date = date_cls.fromisoformat(date_str)
+                pickup_date = date_cls.fromisoformat(pickup_date_str)
+                return_date = date_cls.fromisoformat(return_date_str)
             except ValueError:
-                on_date = None
+                pickup_date = None
+                return_date = None
 
         # ``scoped``: q + visibility only (drives the category facet).
         scoped = Product.objects.select_related('category')
@@ -513,12 +518,12 @@ class ProductBrowseView(View):
             results_qs = results_qs.filter(color__icontains=color)
         results_qs = results_qs.order_by('category__prefix', 'code')
 
-        if on_date:
+        if pickup_date and return_date:
             active_item = (
                 RentalItem.objects.filter(
                     product=OuterRef('pk'),
-                    rental__pickup_date__lte=on_date,
-                    rental__return_date__gte=on_date,
+                    rental__pickup_date__lte=return_date,
+                    rental__return_date__gte=pickup_date,
                 )
                 .exclude(rental__status__in=self.INACTIVE_STATUSES)
             )
@@ -530,7 +535,10 @@ class ProductBrowseView(View):
         start = (page - 1) * self.PAGE_SIZE
         page_items = list(results_qs[start:start + self.PAGE_SIZE])
 
-        rental_map = self._rentals_for_page(page_items, on_date) if on_date else {}
+        rental_map = (
+            self._rentals_for_page(page_items, pickup_date, return_date)
+            if pickup_date and return_date else {}
+        )
 
         results = []
         for product in page_items:
@@ -542,7 +550,7 @@ class ProductBrowseView(View):
                 'size': product.size,
                 'value': str(product.value),
             }
-            if on_date:
+            if pickup_date and return_date:
                 in_use = getattr(product, 'in_use', False)
                 entry['available'] = not in_use
                 rental = rental_map.get(product.pk)
@@ -550,6 +558,7 @@ class ProductBrowseView(View):
                     entry['rental'] = {
                         'number': rental.number,
                         'customer': rental.customer.name,
+                        'pickup_date': rental.pickup_date.isoformat(),
                         'return_date': rental.return_date.isoformat(),
                     }
             results.append(entry)
@@ -563,20 +572,20 @@ class ProductBrowseView(View):
             'facets': {'sizes': sizes, 'colors': colors},
         })
 
-    def _rentals_for_page(self, page_items, on_date):
+    def _rentals_for_page(self, page_items, pickup_date, return_date):
         in_use_ids = [p.pk for p in page_items if getattr(p, 'in_use', False)]
         if not in_use_ids:
             return {}
         items = (
             RentalItem.objects.filter(
                 product_id__in=in_use_ids,
-                rental__pickup_date__lte=on_date,
-                rental__return_date__gte=on_date,
+                rental__pickup_date__lte=return_date,
+                rental__return_date__gte=pickup_date,
             )
             .exclude(rental__status__in=self.INACTIVE_STATUSES)
             .select_related('rental', 'rental__customer')
-            # Deterministic: match find_rental_for when a piece overlaps holds.
-            .order_by('rental__return_date', 'rental__number')
+            # Deterministic: match the overlap validator when a piece has holds.
+            .order_by('rental__pickup_date', 'rental__number')
         )
         rental_map = {}
         for item in items:
@@ -585,17 +594,20 @@ class ProductBrowseView(View):
 
 
 class ProductAvailabilityJsonView(View):
-    """JSON availability check for a product on a given pickup date (R7.04)."""
+    """JSON availability check for a product over the rental window (R7.04)."""
 
     def get(self, request, *args, **kwargs):
         if not picker_access(request.user):
             return JsonResponse({'available': False, 'error': 'auth'}, status=403)
         product_id = request.GET.get('product_id', '').strip()
         date_str = request.GET.get('date', '').strip()
-        if not product_id or not date_str:
+        pickup_date_str = request.GET.get('pickup_date', '').strip() or date_str
+        return_date_str = request.GET.get('return_date', '').strip() or pickup_date_str
+        if not product_id or not pickup_date_str or not return_date_str:
             return JsonResponse({'available': True})
         try:
-            on_date = date_cls.fromisoformat(date_str)
+            pickup_date = date_cls.fromisoformat(pickup_date_str)
+            return_date = date_cls.fromisoformat(return_date_str)
         except ValueError:
             return JsonResponse({'available': True})
         try:
@@ -605,12 +617,13 @@ class ProductAvailabilityJsonView(View):
             product = Product.objects.select_related('category').get(pk=val)
         except (Product.DoesNotExist, ValueError):
             return JsonResponse({'available': False, 'error': 'not_found'})
-        rental = find_rental_for(product, on_date)
+        rental = find_overlapping_rental(product, pickup_date, return_date)
         if rental:
             return JsonResponse({
                 'available': False,
                 'rental_number': rental.number,
                 'customer': rental.customer.name,
+                'pickup_date': rental.pickup_date.isoformat(),
                 'return_date': rental.return_date.isoformat(),
             })
         return JsonResponse({'available': True})

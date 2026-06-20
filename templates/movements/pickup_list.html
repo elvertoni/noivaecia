@@ -41,7 +41,7 @@
   </form>
 
   {# Table #}
-  <div class="table-shell">
+  <div class="table-shell hidden md:block">
     <table class="data-table">
       <thead>
         <tr>
@@ -87,6 +87,58 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="space-y-3 md:hidden">
+    {% for rental in rentals %}
+      <article class="rounded-xl border border-app-border bg-app-surface p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <a href="{% url 'rentals:detail' rental.pk %}" class="text-link text-base">#{{ rental.number }}</a>
+            <p class="mt-1 truncate text-sm font-medium text-app-ink">{{ rental.customer.name }}</p>
+          </div>
+          <div class="shrink-0 text-right text-sm font-semibold text-app-ink">
+            R$ {{ rental.total_value|floatformat:2 }}
+          </div>
+        </div>
+
+        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Retirada</dt>
+            <dd class="mt-1 text-slate-900">
+              {{ rental.pickup_date|date:'d/m/Y' }}
+              {% if rental.pickup_date < today %}
+                <span class="badge badge-warning mt-1">atrasada</span>
+              {% elif rental.pickup_date == today %}
+                <span class="badge badge-info mt-1">hoje</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Retorno</dt>
+            <dd class="mt-1 text-slate-900">{{ rental.return_date|date:'d/m/Y' }}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-xs font-medium text-slate-600">Itens</dt>
+            <dd class="mt-1 text-slate-900">
+              {% for item in rental.items.all %}
+                {{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}
+              {% empty %}—{% endfor %}
+            </dd>
+          </div>
+          {% if rental.use_for %}
+            <div class="col-span-2">
+              <dt class="text-xs font-medium text-slate-600">Usar em</dt>
+              <dd class="mt-1 text-slate-900">{{ rental.use_for }}</dd>
+            </div>
+          {% endif %}
+        </dl>
+
+        <a href="{% url 'movements:pickup' rental.pk %}" class="btn btn-primary mt-4 w-full">Registrar retirada</a>
+      </article>
+    {% empty %}
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma locação pendente de retirada.</div>
+    {% endfor %}
   </div>
 
   {% if is_paginated %}

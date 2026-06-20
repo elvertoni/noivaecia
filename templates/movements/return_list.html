@@ -41,7 +41,7 @@
   </form>
 
   {# Table #}
-  <div class="table-shell">
+  <div class="table-shell hidden md:block">
     <table class="data-table">
       <thead>
         <tr>
@@ -82,6 +82,47 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="space-y-3 md:hidden">
+    {% for rental in rentals %}
+      <article class="rounded-xl border border-app-border bg-app-surface p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <a href="{% url 'rentals:detail' rental.pk %}" class="text-link text-base">#{{ rental.number }}</a>
+            <p class="mt-1 truncate text-sm font-medium text-app-ink">{{ rental.customer.name }}</p>
+          </div>
+          <div class="shrink-0 text-right text-sm font-semibold text-app-ink">
+            R$ {{ rental.total_value|floatformat:2 }}
+          </div>
+        </div>
+
+        <div class="mt-3">
+          {% if rental.return_date < today %}
+            <span class="badge badge-danger">Atrasado {{ rental.return_date|timesince:today }}</span>
+          {% elif rental.return_date == today %}
+            <span class="badge badge-warning">Devolução hoje</span>
+          {% else %}
+            <span class="badge badge-info">No prazo</span>
+          {% endif %}
+        </div>
+
+        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Retirada</dt>
+            <dd class="mt-1 text-slate-900">{% if rental.pickup %}{{ rental.pickup.pickup_date|date:'d/m/Y' }}{% else %}—{% endif %}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium text-slate-600">Retorno previsto</dt>
+            <dd class="mt-1 text-slate-900">{{ rental.return_date|date:'d/m/Y' }}</dd>
+          </div>
+        </dl>
+
+        <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary mt-4 w-full">Registrar devolução</a>
+      </article>
+    {% empty %}
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma locação retirada encontrada.</div>
+    {% endfor %}
   </div>
 
   {% if is_paginated %}

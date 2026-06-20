@@ -228,7 +228,7 @@ class GlobalReceivableListViewTests(TestCase):
         self.user = User.objects.create_user(email='fin@b.com', password='Senha12345')
         ModulePermission.objects.create(user=self.user, module_key='billing', allowed=True)
         self.client.force_login(self.user)
-        _make_scenario()
+        self.customer, self.rental, self.rec, self.account = _make_scenario()
 
     def test_list_returns_200(self):
         response = self.client.get(reverse('billing:receivables'))
@@ -250,6 +250,24 @@ class GlobalReceivableListViewTests(TestCase):
     def test_overdue_filter(self):
         response = self.client.get(reverse('billing:receivables') + '?overdue=1')
         self.assertEqual(response.status_code, 200)
+
+    def test_list_loads_company_once_for_interest_rows(self):
+        company = Company.load()
+        for number in (101, 102):
+            rental = Rental.objects.create(
+                number=number, customer=self.rec.rental.customer,
+                pickup_date=date(2026, 6, 1), return_date=date(2026, 6, 10),
+                total_value=Decimal('100'),
+            )
+            Receivable.objects.create(
+                rental=rental, due_date=date(2020, 1, 1), amount=Decimal('100'),
+            )
+
+        with mock.patch('billing.views.Company.load', return_value=company) as load:
+            response = self.client.get(reverse('billing:receivables'))
+
+        self.assertEqual(response.status_code, 200)
+        load.assert_called_once()
 
 
 class CustomerReceivableViewTests(TestCase):

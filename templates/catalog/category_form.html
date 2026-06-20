@@ -16,8 +16,9 @@
       {% endif %}
       {% for field in form %}
         <div class="field-group">
-          <label class="field-label">{{ field.label }}</label>
+          <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
           {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
         </div>
       {% endfor %}

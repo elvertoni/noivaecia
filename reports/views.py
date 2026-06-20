@@ -1,8 +1,8 @@
-"""Reports module — isolated per-type services (R11.01)."""
+"""Reports module - isolated per-type services (R11.01)."""
 import csv
 from datetime import date as date_cls
 
-from django.http import HttpResponse
+from django.http import StreamingHttpResponse
 from django.views.generic import TemplateView
 
 from core.mixins import ModuleAccessMixin
@@ -28,6 +28,15 @@ class ReportsIndexView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/index.html'
 
 
+class _CSVBuffer:
+    def write(self, value):
+        return value
+
+
+def _fmt_date(value):
+    return value.strftime('%d/%m/%Y') if value else '—'
+
+
 class _BaseReportView(ReportsAccessMixin, TemplateView):
     """Base with common filter param helpers and CSV export (R11.09/R11.10)."""
     csv_filename = 'relatorio.csv'
@@ -37,24 +46,29 @@ class _BaseReportView(ReportsAccessMixin, TemplateView):
         return self.request.GET.get(key, default).strip()
 
     def _csv_response(self, rows, headers):
-        """Build CSV HttpResponse with UTF-8 BOM for Excel (R11.10)."""
+        """Stream CSV rows with UTF-8 BOM for Excel (R11.10)."""
         from django.core.exceptions import PermissionDenied
         if not self.request.user.has_action('reports.export'):
             raise PermissionDenied
-        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+
+        writer = csv.writer(_CSVBuffer(), delimiter=';')
+
+        def stream():
+            yield '\ufeff'
+            yield writer.writerow(headers)
+            for row in rows:
+                yield writer.writerow(row)
+
+        response = StreamingHttpResponse(stream(), content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{self.csv_filename}"'
-        writer = csv.writer(response, delimiter=';')
-        writer.writerow(headers)
-        for row in rows:
-            writer.writerow(row)
         return response
 
     def _limit_for_export(self):
-        return None
+        return self.report_limit
 
 
 class ARetirarReportView(_BaseReportView):
-    """Produtos a retirar — equiv. locados.rpt não retirados (R11.02)."""
+    """Produtos a retirar - equiv. locados.rpt não retirados (R11.02)."""
     template_name = 'reports/a_retirar.html'
     csv_filename = 'a_retirar.csv'
 
@@ -72,14 +86,19 @@ class ARetirarReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Total']
-        rows = []
-        for r in self._get_data(max_results=self._limit_for_export()):
-            rows.append([
-                f'#{r.number}', r.customer.name, r.use_for or '',
-                r.pickup_date.strftime('%d/%m/%Y'), r.return_date.strftime('%d/%m/%Y'),
-                str(r.total_value),
-            ])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for rental in self._get_data(max_results=self._limit_for_export()):
+                yield [
+                    f'#{rental.number}',
+                    rental.customer.name,
+                    rental.use_for or '',
+                    _fmt_date(rental.pickup_date),
+                    _fmt_date(rental.return_date),
+                    str(rental.total_value),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -97,7 +116,7 @@ class ARetirarReportView(_BaseReportView):
 
 
 class RetiradosReportView(_BaseReportView):
-    """Produtos retirados — equiv. locados12.rpt (R11.03)."""
+    """Produtos retirados - equiv. locados12.rpt (R11.03)."""
     template_name = 'reports/retirados.html'
     csv_filename = 'retirados.csv'
 
@@ -115,14 +134,19 @@ class RetiradosReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retirada', 'Retorno previsto', 'Total']
-        rows = []
-        for r in self._get_data(max_results=self._limit_for_export()):
-            pickup_date = r.pickup.pickup_date.strftime('%d/%m/%Y') if hasattr(r, 'pickup') and r.pickup else '—'
-            rows.append([
-                f'#{r.number}', r.customer.name, pickup_date,
-                r.return_date.strftime('%d/%m/%Y'), str(r.total_value),
-            ])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for rental in self._get_data(max_results=self._limit_for_export()):
+                pickup = rental.pickup.pickup_date if hasattr(rental, 'pickup') and rental.pickup else None
+                yield [
+                    f'#{rental.number}',
+                    rental.customer.name,
+                    _fmt_date(pickup),
+                    _fmt_date(rental.return_date),
+                    str(rental.total_value),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -140,7 +164,7 @@ class RetiradosReportView(_BaseReportView):
 
 
 class DevolvidosReportView(_BaseReportView):
-    """Devolvidos — por data efetiva de devolução (R11.04)."""
+    """Devolvidos - por data efetiva de devolução (R11.04)."""
     template_name = 'reports/devolvidos.html'
     csv_filename = 'devolvidos.csv'
 
@@ -158,12 +182,24 @@ class DevolvidosReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retirada', 'Devolução efetiva', 'Total']
-        rows = []
-        for r in self._get_data(max_results=self._limit_for_export()):
-            actual = r.return_record.return_date.strftime('%d/%m/%Y') if hasattr(r, 'return_record') and r.return_record else '—'
-            pickup = r.pickup.pickup_date.strftime('%d/%m/%Y') if hasattr(r, 'pickup') and r.pickup else '—'
-            rows.append([f'#{r.number}', r.customer.name, pickup, actual, str(r.total_value)])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for rental in self._get_data(max_results=self._limit_for_export()):
+                pickup = rental.pickup.pickup_date if hasattr(rental, 'pickup') and rental.pickup else None
+                returned = (
+                    rental.return_record.return_date
+                    if hasattr(rental, 'return_record') and rental.return_record
+                    else None
+                )
+                yield [
+                    f'#{rental.number}',
+                    rental.customer.name,
+                    _fmt_date(pickup),
+                    _fmt_date(returned),
+                    str(rental.total_value),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -180,7 +216,7 @@ class DevolvidosReportView(_BaseReportView):
 
 
 class AtrasadosReportView(_BaseReportView):
-    """Atrasados/não devolvidos — com dias de atraso (R11.05)."""
+    """Atrasados/não devolvidos - com dias de atraso (R11.05)."""
     template_name = 'reports/atrasados.html'
     csv_filename = 'atrasados.csv'
 
@@ -197,12 +233,19 @@ class AtrasadosReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Retorno previsto', 'Dias de atraso', 'Total']
-        rows = []
-        for entry in self._get_data(max_results=self._limit_for_export()):
-            r = entry['rental']
-            rows.append([f'#{r.number}', r.customer.name,
-                         r.return_date.strftime('%d/%m/%Y'), entry['days_late'], str(r.total_value)])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for entry in self._get_data(max_results=self._limit_for_export()):
+                rental = entry['rental']
+                yield [
+                    f'#{rental.number}',
+                    rental.customer.name,
+                    _fmt_date(rental.return_date),
+                    entry['days_late'],
+                    str(rental.total_value),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -218,7 +261,7 @@ class AtrasadosReportView(_BaseReportView):
 
 
 class LocacoesReportView(_BaseReportView):
-    """Locações realizadas — equiv. vendas.rpt (R11.06)."""
+    """Locações realizadas - equiv. vendas.rpt (R11.06)."""
     template_name = 'reports/locacoes.html'
     csv_filename = 'locacoes.csv'
 
@@ -236,14 +279,20 @@ class LocacoesReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Status', 'Total']
-        rows = []
-        for r in self._get_data(max_results=self._limit_for_export()):
-            rows.append([
-                f'#{r.number}', r.customer.name, r.use_for or '',
-                r.pickup_date.strftime('%d/%m/%Y'), r.return_date.strftime('%d/%m/%Y'),
-                r.get_status_display(), str(r.total_value),
-            ])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for rental in self._get_data(max_results=self._limit_for_export()):
+                yield [
+                    f'#{rental.number}',
+                    rental.customer.name,
+                    rental.use_for or '',
+                    _fmt_date(rental.pickup_date),
+                    _fmt_date(rental.return_date),
+                    rental.get_status_display(),
+                    str(rental.total_value),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         from rentals.models import Rental as RentalModel
@@ -261,7 +310,7 @@ class LocacoesReportView(_BaseReportView):
 
 
 class ContasVencimentoReportView(_BaseReportView):
-    """Contas a receber por vencimento — equiv. receber.rpt (R11.07)."""
+    """Contas a receber por vencimento - equiv. receber.rpt (R11.07)."""
     template_name = 'reports/contas_vencimento.html'
     csv_filename = 'contas_a_receber.csv'
 
@@ -279,22 +328,27 @@ class ContasVencimentoReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        qs, _ = self._get_data(max_results=self._limit_for_export())
+        receivables, _ = self._get_data(max_results=self._limit_for_export())
         headers = ['Vencimento', 'Locação', 'Cliente', 'Valor', 'Pago', 'Saldo']
-        rows = []
-        for rec in qs:
-            rows.append([
-                rec.due_date.strftime('%d/%m/%Y') if rec.due_date else '—',
-                f'#{rec.rental.number}', rec.rental.customer.name,
-                str(rec.amount), str(rec.paid_amount), str(rec.balance),
-            ])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for receivable in receivables:
+                yield [
+                    _fmt_date(receivable.due_date),
+                    f'#{receivable.rental.number}',
+                    receivable.rental.customer.name,
+                    str(receivable.amount),
+                    str(receivable.paid_amount),
+                    str(receivable.balance),
+                ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        qs, totals = self._get_data()
+        receivables, totals = self._get_data()
         ctx.update({
-            'receivables': qs,
+            'receivables': receivables,
             'totals': totals,
             'date_from': self._p('date_from'),
             'date_to': self._p('date_to'),
@@ -307,7 +361,7 @@ class ContasVencimentoReportView(_BaseReportView):
 
 
 class ContasClienteReportView(_BaseReportView):
-    """Contas a receber por cliente — equiv. receberc.rpt (R11.08)."""
+    """Contas a receber por cliente - equiv. receberc.rpt (R11.08)."""
     template_name = 'reports/contas_cliente.html'
     csv_filename = 'contas_por_cliente.csv'
 
@@ -324,15 +378,20 @@ class ContasClienteReportView(_BaseReportView):
 
     def _export_csv(self):
         headers = ['Cliente', 'Locação', 'Vencimento', 'Valor', 'Pago', 'Saldo']
-        rows = []
-        for group in self._get_data(max_results=self._limit_for_export()):
-            for rec in group['receivables']:
-                rows.append([
-                    group['customer'].name, f'#{rec.rental.number}',
-                    rec.due_date.strftime('%d/%m/%Y') if rec.due_date else '—',
-                    str(rec.amount), str(rec.paid_amount), str(rec.balance),
-                ])
-        return self._csv_response(rows, headers)
+
+        def rows():
+            for group in self._get_data(max_results=self._limit_for_export()):
+                for receivable in group['receivables']:
+                    yield [
+                        group['customer'].name,
+                        f'#{receivable.rental.number}',
+                        _fmt_date(receivable.due_date),
+                        str(receivable.amount),
+                        str(receivable.paid_amount),
+                        str(receivable.balance),
+                    ]
+
+        return self._csv_response(rows(), headers)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -345,9 +404,8 @@ class ContasClienteReportView(_BaseReportView):
         return ctx
 
 
-# Keep old ReportView for backward-compat redirect
 class ReportView(ReportsAccessMixin, TemplateView):
-    """Legacy combined report view — kept for backward compatibility."""
+    """Legacy combined report view - kept for backward compatibility."""
     template_name = 'reports/report.html'
 
     def get_context_data(self, **kwargs):

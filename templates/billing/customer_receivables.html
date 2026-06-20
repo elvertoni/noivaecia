@@ -19,8 +19,8 @@
   <form method="get" action="{% url 'billing:customer_receivables_search' %}" class="panel p-4">
     <div class="flex gap-3">
       <div class="field-group flex-1">
-        <label class="field-label">Buscar cliente</label>
-        <input type="text" name="q" value="{{ q }}" class="field-input" placeholder="Nome do cliente" autofocus>
+        <label class="field-label" for="customer-receivables-search">Buscar cliente</label>
+        <input type="text" name="q" id="customer-receivables-search" value="{{ q }}" class="field-input" placeholder="Nome do cliente" autofocus>
       </div>
       <div class="flex items-end">
         <button type="submit" class="btn btn-primary">Buscar</button>
@@ -77,8 +77,9 @@
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {% for field in multi_pay_form %}
               <div class="field-group">
-                <label class="field-label">{{ field.label }}</label>
+                <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
+                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
                 {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
               </div>
             {% endfor %}
@@ -132,7 +133,7 @@
                 <td><a href="{% url 'rentals:detail' row.obj.rental_id %}" class="text-link">#{{ row.obj.rental.number }}</a></td>
                 <td class="text-right">R$ {{ row.obj.amount|floatformat:2 }}</td>
                 <td class="text-right font-medium">R$ {{ row.obj.balance|floatformat:2 }}</td>
-                <td class="text-right">R$ {{ row.obj.balance|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.interest|floatformat:2 }}</td>
                 <td class="text-right font-semibold">R$ {{ row.total_with_interest|floatformat:2 }}</td>
                 <td class="text-right">
                   {% if row.days_overdue > 0 %}

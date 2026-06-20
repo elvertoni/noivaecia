@@ -19,7 +19,7 @@
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <div class="field-group">
-        <label class="field-label">{{ form.reason.label }}</label>
+        <label class="field-label" for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>
         {{ form.reason }}
         {% if form.reason.errors %}<p class="field-error">{{ form.reason.errors|striptags }}</p>{% endif %}
       </div>

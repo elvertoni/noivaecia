@@ -1,6 +1,6 @@
 from django import forms
 
-from core.ui import INPUT_CLASS
+from core.ui import BRDecimalInput, INPUT_CLASS
 
 from .models import Company
 
@@ -19,4 +19,7 @@ class CompanyForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
+            if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
+                field.widget = BRDecimalInput()
             field.widget.attrs['class'] = INPUT_CLASS
+

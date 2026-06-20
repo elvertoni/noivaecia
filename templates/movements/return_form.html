@@ -60,7 +60,7 @@
 
       {# Return date #}
       <div class="field-group">
-        <label class="field-label">{{ form.return_date.label }}</label>
+        <label class="field-label" for="{{ form.return_date.id_for_label }}">{{ form.return_date.label }}</label>
         {{ form.return_date }}
         {% if form.return_date.errors %}<p class="field-error">{{ form.return_date.errors|striptags }}</p>{% endif %}
       </div>
@@ -71,17 +71,17 @@
           <h3 class="text-sm font-semibold text-app-ink">Registrar pagamento agora <span class="text-app-muted font-normal">(opcional)</span></h3>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div class="field-group">
-              <label class="field-label">{{ form.payment_amount.label }}</label>
+              <label class="field-label" for="{{ form.payment_amount.id_for_label }}">{{ form.payment_amount.label }}</label>
               {{ form.payment_amount }}
               {% if form.payment_amount.errors %}<p class="field-error">{{ form.payment_amount.errors|striptags }}</p>{% endif %}
             </div>
             <div class="field-group">
-              <label class="field-label">{{ form.payment_method.label }}</label>
+              <label class="field-label" for="{{ form.payment_method.id_for_label }}">{{ form.payment_method.label }}</label>
               {{ form.payment_method }}
               {% if form.payment_method.errors %}<p class="field-error">{{ form.payment_method.errors|striptags }}</p>{% endif %}
             </div>
             <div class="field-group">
-              <label class="field-label">{{ form.payment_date.label }}</label>
+              <label class="field-label" for="{{ form.payment_date.id_for_label }}">{{ form.payment_date.label }}</label>
               {{ form.payment_date }}
               {% if form.payment_date.errors %}<p class="field-error">{{ form.payment_date.errors|striptags }}</p>{% endif %}
             </div>

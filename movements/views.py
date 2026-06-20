@@ -2,12 +2,14 @@ from datetime import date as date_cls
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import CreateView, ListView, TemplateView
 
 from core.mixins import ModuleAccessMixin
+from customers.models import _normalize_name
 from rentals.models import Rental
 
 from .forms import PickupForm, ReturnForm
@@ -153,11 +155,11 @@ class PickupListView(MovementsAccessMixin, ListView):
         if date_to:
             qs = qs.filter(pickup_date__lte=date_to)
         if customer_q:
-            qs = qs.filter(customer__name__icontains=customer_q)
+            qs = qs.filter(customer__name_search__icontains=_normalize_name(customer_q))
         if product_q:
             qs = qs.filter(
                 Q(items__product__category__prefix__icontains=product_q)
-                | Q(items__product__description__icontains=product_q)
+                | Q(items__product__description_search__icontains=_normalize_name(product_q))
             ).distinct()
         return qs
 
@@ -197,11 +199,11 @@ class ReturnListView(MovementsAccessMixin, ListView):
         if date_to:
             qs = qs.filter(pickup__pickup_date__lte=date_to)
         if customer_q:
-            qs = qs.filter(customer__name__icontains=customer_q)
+            qs = qs.filter(customer__name_search__icontains=_normalize_name(customer_q))
         if product_q:
             qs = qs.filter(
                 Q(items__product__category__prefix__icontains=product_q)
-                | Q(items__product__description__icontains=product_q)
+                | Q(items__product__description_search__icontains=_normalize_name(product_q))
             ).distinct()
         return qs
 
@@ -223,6 +225,8 @@ class OverdueListView(MovementsAccessMixin, TemplateView):
 
     template_name = 'movements/overdue_list.html'
 
+    paginate_by = 30
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         today = date_cls.today()
@@ -231,13 +235,16 @@ class OverdueListView(MovementsAccessMixin, TemplateView):
             .select_related('customer')
             .order_by('return_date', 'number')
         )
+        paginator = Paginator(rentals, self.paginate_by)
+        page_obj = paginator.get_page(self.request.GET.get('page'))
         # Annotate days late in Python (avoid DB func dependency)
-        overdue = []
-        for r in rentals:
-            overdue.append({
-                'rental': r,
-                'days_late': (today - r.return_date).days,
-            })
+        overdue = [
+            {'rental': r, 'days_late': (today - r.return_date).days}
+            for r in page_obj
+        ]
         ctx['overdue'] = overdue
+        ctx['page_obj'] = page_obj
+        ctx['paginator'] = paginator
+        ctx['is_paginated'] = page_obj.has_other_pages()
         ctx['today'] = today
         return ctx

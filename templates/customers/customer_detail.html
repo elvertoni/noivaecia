@@ -95,7 +95,14 @@
 
   {# Rentals (R9.02) #}
   <div>
-    <h2 class="section-title mb-3">Locações <span class="text-xs font-normal text-app-muted">({{ rentals|length }})</span></h2>
+    <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <h2 class="section-title">Locações <span class="text-xs font-normal text-app-muted">({{ rentals_count }})</span></h2>
+      {% if rentals_is_paginated %}
+        <p class="text-sm text-app-muted">
+          Mostrando {{ rentals_page_obj.start_index }}-{{ rentals_page_obj.end_index }} de {{ rentals_count }}
+        </p>
+      {% endif %}
+    </div>
     {% if rentals %}
       <div class="table-shell">
         <table class="data-table">
@@ -139,6 +146,19 @@
           </tbody>
         </table>
       </div>
+      {% if rentals_is_paginated %}
+        <div class="pagination mt-3">
+          <span>Página {{ rentals_page_obj.number }} de {{ rentals_page_obj.paginator.num_pages }}</span>
+          <div class="flex gap-2">
+            {% if rentals_page_obj.has_previous %}
+              <a href="?{{ rental_page_querystring }}rental_page={{ rentals_page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+            {% endif %}
+            {% if rentals_page_obj.has_next %}
+              <a href="?{{ rental_page_querystring }}rental_page={{ rentals_page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
     {% else %}
       <div class="panel-spacious text-center text-app-muted">Nenhuma locação encontrada com os filtros aplicados.</div>
     {% endif %}

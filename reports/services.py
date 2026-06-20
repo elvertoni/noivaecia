@@ -6,6 +6,7 @@ from django.db.models import Prefetch
 from django.db.models import Q, Sum
 
 from billing.models import Receivable
+from customers.models import _normalize_name
 from rentals.models import Rental, RentalItem
 
 
@@ -46,7 +47,7 @@ def _apply_rental_filters(
     if date_to:
         qs = qs.filter(**{f'{date_field}__lte': date_to})
     if customer:
-        qs = qs.filter(customer__name__icontains=customer)
+        qs = qs.filter(customer__name_search__icontains=_normalize_name(customer))
     if prefix:
         qs = qs.filter(items__product__category__prefix__iexact=prefix)
         needs_distinct = True
@@ -135,7 +136,7 @@ def report_contas_vencimento(
     if date_to:
         qs = qs.filter(due_date__lte=date_to)
     if customer:
-        qs = qs.filter(rental__customer__name__icontains=customer)
+        qs = qs.filter(rental__customer__name_search__icontains=_normalize_name(customer))
     if overdue_only:
         qs = qs.filter(due_date__lt=today)
     totals = qs.aggregate(t_amount=Sum('amount'), t_paid=Sum('paid_amount'), t_balance=Sum('balance'))
@@ -149,7 +150,7 @@ def report_contas_cliente(customer='', status='', max_results=DEFAULT_REPORT_LIM
         .order_by('rental__customer__name', 'due_date')
     )
     if customer:
-        qs = qs.filter(rental__customer__name__icontains=customer)
+        qs = qs.filter(rental__customer__name_search__icontains=_normalize_name(customer))
     if status == 'open':
         qs = qs.filter(balance__gt=0)
     elif status == 'paid':

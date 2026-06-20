@@ -1,6 +1,9 @@
 """Tests for Sprint R11 — reports, print, CSV export."""
+import csv
+import io
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -18,6 +21,16 @@ from reports.services import report_a_retirar
 
 User = get_user_model()
 TODAY = date.today()
+
+
+def _streaming_csv_rows(response):
+    content = []
+    for chunk in response.streaming_content:
+        if isinstance(chunk, bytes):
+            content.append(chunk.decode('utf-8-sig'))
+        else:
+            content.append(chunk.lstrip('\ufeff'))
+    return list(csv.reader(io.StringIO(''.join(content)), delimiter=';'))
 
 
 def _make_company():
@@ -101,6 +114,21 @@ class ARetirarReportViewTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('text/csv', r['Content-Type'])
         self.assertIn('attachment', r.get('Content-Disposition', ''))
+
+    def test_csv_export_is_streaming(self):
+        r = self.client.get(self.url, {'format': 'csv'})
+
+        self.assertTrue(r.streaming)
+
+    def test_csv_export_keeps_report_limit(self):
+        _make_rental(202, status='pending')
+        _make_rental(203, status='pending')
+
+        with mock.patch('reports.views.ARetirarReportView.report_limit', 1):
+            r = self.client.get(self.url, {'format': 'csv'})
+            rows = _streaming_csv_rows(r)
+
+        self.assertEqual(len(rows), 2)  # header + one data row
 
 
 class ReportQueryPerformanceTests(TestCase):

@@ -8,7 +8,7 @@
       <p class="page-description">Locações pendentes de retirada.</p>
     </div>
     <div class="flex gap-2 print:hidden">
-      <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer }}&prefix={{ prefix }}&code={{ code }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>

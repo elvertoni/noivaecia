@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from catalog.models import Product
-from core.ui import DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from customers.models import Customer
 from .models import Rental, RentalItem
@@ -21,6 +21,8 @@ def _style(form):
     for field in form.fields.values():
         if isinstance(field.widget, forms.Textarea):
             field.widget.attrs.setdefault('rows', 3)
+        if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
+            field.widget = BRDecimalInput()
         css = field.widget.attrs.get('class', '')
         field.widget.attrs['class'] = (css + ' ' + INPUT_CLASS).strip()
 
@@ -197,6 +199,17 @@ class RentalItemForm(forms.ModelForm):
         else:
             self.fields['product'].queryset = Product.objects.none()
 
+    def has_changed(self):
+        # An unsaved row with no product chosen is an empty row and must be
+        # ignored — never saved, never re-rendered. Without this, the model's
+        # ``value`` default (0) makes a blank form look "changed" (submitted
+        # '' != initial 0), so leftover empty items pile up and block saving.
+        if not (self.instance and self.instance.pk):
+            product = (self.data.get(self.add_prefix('product')) or '').strip()
+            if not product:
+                return False
+        return super().has_changed()
+
     def clean_proof_photo_upload(self):
         uploaded_file = self.cleaned_data.get('proof_photo_upload')
         if uploaded_file is False:
@@ -232,10 +245,47 @@ class RentalItemForm(forms.ModelForm):
         return instance
 
 
+class BaseRentalItemFormSet(forms.BaseInlineFormSet):
+    """Shared rules for rental item formsets (create + edit).
+
+    - Only loads items that actually point to a product, so legacy/orphaned
+      rows without a resolvable product never render as ghost "empty" items.
+    - Blocks the same product being booked twice in one rental (one physical
+      piece = one line), surfacing the error on the offending item.
+    """
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return qs.filter(product__isnull=False).select_related('product__category')
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        seen = set()
+        for form in self.forms:
+            if not getattr(form, 'cleaned_data', None):
+                continue
+            if form.cleaned_data.get('DELETE'):
+                continue
+            product = form.cleaned_data.get('product')
+            if not product:
+                continue
+            if product.pk in seen:
+                # Only block a *newly added* duplicate. Pre-existing (saved)
+                # duplicate rows in legacy rentals stay editable for backward
+                # compatibility — saved rows are iterated before extra rows.
+                if not form.instance.pk:
+                    form.add_error('product', 'Esta peça já foi adicionada a esta locação.')
+            else:
+                seen.add(product.pk)
+
+
 RentalItemFormSet = forms.inlineformset_factory(
     Rental,
     RentalItem,
     form=RentalItemForm,
+    formset=BaseRentalItemFormSet,
     extra=1,
     can_delete=True,
 )
@@ -245,6 +295,7 @@ RentalItemEditFormSet = forms.inlineformset_factory(
     Rental,
     RentalItem,
     form=RentalItemForm,
+    formset=BaseRentalItemFormSet,
     extra=0,
     can_delete=True,
 )

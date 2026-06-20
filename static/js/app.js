@@ -4,12 +4,13 @@
   const APP_TRACE = {
     name: 'NoivasCiaApp',
     version: 'frontend-a11y-rental-2026-06-16',
-    features: ['enter-navigation', 'br-date-inputs'],
+    features: ['enter-navigation', 'br-date-inputs', 'br-decimal-inputs'],
   };
   const DATE_INPUT_SELECTOR = [
     'input[data-date-br="true"]',
     'input[data-date-format="br"]',
   ].join(',');
+  const DECIMAL_INPUT_SELECTOR = 'input[data-decimal-br="true"]';
 
   function isElementVisible(el) {
     return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
@@ -183,19 +184,179 @@
     root.querySelectorAll(DATE_INPUT_SELECTOR).forEach(prepareDateInput);
   }
 
+  // ── Brazilian Decimal Inputs ───────────────────────────────────────────────
+
+  /**
+   * Parse a Brazilian-formatted decimal string into a plain numeric string.
+   * Accepts: "1.234,56", "1234,56", "1234.56", "1234", "0,5"
+   * Returns: "1234.56" (dot-decimal, no thousands separator)
+   */
+  function parseBRDecimal(value) {
+    var s = String(value || '').trim();
+    if (!s) return '';
+    // If the string contains both dot and comma, the last one is the decimal sep.
+    var hasComma = s.indexOf(',') !== -1;
+    var hasDot = s.indexOf('.') !== -1;
+    if (hasComma && hasDot) {
+      // Brazilian format: dots are thousands, comma is decimal
+      // e.g. "1.234,56" → "1234.56"
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        // US format: commas are thousands, dot is decimal
+        s = s.replace(/,/g, '');
+      }
+    } else if (hasComma) {
+      // Only comma: treat as decimal separator
+      s = s.replace(',', '.');
+    }
+    // else only dot or no separator: already ok
+    // Remove any non-numeric chars except dot and minus
+    s = s.replace(/[^\d.\-]/g, '');
+    return s;
+  }
+
+  /**
+   * Format a numeric value into Brazilian decimal display: 1.234,56
+   */
+  function formatBRDecimal(value) {
+    var s = parseBRDecimal(value);
+    if (!s) return '';
+    var num = parseFloat(s);
+    if (isNaN(num)) return String(value || '');
+    // Format with 2 decimal places
+    var fixed = num.toFixed(2);
+    // Split into integer and decimal parts
+    var parts = fixed.split('.');
+    var intPart = parts[0];
+    var decPart = parts[1];
+    var negative = false;
+    if (intPart.charAt(0) === '-') {
+      negative = true;
+      intPart = intPart.substring(1);
+    }
+    // Add thousand separators (dots)
+    var result = '';
+    for (var i = intPart.length - 1, count = 0; i >= 0; i--, count++) {
+      if (count > 0 && count % 3 === 0) {
+        result = '.' + result;
+      }
+      result = intPart.charAt(i) + result;
+    }
+    return (negative ? '-' : '') + result + ',' + decPart;
+  }
+
+  /**
+   * Live mask for decimal input: keeps only digits and one comma,
+   * auto-inserts thousand-dot separators.
+   */
+  function maskDecimal(raw) {
+    // Strip everything except digits and comma
+    var s = raw.replace(/[^\d,]/g, '');
+    // Allow only one comma
+    var commaIndex = s.indexOf(',');
+    if (commaIndex !== -1) {
+      // Keep only the first comma and limit decimal digits to 2
+      var before = s.substring(0, commaIndex).replace(/,/g, '');
+      var after = s.substring(commaIndex + 1).replace(/,/g, '').substring(0, 2);
+      // Remove leading zeros from integer part (but keep at least one digit)
+      before = before.replace(/^0+(?=\d)/, '') || '0';
+      // Add thousand separators to the integer part
+      var formatted = '';
+      for (var i = before.length - 1, count = 0; i >= 0; i--, count++) {
+        if (count > 0 && count % 3 === 0) formatted = '.' + formatted;
+        formatted = before.charAt(i) + formatted;
+      }
+      return formatted + ',' + after;
+    }
+    // No comma yet: just format integer part with thousand separators
+    s = s.replace(/^0+(?=\d)/, '') || '';
+    if (!s) return s;
+    var result = '';
+    for (var j = s.length - 1, cnt = 0; j >= 0; j--, cnt++) {
+      if (cnt > 0 && cnt % 3 === 0) result = '.' + result;
+      result = s.charAt(j) + result;
+    }
+    return result;
+  }
+
+  function prepareDecimalInput(input) {
+    if (input.dataset.decimalPrepared === 'true') return;
+    input.dataset.decimalPrepared = 'true';
+
+    // Convert type="number" to type="text" if needed
+    try {
+      if (input.type === 'number') input.type = 'text';
+    } catch (_) {
+      input.setAttribute('type', 'text');
+    }
+    input.inputMode = 'decimal';
+    input.autocomplete = 'off';
+    input.dataset.decimalBr = 'true';
+
+    // Format existing value from dot-decimal to BR format
+    var initial = input.value;
+    if (initial && initial.trim()) {
+      input.value = formatBRDecimal(initial);
+    }
+
+    input.addEventListener('input', function () {
+      var cursorPos = this.selectionStart || 0;
+      var oldLength = this.value.length;
+      // Count digits before cursor in old value
+      var digitsBefore = this.value.substring(0, cursorPos).replace(/[^\d]/g, '').length;
+      this.value = maskDecimal(this.value);
+      // Reposition cursor: find position after the same number of digits
+      var newPos = 0;
+      var counted = 0;
+      for (var i = 0; i < this.value.length && counted < digitsBefore; i++) {
+        if (/\d/.test(this.value.charAt(i))) counted++;
+        newPos = i + 1;
+      }
+      // If we didn't find enough digits, put cursor at end
+      if (counted < digitsBefore) newPos = this.value.length;
+      try {
+        this.setSelectionRange(newPos, newPos);
+      } catch (_) {}
+    });
+
+    input.addEventListener('blur', function () {
+      if (this.value.trim()) {
+        this.value = formatBRDecimal(this.value);
+      }
+    });
+  }
+
+  function normalizeFormDecimals(form) {
+    form.querySelectorAll(DECIMAL_INPUT_SELECTOR).forEach(function (input) {
+      if (input.value.trim()) {
+        input.value = parseBRDecimal(input.value);
+      }
+    });
+  }
+
+  function initDecimalInputs(root) {
+    root.querySelectorAll(DECIMAL_INPUT_SELECTOR).forEach(prepareDecimalInput);
+  }
+
   window.NoivasCiaApp = Object.assign(window.NoivasCiaApp || {}, APP_TRACE);
   window.NoivasCiaForms = Object.assign(window.NoivasCiaForms || {}, {
     getDateInputIsoValue: function (input) {
       return input ? dateValueToIso(input.value) : '';
     },
     prepareDateInputs: initDateInputs,
+    prepareDecimalInputs: initDecimalInputs,
+    parseBRDecimal: parseBRDecimal,
+    formatBRDecimal: formatBRDecimal,
   });
 
   document.addEventListener('keydown', handleEnterNavigation);
   document.addEventListener('submit', function (event) {
     normalizeFormDates(event.target);
+    normalizeFormDecimals(event.target);
   }, true);
   document.addEventListener('DOMContentLoaded', function () {
     initDateInputs(document);
+    initDecimalInputs(document);
   });
 }());

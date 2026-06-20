@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
-from catalog.availability import find_rental_for
+from catalog.availability import find_overlapping_rental, find_rental_for
 from catalog.models import Category, Product
 from customers.models import Customer
 from rentals.models import Rental, RentalItem
@@ -53,6 +53,12 @@ class AvailabilityTests(TestCase):
         self.rental.status = Rental.Status.CANCELLED
         self.rental.save()
         self.assertIsNone(find_rental_for(self.product, date(2026, 6, 15)))
+
+    def test_overlap_finds_conflict_after_pickup_date(self):
+        self.assertEqual(
+            find_overlapping_rental(self.product, date(2026, 6, 1), date(2026, 6, 12)),
+            self.rental,
+        )
 
 
 class ProductBrowseViewTests(TestCase):
@@ -148,6 +154,24 @@ class ProductBrowseViewTests(TestCase):
         self.assertEqual(results['BMA500']['rental']['customer'], 'Maria')
         self.assertTrue(results['BMA501']['available'])
 
+    def test_availability_inline_uses_full_rental_window(self):
+        rental = Rental.objects.create(
+            number=3, customer=self.customer,
+            pickup_date=date(2026, 6, 15), return_date=date(2026, 6, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+        RentalItem.objects.create(rental=rental, product=self.b54_cinza, value=120)
+        results = {
+            r['code']: r for r in self._get(
+                prefix='BMA',
+                size='54',
+                pickup_date='2026-06-10',
+                return_date='2026-06-16',
+            )['results']
+        }
+        self.assertFalse(results['BMA500']['available'])
+        self.assertEqual(results['BMA500']['rental']['number'], 3)
+
     def test_cancelled_rental_does_not_block(self):
         rental = Rental.objects.create(
             number=2, customer=self.customer,
@@ -208,3 +232,39 @@ class ProductOverflowTests(TestCase):
         response = self.client.get(f'{url}?product_id=9999999999&date=2026-06-18')
         self.assertEqual(response.status_code, 200)
         self.assertJSONEqual(response.content, {'available': False, 'error': 'not_found'})
+
+
+class ProductAvailabilityJsonTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='avail@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        self.client.force_login(self.user)
+        self.url = reverse('catalog:availability_json')
+        self.customer = Customer.objects.create(name='Maria')
+        self.category = Category.objects.create(prefix='VN', name='Vestidos')
+        self.product = Product.objects.create(
+            category=self.category, code=20, description='Vestido renda', value=300
+        )
+
+    def test_uses_full_rental_window_for_partial_overlap(self):
+        rental = Rental.objects.create(
+            number=20,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 15),
+            return_date=date(2026, 6, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+        RentalItem.objects.create(rental=rental, product=self.product, value=300)
+
+        response = self.client.get(self.url, {
+            'product_id': self.product.pk,
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-16',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['available'])
+        self.assertEqual(data['rental_number'], 20)
+        self.assertEqual(data['pickup_date'], '2026-06-15')
+        self.assertEqual(data['return_date'], '2026-06-20')

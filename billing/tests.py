@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 
@@ -113,6 +114,20 @@ class InterestServiceTests(TestCase):
         interest = services.compute_interest(rec, on_date=date(2026, 6, 30))
         self.assertEqual(interest, Decimal('10.00'))
         self.assertEqual(services.total_with_interest(rec, on_date=date(2026, 6, 30)), Decimal('110.00'))
+
+    def test_interest_uses_provided_company_without_loading_config(self):
+        rec = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('100'),
+        )
+        company = Company.load()
+
+        with mock.patch('billing.services.Company.load') as load:
+            interest = services.compute_interest(
+                rec, on_date=date(2026, 6, 30), company=company
+            )
+
+        self.assertEqual(interest, Decimal('10.00'))
+        load.assert_not_called()
 
     def test_no_interest_when_paid(self):
         rec = Receivable.objects.create(

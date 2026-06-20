@@ -25,19 +25,32 @@ def days_overdue(receivable, on_date=None):
     return max(0, (on_date - receivable.due_date).days)
 
 
-def compute_interest(receivable, on_date=None):
+def compute_interest(receivable, on_date=None, company=None):
     """Late interest on the open balance using the company daily rate (RF-20)."""
     days = days_overdue(receivable, on_date)
     if days == 0:
         return Decimal('0.00')
-    rate = Company.load().daily_interest_rate or Decimal('0')
+    company = company or Company.load()
+    rate = company.daily_interest_rate or Decimal('0')
     interest = receivable.balance * (rate / Decimal('100')) * days
     return interest.quantize(Decimal('0.01'))
 
 
-def total_with_interest(receivable, on_date=None):
+def total_with_interest(receivable, on_date=None, company=None):
     """Open balance plus accrued late interest."""
-    return (receivable.balance + compute_interest(receivable, on_date)).quantize(Decimal('0.01'))
+    return (
+        receivable.balance + compute_interest(receivable, on_date, company=company)
+    ).quantize(Decimal('0.01'))
+
+
+def interest_breakdown(receivable, on_date=None, company=None):
+    """Return days, interest, and total using one company config lookup."""
+    interest = compute_interest(receivable, on_date, company=company)
+    return {
+        'interest': interest,
+        'total_with_interest': (receivable.balance + interest).quantize(Decimal('0.01')),
+        'days_overdue': days_overdue(receivable, on_date),
+    }
 
 
 def generate_for_rental(rental, installments=1, first_due_date=None):
@@ -175,7 +188,7 @@ def reverse_payment(payment, reason, user=None):
     return reversal
 
 
-def compute_moratoria(receivable, on_date=None):
+def compute_moratoria(receivable, on_date=None, company=None):
     """Late moratoria fee (multa moratória) on the open balance using Company.late_fee_rate (R6.09).
 
     Applied once when the receivable becomes overdue (not per day).
@@ -186,12 +199,13 @@ def compute_moratoria(receivable, on_date=None):
     on_date = on_date or date_cls.today()
     if on_date <= receivable.due_date:
         return Decimal('0.00')
-    rate = Company.load().late_fee_rate or Decimal('0')
+    company = company or Company.load()
+    rate = company.late_fee_rate or Decimal('0')
     fee = receivable.balance * (rate / Decimal('100'))
     return fee.quantize(Decimal('0.01'))
 
 
-def compute_monthly_interest(receivable, on_date=None):
+def compute_monthly_interest(receivable, on_date=None, company=None):
     """Monthly interest (juros ao mês) using Company.monthly_interest_rate, applied daily (R6.09).
 
     Uses monthly_rate/30 per day. Falls back to daily_interest_rate if monthly is zero.
@@ -199,7 +213,7 @@ def compute_monthly_interest(receivable, on_date=None):
     days = days_overdue(receivable, on_date)
     if days == 0:
         return Decimal('0.00')
-    company = Company.load()
+    company = company or Company.load()
     monthly_rate = company.monthly_interest_rate or Decimal('0')
     if monthly_rate:
         daily = monthly_rate / Decimal('30')
@@ -209,15 +223,17 @@ def compute_monthly_interest(receivable, on_date=None):
     return interest.quantize(Decimal('0.01'))
 
 
-def compute_damage_penalty(item_value):
+def compute_damage_penalty(item_value, company=None):
     """Damage penalty: Company.damage_penalty_rate % of item value (R6.09)."""
-    rate = Company.load().damage_penalty_rate or Decimal('0')
+    company = company or Company.load()
+    rate = company.damage_penalty_rate or Decimal('0')
     return (Decimal(str(item_value)) * rate / Decimal('100')).quantize(Decimal('0.01'))
 
 
-def compute_loss_penalty(item_value):
+def compute_loss_penalty(item_value, company=None):
     """Loss/non-return penalty: Company.loss_penalty_rate % of item value (R6.09)."""
-    rate = Company.load().loss_penalty_rate or Decimal('0')
+    company = company or Company.load()
+    rate = company.loss_penalty_rate or Decimal('0')
     return (Decimal(str(item_value)) * rate / Decimal('100')).quantize(Decimal('0.01'))
 
 

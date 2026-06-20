@@ -169,6 +169,28 @@ class CustomerDetailViewTests(TestCase):
         r = self.client.get(self.url)
         self.assertIn(self.rental, r.context['rentals'])
 
+    def test_rentals_are_paginated(self):
+        for number in range(101, 131):
+            Rental.objects.create(
+                number=number,
+                customer=self.customer,
+                pickup_date=date(2026, 6, 1),
+                return_date=date(2026, 6, 10),
+                total_value=Decimal('200'),
+            )
+
+        r = self.client.get(self.url)
+
+        self.assertEqual(len(r.context['rentals']), 25)
+        self.assertEqual(r.context['rentals_count'], 31)
+        self.assertTrue(r.context['rentals_is_paginated'])
+
+    def test_rental_pagination_preserves_filters(self):
+        r = self.client.get(self.url, {'rental_status': 'pending', 'rental_page': '2'})
+
+        self.assertEqual(r.context['rental_status'], 'pending')
+        self.assertEqual(r.context['rental_page_querystring'], 'rental_status=pending&')
+
     def test_context_has_receivables(self):
         r = self.client.get(self.url)
         self.assertIn(self.rec, r.context['receivables'])

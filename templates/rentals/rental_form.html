@@ -35,11 +35,13 @@
                    aria-autocomplete="list"
                    aria-expanded="false"
                    aria-controls="customer-search-results"
-                   aria-describedby="customer-search-status">
+                   aria-required="true"
+                   {% if form.customer.errors %}aria-invalid="true"{% endif %}
+                   aria-describedby="customer-search-status{% if form.customer.errors %} customer-search-error{% endif %}">
             <div id="customer-search-results" class="autocomplete-results hidden" role="listbox"></div>
           </div>
           <p id="customer-search-status" class="sr-only" aria-live="polite"></p>
-          {% if form.customer.errors %}<p class="field-error">{{ form.customer.errors|striptags }}</p>{% endif %}
+          {% if form.customer.errors %}<p id="customer-search-error" class="field-error">{{ form.customer.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- use_for -->
@@ -92,6 +94,8 @@
 
         <div id="item-forms" class="mt-4 space-y-4">
           {% for item_form in items %}
+            {# Skip blank, unsaved rows on re-render so leftover empty items never pile up. #}
+            {% if not items.is_bound or item_form.instance.pk or item_form.has_changed %}
             <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
               {{ item_form.id }}
               
@@ -112,9 +116,11 @@
                 </div>
               </div>
 
-              <!-- Collapsed Summary Card (Clickable to edit) -->
-              <div class="item-summary-card flex items-center justify-between py-2 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors {% if not item_form.instance.pk or item_form.errors %}hidden{% endif %}"
-                   onclick="toggleItemForm(this.closest('.item-form'), true)">
+              <!-- Collapsed Summary Card -->
+              <button type="button"
+                      class="item-summary-card group flex w-full items-center justify-between py-2 text-left hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors {% if not item_form.instance.pk or item_form.errors %}hidden{% endif %}"
+                      onclick="toggleItemForm(this.closest('.item-form'), true)"
+                      title="Editar item">
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
                     {% if item_form.instance.proof_photo %}
@@ -148,14 +154,13 @@
                   <span class="text-sm font-semibold text-app-ink summary-product-value">
                     R$ {{ item_form.instance.value|default:'0,00' }}
                   </span>
-                  <button type="button" class="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100 transition-colors"
-                          title="Editar item">
+                  <span class="rounded-md p-1 text-slate-400 transition-colors group-hover:text-rose-600">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
                     </svg>
-                  </button>
+                  </span>
                 </div>
-              </div>
+              </button>
 
               <!-- Detailed Edit Fields -->
               <div class="item-edit-fields mt-3 space-y-3 {% if item_form.instance.pk and not item_form.errors %}hidden{% endif %}">
@@ -170,7 +175,9 @@
                            data-field-id="{{ item_form.product.id_for_label }}"
                            role="combobox"
                            aria-autocomplete="list"
-                           aria-expanded="false">
+                           aria-expanded="false"
+                           aria-required="true"
+                           {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.id_for_label }}-error"{% endif %}>
                     <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
                   </div>
                   <p class="product-search-status sr-only" aria-live="polite"></p>
@@ -178,7 +185,7 @@
                     <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
                   </div>
                   <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
-                  {% if item_form.product.errors %}<p class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                  {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
                 </div>
 
                 <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -202,6 +209,7 @@
                 </div>
               </div>
             </div>
+            {% endif %}
           {% endfor %}
         </div>
       </div>
@@ -284,8 +292,10 @@
     </div>
 
     <!-- Collapsed Summary Card (Starts hidden for new item) -->
-    <div class="item-summary-card flex items-center justify-between py-2 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors hidden"
-         onclick="toggleItemForm(this.closest('.item-form'), true)">
+    <button type="button"
+            class="item-summary-card group flex w-full items-center justify-between py-2 text-left hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors hidden"
+            onclick="toggleItemForm(this.closest('.item-form'), true)"
+            title="Editar item">
       <div class="flex items-center gap-3 min-w-0">
         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -299,14 +309,13 @@
       </div>
       <div class="flex items-center gap-3 shrink-0 ml-4">
         <span class="text-sm font-semibold text-app-ink summary-product-value">R$ 0,00</span>
-        <button type="button" class="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100 transition-colors"
-                title="Editar item">
+        <span class="rounded-md p-1 text-slate-400 transition-colors group-hover:text-rose-600">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
           </svg>
-        </button>
+        </span>
       </div>
-    </div>
+    </button>
 
     <!-- Detailed Edit Fields (Starts expanded) -->
     <div class="item-edit-fields mt-3 space-y-3">
@@ -319,7 +328,8 @@
                  autocomplete="off"
                  role="combobox"
                  aria-autocomplete="list"
-                 aria-expanded="false">
+                 aria-expanded="false"
+                 aria-required="true">
           <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
         </div>
         <p class="product-search-status sr-only" aria-live="polite"></p>
@@ -628,7 +638,14 @@
     }
   }
 
+  function markRentalDecimalInputs(root) {
+    if (window.NoivasCiaForms && window.NoivasCiaForms.prepareDecimalInputs) {
+      window.NoivasCiaForms.prepareDecimalInputs(root);
+    }
+  }
+
   markRentalDateInputs(document);
+  markRentalDecimalInputs(document);
 
   // Item formset clone
   const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
@@ -671,8 +688,14 @@
     // Value
     if (valueEl) {
       if (valueInput && valueInput.value.trim()) {
-        const val = parseFloat(valueInput.value.replace(',', '.')) || 0;
-        valueEl.textContent = `R$ ${val.toFixed(2).replace('.', ',')}`;
+        var parseFn = (window.NoivasCiaForms && window.NoivasCiaForms.parseBRDecimal)
+          ? window.NoivasCiaForms.parseBRDecimal
+          : function (v) { return v.replace(',', '.'); };
+        var formatFn = (window.NoivasCiaForms && window.NoivasCiaForms.formatBRDecimal)
+          ? window.NoivasCiaForms.formatBRDecimal
+          : function (v) { var n = parseFloat(v) || 0; return n.toFixed(2).replace('.', ','); };
+        var normalized = parseFn(valueInput.value);
+        valueEl.textContent = `R$ ${formatFn(normalized)}`;
       } else {
         valueEl.textContent = "R$ 0,00";
       }
@@ -772,6 +795,34 @@
     });
   }
 
+  // An unsaved row with no product chosen yet — the single "empty" slot.
+  function findEmptyUnsavedRow() {
+    if (!container) return null;
+    const rows = container.querySelectorAll('.item-form');
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      if (del && del.checked) continue;
+      const idField = row.querySelector('input[name$="-id"]');
+      if (idField && idField.value) continue;            // saved item
+      const productSelect = row.querySelector('select[name$="-product"]');
+      if (productSelect && productSelect.value) continue; // product already chosen
+      return row;
+    }
+    return null;
+  }
+
+  function focusEmptyRow(row) {
+    window.toggleItemForm(row, true);
+    const input = row.querySelector('.product-search-input');
+    if (input) {
+      input.classList.add('border-rose-400');
+      input.focus();
+      setTimeout(function () { input.classList.remove('border-rose-400'); }, 1200);
+    }
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   function addItemRow(focus) {
     if (!tpl || !totalForms || !container) return null;
     const index = parseInt(totalForms.value, 10);
@@ -781,6 +832,7 @@
     totalForms.value = index + 1;
     const row = container.lastElementChild;
     markRentalDateInputs(row);
+    markRentalDecimalInputs(row);
     attachProductSearch(row);
     renumberItems();
     if (focus) {
@@ -793,6 +845,12 @@
 
   if (tpl && totalForms && container) {
     document.getElementById('add-item').addEventListener('click', function () {
+      // Reuse the existing empty slot instead of stacking blank forms.
+      const empty = findEmptyUnsavedRow();
+      if (empty) {
+        focusEmptyRow(empty);
+        return;
+      }
       addItemRow(true);
     });
     // Re-number when an item is toggled for removal.
@@ -850,8 +908,6 @@
     const status = row.querySelector('.product-search-status');
     const availBadge = row.querySelector('.availability-badge');
     const productSelect = row.querySelector('select[name$="-product"]');
-    const pickupDateInput = document.getElementById('id_pickup_date');
-
     if (!searchInput || !productSelect || !resultsDiv) return;
 
     productSelect.setAttribute('aria-hidden', 'true');
@@ -886,13 +942,12 @@
     const productSelect = row.querySelector('select[name$="-product"]');
     const searchInput = row.querySelector('.product-search-input');
     const availBadge = row.querySelector('.availability-badge');
-    const pickupDateInput = document.getElementById('id_pickup_date');
     if (!productSelect) return;
     const text = product.text || product.description || '';
     const label = `${product.code} · ${text}`;
     setHiddenSelectValue(productSelect, product.id, label);
     if (searchInput) searchInput.value = label;
-    if (availBadge) checkAvailability(product.id, row, availBadge, pickupDateInput);
+    if (availBadge) checkAvailability(product.id, row, availBadge);
     const valueInput = row.querySelector('input[name$="-value"]');
     if (valueInput && !valueInput.value) valueInput.value = product.value;
 
@@ -916,14 +971,21 @@
     badge.textContent = text;
   }
 
-  function checkAvailability(productId, row, badge, pickupDateInput) {
-    const d = window.NoivasCiaForms && window.NoivasCiaForms.getDateInputIsoValue
-      ? window.NoivasCiaForms.getDateInputIsoValue(pickupDateInput)
-      : (pickupDateInput ? pickupDateInput.value : '');
-    if (!productId || !d) {
-      // No pickup date yet — can't verify; prompt the user instead of staying silent.
+  function getIsoDate(input) {
+    return window.NoivasCiaForms && window.NoivasCiaForms.getDateInputIsoValue
+      ? window.NoivasCiaForms.getDateInputIsoValue(input)
+      : (input ? input.value : '');
+  }
+
+  function checkAvailability(productId, row, badge) {
+    const pickupDateInput = document.getElementById('id_pickup_date');
+    const returnDateInput = document.getElementById('id_return_date');
+    const pickupDate = getIsoDate(pickupDateInput);
+    const returnDate = getIsoDate(returnDateInput);
+    if (!productId || !pickupDate || !returnDate) {
+      // No full rental window yet — can't verify; prompt the user instead of staying silent.
       if (productId && badge) {
-        setBadge(badge, 'error', 'Informe a data de retirada para verificar a disponibilidade.');
+        setBadge(badge, 'error', 'Informe retirada e retorno para verificar a disponibilidade.');
       }
       return;
     }
@@ -935,7 +997,13 @@
 
     setBadge(badge, 'checking', 'Verificando disponibilidade…');
 
-    fetch(`${availabilityUrl}?product_id=${encodeURIComponent(productId)}&date=${encodeURIComponent(d)}`, {
+    const params = new URLSearchParams({
+      product_id: productId,
+      pickup_date: pickupDate,
+      return_date: returnDate,
+    });
+
+    fetch(`${availabilityUrl}?${params.toString()}`, {
       signal: row._availabilityController.signal,
     })
       .then(function (response) {
@@ -950,7 +1018,8 @@
           setBadge(
             badge,
             'busy',
-            `⚠ Peça já alocada na locação #${data.rental_number} (${data.customer}) até ${data.return_date}. ` +
+            `⚠ Peça já alocada na locação #${data.rental_number} (${data.customer}) ` +
+            `de ${data.pickup_date} a ${data.return_date}. ` +
             'Confirme antes de salvar para não duplicar a reserva.'
           );
         }
@@ -977,7 +1046,10 @@
     const prevBtn = document.getElementById('browse-prev');
     const nextBtn = document.getElementById('browse-next');
 
-    const state = { prefix: '', size: '', color: '', q: '', date: '', empty: false, page: 1 };
+    const state = {
+      prefix: '', size: '', color: '', q: '',
+      pickupDate: '', returnDate: '', empty: false, page: 1,
+    };
     let activeRow = null;
     let lastFocus = null;
     let timer = null;
@@ -1063,7 +1135,9 @@
           if (p.available) {
             badge.textContent = '● Livre';
           } else if (p.rental) {
-            badge.textContent = `● Em uso: #${p.rental.number} (${p.rental.customer}) até ${p.rental.return_date}`;
+            badge.textContent =
+              `● Em uso: #${p.rental.number} (${p.rental.customer}) ` +
+              `de ${p.rental.pickup_date} a ${p.rental.return_date}`;
           } else {
             badge.textContent = '● Em uso';
           }
@@ -1097,7 +1171,8 @@
       if (state.size) params.set('size', state.size);
       if (state.color) params.set('color', state.color);
       if (state.q) params.set('q', state.q);
-      if (state.date) params.set('date', state.date);
+      if (state.pickupDate) params.set('pickup_date', state.pickupDate);
+      if (state.returnDate) params.set('return_date', state.returnDate);
       if (state.empty) params.set('empty', '1');
       params.set('page', String(state.page));
 
@@ -1144,9 +1219,10 @@
       lastFocus = current && current !== document.body ? current : null;
       state.prefix = ''; state.size = ''; state.color = '';
       state.q = ''; state.empty = false; state.page = 1;
-      state.date = getIsoDate(document.getElementById('id_pickup_date'));
+      state.pickupDate = getIsoDate(document.getElementById('id_pickup_date'));
+      state.returnDate = getIsoDate(document.getElementById('id_return_date'));
       qInput.value = ''; colorInput.value = ''; emptyToggle.checked = false;
-      dateInput.value = state.date;
+      dateInput.value = state.pickupDate;
       browseEl.classList.remove('hidden');
       browseEl.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
@@ -1162,7 +1238,7 @@
     qInput.addEventListener('input', function () { state.q = qInput.value.trim(); debouncedFetch(); });
     colorInput.addEventListener('input', function () { state.color = colorInput.value.trim(); debouncedFetch(); });
     dateInput.addEventListener('change', function () {
-      state.date = getIsoDate(dateInput); state.page = 1; fetchBrowse();
+      state.pickupDate = getIsoDate(dateInput); state.page = 1; fetchBrowse();
     });
     emptyToggle.addEventListener('change', function () {
       state.empty = emptyToggle.checked; state.page = 1; fetchBrowse();
@@ -1203,29 +1279,30 @@
   });
   renumberItems();
 
-  // Re-verify every selected product when the pickup date changes, so the
-  // availability warnings never go stale after the user edits the date.
+  // Re-verify every selected product when the rental window changes, so the
+  // availability warnings never go stale after the user edits either date.
   function recheckAllAvailability() {
-    const pickupDateInput = document.getElementById('id_pickup_date');
     document.querySelectorAll('.item-form').forEach(function (row) {
       const productSelect = row.querySelector('select[name$="-product"]');
       const badge = row.querySelector('.availability-badge');
       if (productSelect && productSelect.value && badge) {
-        checkAvailability(productSelect.value, row, badge, pickupDateInput);
+        checkAvailability(productSelect.value, row, badge);
       }
     });
   }
-  const pickupInput = document.getElementById('id_pickup_date');
-  if (pickupInput) {
-    pickupInput.addEventListener('change', recheckAllAvailability);
-  }
+  ['id_pickup_date', 'id_return_date'].forEach(function (id) {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener('change', recheckAllAvailability);
+  });
 
   // Deep-link from "Adicionar item à locação nº" (?add=1): expand the items
   // section, add a fresh row, and drop the cursor in its product search.
   if (new URLSearchParams(window.location.search).get('add') === '1') {
     const section = document.getElementById('itens');
     if (section) {
-      addItemRow(true);
+      const empty = findEmptyUnsavedRow();
+      if (empty) focusEmptyRow(empty);
+      else addItemRow(true);
     }
   }
 })();

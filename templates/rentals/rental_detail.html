@@ -24,7 +24,7 @@
 
       {# Cancelar — pending or picked_up #}
       {% if rental.status == 'pending' or rental.status == 'picked_up' %}
-        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary">Cancelar</a>
+        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary">Cancelar locação</a>
       {% endif %}
 
       {# Excluir — only cancelled, and no movements/payments (validated in view) #}
@@ -104,7 +104,12 @@
           {% for item in rental.items.all %}
             <tr>
               <td>{{ item.product }}</td>
-              <td>{{ item.description|default:'—' }}</td>
+              <td>
+                <p class="font-medium text-app-ink">{{ item.product.description }}</p>
+                {% if item.description %}
+                  <p class="mt-1 text-xs text-app-muted">{{ item.description }}</p>
+                {% endif %}
+              </td>
               <td>
                 {% if item.has_proof_photo %}
                   <a href="{% url 'rentals:item_photo' item.pk %}" target="_blank" rel="noopener" class="inline-flex items-center gap-3 text-link">

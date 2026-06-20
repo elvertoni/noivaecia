@@ -1,7 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from core.ui import INPUT_CLASS
+from core.ui import BRDecimalInput, INPUT_CLASS
 
 from .models import Category, Product
 
@@ -10,6 +10,8 @@ def _style_fields(form):
     for field in form.fields.values():
         if isinstance(field.widget, forms.Textarea):
             field.widget.attrs.setdefault('rows', 3)
+        if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
+            field.widget = BRDecimalInput()
         field.widget.attrs['class'] = INPUT_CLASS
 
 

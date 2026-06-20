@@ -125,7 +125,7 @@ class RentalDetailView(RentalAccessMixin, DetailView):
     context_object_name = 'rental'
 
     def get_queryset(self):
-        items = RentalItem.objects.select_related('product').defer('proof_photo')
+        items = RentalItem.objects.select_related('product__category').defer('proof_photo')
         return super().get_queryset().select_related('customer').prefetch_related(
             Prefetch('items', queryset=items)
         )
@@ -432,7 +432,7 @@ class RentalContractView(RentalAccessMixin, TemplateView):
             Rental.objects.select_related('customer').prefetch_related(
                 Prefetch(
                     'items',
-                    queryset=RentalItem.objects.select_related('product').defer('proof_photo'),
+                    queryset=RentalItem.objects.select_related('product__category').defer('proof_photo'),
                 )
             ),
             pk=kwargs['pk'],
