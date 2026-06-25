@@ -212,6 +212,11 @@
             {% endif %}
           {% endfor %}
         </div>
+
+        {# Mirror of the header button — follows the flow so the user never scrolls up. #}
+        <div class="mt-4">
+          <button type="button" id="add-item-bottom" class="btn btn-secondary w-full justify-center">+ Adicionar item</button>
+        </div>
       </div>
       {% endif %}
 
@@ -844,7 +849,7 @@
   }
 
   if (tpl && totalForms && container) {
-    document.getElementById('add-item').addEventListener('click', function () {
+    function handleAddItem() {
       // Reuse the existing empty slot instead of stacking blank forms.
       const empty = findEmptyUnsavedRow();
       if (empty) {
@@ -852,6 +857,10 @@
         return;
       }
       addItemRow(true);
+    }
+    ['add-item', 'add-item-bottom'].forEach(function (id) {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', handleAddItem);
     });
     // Re-number when an item is toggled for removal.
     container.addEventListener('change', function (event) {
