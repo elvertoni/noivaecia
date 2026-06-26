@@ -38,8 +38,8 @@
         {% endfor %}
       </select>
     </div>
-    <button type="submit" class="btn btn-secondary text-sm">Filtrar</button>
-    {% if q or status_filter %}<a href="{% url 'rentals:list' %}" class="btn btn-secondary text-sm">Limpar</a>{% endif %}
+    <button type="submit" class="btn btn-secondary">Filtrar</button>
+    {% if q or status_filter %}<a href="{% url 'rentals:list' %}" class="btn btn-secondary">Limpar</a>{% endif %}
   </form>
 
   <div class="table-shell">
@@ -64,17 +64,7 @@
             <td>{{ rental.return_date|date:'d/m/Y' }}</td>
             <td class="text-right">R$ {{ rental.total_value }}</td>
             <td>
-              {% if rental.status == 'pending' %}
-                <span class="badge badge-warning">Pendente</span>
-              {% elif rental.status == 'picked_up' %}
-                <span class="badge badge-info">Retirado</span>
-              {% elif rental.status == 'returned' %}
-                <span class="badge badge-success">Devolvido</span>
-              {% elif rental.status == 'cancelled' %}
-                <span class="badge badge-danger">Cancelado</span>
-              {% else %}
-                {{ rental.get_status_display }}
-              {% endif %}
+              {% include 'includes/rental_status_badge.html' %}
             </td>
             <td class="text-right">
               <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>

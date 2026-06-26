@@ -64,24 +64,29 @@
         </div>
       </div>
 
-      {# Telefones #}
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div class="field-group">
-          <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone residencial</label>
-          {{ form.phone_home }}
-          {% if form.phone_home.errors %}<p class="field-error">{{ form.phone_home.errors|striptags }}</p>{% endif %}
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="{{ form.phone_mobile.id_for_label }}">Celular</label>
-          {{ form.phone_mobile }}
-          {% if form.phone_mobile.errors %}<p class="field-error">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="{{ form.phone_work.id_for_label }}">Telefone comercial</label>
-          {{ form.phone_work }}
-          {% if form.phone_work.errors %}<p class="field-error">{{ form.phone_work.errors|striptags }}</p>{% endif %}
-        </div>
+      {# Celular (principal) #}
+      <div class="field-group">
+        <label class="field-label" for="{{ form.phone_mobile.id_for_label }}">Celular</label>
+        {{ form.phone_mobile }}
+        {% if form.phone_mobile.errors %}<p class="field-error">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
       </div>
+
+      {# Telefones secundários #}
+      <details class="rounded-lg border border-slate-200 px-4 py-3"{% if form.phone_home.value or form.phone_work.value %} open{% endif %}>
+        <summary class="cursor-pointer text-sm font-medium text-app-muted hover:text-app-ink select-none">Outros telefones</summary>
+        <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="field-group">
+            <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone residencial</label>
+            {{ form.phone_home }}
+            {% if form.phone_home.errors %}<p class="field-error">{{ form.phone_home.errors|striptags }}</p>{% endif %}
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="{{ form.phone_work.id_for_label }}">Telefone comercial</label>
+            {{ form.phone_work }}
+            {% if form.phone_work.errors %}<p class="field-error">{{ form.phone_work.errors|striptags }}</p>{% endif %}
+          </div>
+        </div>
+      </details>
 
       {# Observações #}
       <div class="field-group">
@@ -91,7 +96,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="submit" class="btn btn-primary">Salvar cliente</button>
         <a href="{% url 'customers:list' %}" class="btn btn-secondary">Cancelar</a>
       </div>
     </form>

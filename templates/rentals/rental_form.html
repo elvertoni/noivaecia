@@ -29,7 +29,7 @@
           <div class="relative mt-1">
             <input type="text" id="customer-search-input"
                    class="field-input flex-1"
-                   placeholder="Digite para buscar cliente por nome, CPF, RG ou telefone…"
+                   placeholder="Buscar cliente…"
                    autocomplete="off"
                    role="combobox"
                    aria-autocomplete="list"
@@ -264,7 +264,7 @@
       {% endif %}
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="submit" class="btn btn-primary">Salvar locação</button>
         {% if form.instance.pk %}
           <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
         {% else %}

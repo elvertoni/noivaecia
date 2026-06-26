@@ -17,11 +17,7 @@
   </div>
 
   {# Filters #}
-  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 md:grid-cols-4">
-    <div class="field-group">
-      <label class="field-label" for="pickup-date-from">Retirada de</label>
-      <input type="date" name="date_from" id="pickup-date-from" value="{{ date_from }}" class="field-input" data-date-br="true">
-    </div>
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-x-3 gap-y-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
     <div class="field-group">
       <label class="field-label" for="pickup-date-to">Retirada até</label>
       <input type="date" name="date_to" id="pickup-date-to" value="{{ date_to }}" class="field-input" data-date-br="true">
@@ -34,7 +30,7 @@
       <label class="field-label" for="pickup-product">Produto</label>
       <input type="text" name="product" id="pickup-product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
     </div>
-    <div class="flex items-end gap-2 md:col-span-4">
+    <div class="flex items-end gap-2 col-span-2 md:col-span-1">
       <button type="submit" class="btn btn-secondary">Filtrar</button>
       <a href="{% url 'movements:pickup_list' %}" class="btn btn-secondary">Limpar</a>
     </div>
@@ -158,28 +154,15 @@
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="flex gap-2">
         {% if page_obj.has_previous %}
-          <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
+          <a href="?date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.previous_page_number }}" class="pagination-page">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
+          <a href="?date_to={{ date_to }}&customer={{ customer_q }}&product={{ product_q }}&page={{ page_obj.next_page_number }}" class="pagination-page">Próxima</a>
         {% endif %}
       </div>
     </div>
   {% endif %}
 </div>
 
-<script>
-  // [Enter] on "Retirada de" jumps to "Retirada até" instead of submitting.
-  (function () {
-    var from = document.getElementById('pickup-date-from');
-    var to = document.getElementById('pickup-date-to');
-    if (!from || !to) return;
-    from.addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        to.focus();
-      }
-    });
-  })();
-</script>
+
 {% endblock %}

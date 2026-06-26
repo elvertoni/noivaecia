@@ -14,7 +14,7 @@
     </div>
   </div>
   {% include 'reports/_print_header.html' %}
-  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 md:grid-cols-5 print:hidden">
+  <form method="get" class="panel-spacious grid grid-cols-2 gap-x-3 gap-y-4 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] md:items-end print:hidden">
     <div class="field-group">
       <label class="field-label">Retirada de</label>
       <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
@@ -35,7 +35,7 @@
       <label class="field-label">Código</label>
       <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
     </div>
-    <div class="flex items-end gap-2 md:col-span-5 print:hidden">
+    <div class="flex items-end gap-2 col-span-2 md:col-span-1 print:hidden">
       <button type="submit" class="btn btn-secondary">Filtrar</button>
       <a href="{% url 'reports:a_retirar' %}" class="btn btn-secondary">Limpar</a>
     </div>

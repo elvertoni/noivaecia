@@ -25,33 +25,18 @@
     {# Linha 1 — busca geral #}
     <form method="get" class="flex gap-2" id="form-busca-geral">
       {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
-      {% if cpf_search %}<input type="hidden" name="cpf" value="{{ cpf_search }}">{% endif %}
       <label for="q" class="sr-only">Buscar clientes</label>
       <input type="search" name="q" id="q" value="{{ search }}"
-             placeholder="Buscar por nome, RG, telefone ou ID legado…"
+             placeholder="Buscar por nome, CPF, RG, telefone ou ID legado…"
              class="field-input flex-1"
              autocomplete="off">
       <button type="submit" class="btn btn-primary">Buscar</button>
-      {% if search or cpf_search %}
-        <a href="{% querystring q=None cpf=None page=None %}" class="btn btn-secondary">Limpar</a>
+      {% if search %}
+        <a href="{% querystring q=None page=None %}" class="btn btn-secondary">Limpar</a>
       {% endif %}
     </form>
 
-    {# Linha 2 — busca por CPF #}
-    <form method="get" class="flex gap-2" id="form-busca-cpf">
-      {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
-      {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
-      <label for="cpf_q" class="sr-only">Buscar por CPF</label>
-      <input type="search" name="cpf" id="cpf_q" value="{{ cpf_search }}"
-             placeholder="Buscar por CPF (com ou sem pontuação)"
-             class="field-input flex-1"
-             maxlength="14"
-             autocomplete="off"
-             data-mask="cpf">
-      <button type="submit" class="btn btn-secondary">Buscar CPF</button>
-    </form>
-
-    {# Linha 3 — filtros de status #}
+    {# Linha 2 — filtros de status #}
     <div class="flex items-center gap-4 text-sm">
       <span class="text-slate-500">Mostrar:</span>
       <a href="{% querystring active=None page=None %}"
@@ -108,7 +93,6 @@
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'customers:detail' customer.pk %}" class="text-link">Histórico</a>
               <a href="{% url 'customers:update' customer.pk %}" class="ml-3 text-link">Editar</a>
-              <a href="{% url 'customers:delete' customer.pk %}" class="ml-3 text-danger">Excluir</a>
             </td>
           </tr>
         {% empty %}
@@ -166,35 +150,4 @@
 
 </div>
 
-<script>
-(function () {
-  function onlyDigits(v) { return v.replace(/\D/g, ''); }
-  function maskCPF(v) {
-    const d = onlyDigits(v).slice(0, 11);
-    if (d.length <= 3) return d;
-    if (d.length <= 6) return d.slice(0,3) + '.' + d.slice(3);
-    if (d.length <= 9) return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6);
-    return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
-  }
-  function cursorAposDigitos(maskedValue, n) {
-    let conta = 0;
-    for (let i = 0; i < maskedValue.length; i++) {
-      if (/\d/.test(maskedValue[i])) {
-        conta++;
-        if (conta === n) return i + 1;
-      }
-    }
-    return maskedValue.length;
-  }
-  const cpfInput = document.getElementById('cpf_q');
-  if (cpfInput) {
-    cpfInput.addEventListener('input', function () {
-      const digitosAntes = this.value.substring(0, this.selectionStart).replace(/\D/g, '').length;
-      this.value = maskCPF(this.value);
-      const pos = cursorAposDigitos(this.value, digitosAntes);
-      try { this.setSelectionRange(pos, pos); } catch (_) {}
-    });
-  }
-}());
-</script>
 {% endblock %}

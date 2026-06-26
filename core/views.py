@@ -47,8 +47,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         open_receivables = Receivable.objects.filter(balance__gt=0).count()
 
         context['indicators'] = [
-            {'label': 'Locações a retirar', 'value': to_pick_up},
-            {'label': 'Locações a devolver', 'value': to_return},
-            {'label': 'Recebimentos em aberto', 'value': open_receivables},
+            {'label': 'Locações a retirar', 'value': to_pick_up, 'url': reverse('movements:pickup_list')},
+            {'label': 'Locações a devolver', 'value': to_return, 'url': reverse('movements:return_list')},
+            {'label': 'Recebimentos em aberto', 'value': open_receivables, 'url': reverse('billing:receivables')},
         ]
         return context

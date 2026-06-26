@@ -7,37 +7,15 @@
 <div class="space-y-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <h1 class="page-title">Locação #{{ rental.number }}</h1>
+      <p class="text-sm text-app-muted"><a href="{% url 'rentals:list' %}" class="text-link hover:underline">Locações</a> › #{{ rental.number }}</p>
+      <h1 class="page-title mt-1">Locação #{{ rental.number }}</h1>
       <p class="page-description">{{ rental.customer.name }}</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
 
-      {# R7.12 — contextual actions #}
+      {# R7.12 — contextual actions, organized by priority #}
 
-      {# Imprimir contrato — always available #}
-      <a href="{% url 'rentals:contract' rental.pk %}" target="_blank" rel="noopener" class="btn btn-secondary">Contrato</a>
-
-      {# Editar — only pending #}
-      {% if rental.status == 'pending' %}
-        <a href="{% url 'rentals:update' rental.pk %}" class="btn btn-secondary">Editar</a>
-      {% endif %}
-
-      {# Cancelar — pending or picked_up #}
-      {% if rental.status == 'pending' or rental.status == 'picked_up' %}
-        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary">Cancelar locação</a>
-      {% endif %}
-
-      {# Excluir — only cancelled, and no movements/payments (validated in view) #}
-      {% if rental.status == 'cancelled' %}
-        <a href="{% url 'rentals:delete' rental.pk %}" class="btn btn-danger text-sm">Excluir</a>
-      {% endif %}
-
-      {# Recebimentos — billing module #}
-      {% if request.user|has_module:'billing' %}
-        <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Recebimentos</a>
-      {% endif %}
-
-      {# Retirada / Devolução — movements module #}
+      {# 1. Primary action (most important, stands out) #}
       {% if request.user|has_module:'movements' %}
         {% if rental.status == 'pending' %}
           <a href="{% url 'movements:pickup' rental.pk %}" class="btn btn-primary">Registrar retirada</a>
@@ -46,7 +24,25 @@
         {% endif %}
       {% endif %}
 
-      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Voltar</a>
+      {# 2. Secondary actions (supporting) #}
+      <a href="{% url 'rentals:contract' rental.pk %}" target="_blank" rel="noopener" class="btn btn-secondary">Contrato</a>
+
+      {% if request.user|has_module:'billing' %}
+        <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Recebimentos</a>
+      {% endif %}
+
+      {% if rental.status == 'pending' %}
+        <a href="{% url 'rentals:update' rental.pk %}" class="btn btn-secondary">Editar</a>
+      {% endif %}
+
+      {# 3. Destructive actions (visually separated) #}
+      {% if rental.status == 'pending' or rental.status == 'picked_up' %}
+        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary text-amber-700 hover:text-amber-800">Cancelar</a>
+      {% endif %}
+
+      {% if rental.status == 'cancelled' %}
+        <a href="{% url 'rentals:delete' rental.pk %}" class="btn btn-danger">Excluir</a>
+      {% endif %}
     </div>
   </div>
 
@@ -62,17 +58,7 @@
     <div class="panel">
       <p class="field-label">Situação</p>
       <div class="mt-1">
-        {% if rental.status == 'pending' %}
-          <span class="badge badge-warning">Pendente</span>
-        {% elif rental.status == 'picked_up' %}
-          <span class="badge badge-info">Retirado</span>
-        {% elif rental.status == 'returned' %}
-          <span class="badge badge-success">Devolvido</span>
-        {% elif rental.status == 'cancelled' %}
-          <span class="badge badge-danger">Cancelado</span>
-        {% else %}
-          <span class="text-lg font-semibold text-app-ink">{{ rental.get_status_display }}</span>
-        {% endif %}
+        {% include 'includes/rental_status_badge.html' %}
       </div>
     </div>
     <div class="panel">

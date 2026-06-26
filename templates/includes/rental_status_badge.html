@@ -1,0 +1,15 @@
+{% comment %}
+Reusable rental status badge (design system).
+Context: rental — a Rental instance with .status and .get_status_display.
+{% endcomment %}
+{% if rental.status == 'pending' %}
+  <span class="badge badge-warning">Pendente</span>
+{% elif rental.status == 'picked_up' %}
+  <span class="badge badge-info">Retirado</span>
+{% elif rental.status == 'returned' %}
+  <span class="badge badge-success">Devolvido</span>
+{% elif rental.status == 'cancelled' %}
+  <span class="badge badge-danger">Cancelado</span>
+{% else %}
+  <span class="text-sm font-medium text-app-ink">{{ rental.get_status_display }}</span>
+{% endif %}

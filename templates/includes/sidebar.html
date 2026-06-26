@@ -28,8 +28,8 @@
         <a href="{% url 'customers:list' %}" class="nav-link{% if request.resolver_match.app_name == 'customers' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'customers' %}aria-current="page"{% endif %}>Clientes</a>
       {% endif %}
       {% if request.user|has_module:'catalog' %}
-        <a href="{% url 'catalog:category_list' %}" class="nav-link{% if request.resolver_match.app_name == 'catalog' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'catalog' %}aria-current="page"{% endif %}>Categorias</a>
-        <a href="{% url 'catalog:product_list' %}" class="nav-link{% if request.resolver_match.app_name == 'catalog' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'catalog' %}aria-current="page"{% endif %}>Produtos</a>
+        <a href="{% url 'catalog:category_list' %}" class="nav-link{% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'category_form' or request.resolver_match.url_name == 'category_confirm_delete' or request.resolver_match.url_name == 'category_merge' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'category_list' %}aria-current="page"{% endif %}>Categorias</a>
+        <a href="{% url 'catalog:product_list' %}" class="nav-link{% if request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_form' or request.resolver_match.url_name == 'product_confirm_delete' or request.resolver_match.url_name == 'product_history' or request.resolver_match.url_name == 'placeholder_review' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'product_list' %}aria-current="page"{% endif %}>Produtos</a>
       {% endif %}
       {% if request.user|has_module:'company' %}
         <a href="{% url 'company:edit' %}" class="nav-link{% if request.resolver_match.app_name == 'company' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'company' %}aria-current="page"{% endif %}>Empresa</a>

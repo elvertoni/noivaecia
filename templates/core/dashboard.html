@@ -11,10 +11,10 @@
 
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     {% for indicator in indicators %}
-      <div class="stat-card">
+      <a href="{{ indicator.url }}" class="stat-card transition-shadow hover:shadow-md">
         <p class="stat-label">{{ indicator.label }}</p>
         <p class="stat-value">{{ indicator.value }}</p>
-      </div>
+      </a>
     {% endfor %}
   </div>
 
