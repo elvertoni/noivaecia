@@ -91,7 +91,7 @@
             <td>{{ product.description }}</td>
             <td>{{ product.color|default:'—' }}</td>
             <td>{{ product.size|default:'—' }}</td>
-            <td class="text-right">R$ {{ product.value }}</td>
+            <td class="text-right whitespace-nowrap">R$ {{ product.value }}</td>
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'catalog:product_history' product.pk %}" class="text-link">Histórico</a>
               <a href="{% url 'catalog:product_update' product.pk %}" class="text-link ml-3">Editar</a>

@@ -39,9 +39,9 @@
             <td class="text-right">
               <span class="badge badge-danger">{{ entry.days_late }} dia{{ entry.days_late|pluralize }}</span>
             </td>
-            <td class="text-right font-medium">R$ {{ entry.rental.total_value|floatformat:2 }}</td>
+            <td class="text-right font-medium whitespace-nowrap">R$ {{ entry.rental.total_value|floatformat:2 }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'movements:return' entry.rental.pk %}" class="btn btn-primary">Registrar devolução</a>
+              <a href="{% url 'movements:return' entry.rental.pk %}" class="btn btn-primary btn-sm">Registrar devolução</a>
             </td>
           </tr>
         {% empty %}

@@ -73,15 +73,17 @@
                 {{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}
               {% empty %}—{% endfor %}
             </td>
-            <td class="text-right font-medium">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|floatformat:2 }}</td>
             <td class="text-right whitespace-nowrap">
-              {# One-click pickup: inherits today's date, no intermediate form. #}
-              <form method="post" action="{% url 'movements:pickup' rental.pk %}" class="inline-flex items-center gap-2">
-                {% csrf_token %}
-                <input type="hidden" name="pickup_date" value="{{ today|date:'Y-m-d' }}">
-                <button type="submit" class="btn btn-primary">Registrar retirada</button>
-              </form>
-              <a href="{% url 'movements:pickup' rental.pk %}" class="mt-1 inline-block text-xs text-app-muted hover:text-app-ink">Outra data</a>
+              <div class="flex items-center justify-end gap-2">
+                {# One-click pickup: inherits today's date, no intermediate form. #}
+                <form method="post" action="{% url 'movements:pickup' rental.pk %}" class="inline-flex">
+                  {% csrf_token %}
+                  <input type="hidden" name="pickup_date" value="{{ today|date:'Y-m-d' }}">
+                  <button type="submit" class="btn btn-primary btn-sm">Registrar retirada</button>
+                </form>
+                <a href="{% url 'movements:pickup' rental.pk %}" class="text-xs text-app-muted hover:text-app-ink">Outra data</a>
+              </div>
             </td>
           </tr>
         {% empty %}

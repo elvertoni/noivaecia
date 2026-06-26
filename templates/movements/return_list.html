@@ -72,9 +72,9 @@
                 <span class="badge badge-info">No prazo</span>
               {% endif %}
             </td>
-            <td class="text-right font-medium">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|floatformat:2 }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary">Registrar devolução</a>
+              <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary btn-sm">Registrar devolução</a>
             </td>
           </tr>
         {% empty %}

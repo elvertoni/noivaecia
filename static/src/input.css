@@ -79,6 +79,10 @@
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold leading-5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
   }
 
+  .btn-sm {
+    @apply min-h-8 px-2.5 py-1 text-xs font-semibold rounded-md;
+  }
+
   .btn-primary {
     @apply bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900;
   }
@@ -279,7 +283,7 @@
   }
 
   .brand-logo-sidebar {
-    @apply h-auto w-full max-h-28 object-contain object-left;
+    @apply h-auto w-full max-h-20 object-contain object-left;
   }
 
   .brand-logo-auth {
