@@ -20,7 +20,7 @@ PROOF_PHOTO_JPEG_QUALITY = 84
 def _style(form):
     for field in form.fields.values():
         if isinstance(field.widget, forms.Textarea):
-            field.widget.attrs.setdefault('rows', 3)
+            field.widget.attrs.setdefault('rows', 2)
         if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
             field.widget = BRDecimalInput()
         css = field.widget.attrs.get('class', '')

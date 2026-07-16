@@ -67,12 +67,32 @@
           {{ form.penalty_value }}
           {% if form.penalty_value.errors %}<p class="field-error">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
-        <div class="field-group md:col-span-2">
-          <label class="field-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
-          {{ form.notes }}
-          {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
+      </div>
+
+      <!-- Prévia dos itens locados -->
+      {% if form.instance.pk and form.instance.items.exists %}
+      <div id="items-preview" class="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
+        <h2 class="section-title mb-3">Prévia dos itens locados</h2>
+        <div class="divide-y divide-slate-100">
+          {% for item in form.instance.items.all %}
+            {% if item.product %}
+            <div class="flex items-center justify-between gap-3 py-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-700">{{ forloop.counter }}</span>
+                <span class="truncate text-sm font-medium text-app-ink">{{ item.product.category.prefix }}{{ item.product.code }} · {{ item.product.description|default:'Sem descrição' }}</span>
+                {% if item.description %}<span class="hidden sm:inline truncate text-xs text-app-muted ml-1">— {{ item.description }}</span>{% endif %}
+              </div>
+              <span class="shrink-0 text-sm font-semibold text-app-ink">R$ {{ item.value }}</span>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="mt-3 flex items-center justify-between border-t border-rose-200 pt-3">
+          <span class="text-xs text-app-muted">{{ form.instance.items.count }} item(s) locado(s)</span>
+          <span class="text-sm font-bold text-rose-700">Total: R$ {{ form.instance.total_value }}</span>
         </div>
       </div>
+      {% endif %}
 
       <!-- Items -->
       {% if not has_payments %}
@@ -262,6 +282,13 @@
         </div>
       </div>
       {% endif %}
+
+      <!-- Observações — campo reduzido (auto-expand ao digitar) -->
+      <div class="field-group">
+        <label class="field-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+        {{ form.notes }}
+        {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
+      </div>
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Salvar locação</button>
@@ -1314,6 +1341,23 @@
       else addItemRow(true);
     }
   }
+})();
+
+// Auto-expand do textarea de Observações
+(function () {
+  const notesTextarea = document.getElementById('id_notes');
+  if (!notesTextarea) return;
+
+  function autoExpand(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
+  // Expand on load if there's already content
+  autoExpand(notesTextarea);
+  notesTextarea.style.overflowY = 'hidden';
+  notesTextarea.style.resize = 'none';
+  notesTextarea.addEventListener('input', function () { autoExpand(notesTextarea); });
 })();
 </script>
 {% endblock %}
