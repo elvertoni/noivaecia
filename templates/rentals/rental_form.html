@@ -12,7 +12,7 @@
       </div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
+    <form id="rental-form" method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
       {% if form.non_field_errors %}
         <div class="alert alert-error">{{ form.non_field_errors }}</div>
@@ -290,16 +290,35 @@
         {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Salvar locação</button>
-        {% if form.instance.pk %}
-          <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
-        {% else %}
-          <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
-        {% endif %}
-      </div>
+      <!-- Espaço reservado para o footer fixo não sobrepor o conteúdo -->
+      <div aria-hidden="true" class="h-20"></div>
     </form>
   </div>
+</div>
+
+<!-- ===== Barra de ações fixa (sticky footer) ===== -->
+<div id="rental-action-bar"
+     role="region"
+     aria-label="Ações do formulário"
+     class="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-6">
+  <div class="flex items-center gap-3">
+    <button type="submit"
+            form="rental-form"
+            class="btn btn-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"/>
+      </svg>
+      Salvar locação
+    </button>
+    {% if form.instance.pk %}
+      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
+    {% else %}
+      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+    {% endif %}
+  </div>
+  {% if not has_payments %}
+    <p class="hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
+  {% endif %}
 </div>
 
 {% if not has_payments %}
