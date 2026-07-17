@@ -3,7 +3,8 @@ from datetime import date as date_cls
 from decimal import Decimal
 
 from django.contrib import messages
-from django.db.models import Sum
+from django.db import transaction
+from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import FormView, ListView, TemplateView, View
@@ -613,11 +614,23 @@ class GenerateReceivablesView(BillingAccessMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        generate_for_rental(
-            self.rental,
-            installments=form.cleaned_data['installments'],
-            first_due_date=form.cleaned_data.get('first_due_date'),
-        )
+        has_payments = self.rental.receivables.filter(
+            Q(paid_amount__gt=0) | Q(payments__isnull=False)
+        ).exists()
+        if has_payments:
+            messages.error(
+                self.request,
+                'Não é possível re-gerar as parcelas pois esta locação já possui pagamentos registrados.'
+            )
+            return redirect('billing:list', rental_pk=self.rental.pk)
+
+        with transaction.atomic():
+            self.rental.receivables.all().delete()
+            generate_for_rental(
+                self.rental,
+                installments=form.cleaned_data['installments'],
+                first_due_date=form.cleaned_data.get('first_due_date'),
+            )
         messages.success(self.request, 'Parcelas geradas com sucesso.')
         return redirect('billing:list', rental_pk=self.rental.pk)
 

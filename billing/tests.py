@@ -9,6 +9,7 @@ from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from company.models import Company
 from customers.models import Customer
 from rentals.models import Rental
+from django.urls import reverse
 
 
 def make_rental(number=1):
@@ -284,3 +285,61 @@ class FinancialMovementTests(TestCase):
         self.assertIn('fmv_date_created_idx', index_names)
         self.assertIn('fmv_direction_date_idx', index_names)
         self.assertIn('fmv_source_direction_date_idx', index_names)
+
+
+class GenerateReceivablesViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.user = User.objects.create_superuser(username='admin', password='password')
+        self.client.login(username='admin', password='password')
+        self.rental = make_rental()
+
+    def test_re_generate_deletes_old_unpaid_receivables(self):
+        # Create an existing unpaid receivable (e.g. representing the default 1 installment)
+        old_rec = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('300.00')
+        )
+        self.assertEqual(self.rental.receivables.count(), 1)
+
+        # Call the generate view to split into 3 installments
+        url = reverse('billing:generate', args=[self.rental.pk])
+        response = self.client.post(url, {
+            'installments': 3,
+            'first_due_date': '2026-07-01'
+        })
+        self.assertEqual(response.status_code, 302)  # Redirect to billing:list
+
+        # Validate that the old unpaid receivable was deleted and 3 new ones were created
+        self.assertEqual(self.rental.receivables.count(), 3)
+        self.assertFalse(Receivable.objects.filter(pk=old_rec.pk).exists())
+        self.assertEqual(sum(r.amount for r in self.rental.receivables.all()), Decimal('300.00'))
+
+    def test_re_generate_blocked_when_payments_exist(self):
+        # Create an existing receivable
+        rec = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('300.00')
+        )
+        # Register a payment against it
+        Payment.objects.create(
+            receivable=rec,
+            payment_date=date(2026, 6, 20),
+            amount=Decimal('100.00')
+        )
+        # Refresh from DB to update balance/paid_amount
+        rec.recalculate_from_payments()
+        self.assertEqual(rec.paid_amount, Decimal('100.00'))
+        self.assertEqual(self.rental.receivables.count(), 1)
+
+        # Call the generate view to split into 3 installments
+        url = reverse('billing:generate', args=[self.rental.pk])
+        response = self.client.post(url, {
+            'installments': 3,
+            'first_due_date': '2026-07-01'
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Validate that the generation was blocked and the old receivable is still there
+        self.assertEqual(self.rental.receivables.count(), 1)
+        self.assertTrue(Receivable.objects.filter(pk=rec.pk).exists())
+
