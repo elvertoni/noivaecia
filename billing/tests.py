@@ -291,8 +291,8 @@ class GenerateReceivablesViewTests(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        self.user = User.objects.create_superuser(username='admin', email='admin@test.com', password='password')
-        self.client.login(username='admin', password='password')
+        self.user = User.objects.create_superuser(email='admin@test.com', password='password')
+        self.client.login(email='admin@test.com', password='password')
         self.rental = make_rental()
 
     def test_re_generate_deletes_old_unpaid_receivables(self):
