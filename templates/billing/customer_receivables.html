@@ -71,29 +71,24 @@
 
       <!-- Multi-pay form -->
       <div class="panel p-4">
-        <h2 class="section-title mb-3">Baixa múltipla</h2>
+        <h2 class="section-title mb-3">Receber títulos</h2>
         <form method="post" action="{% url 'billing:multi_pay' customer.pk %}">
           {% csrf_token %}
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {% for field in multi_pay_form %}
-              <div class="field-group">
-                <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-                {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-              </div>
+              {% include 'includes/form_field.html' with field=field only %}
             {% endfor %}
           </div>
           <!-- Checkbox list for receivable selection -->
           <div class="mt-3">
-            <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer mb-2">
-              <input type="checkbox" id="select-all-receivables">
+            <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer mb-2" for="select-all-receivables">
+              <input type="checkbox" id="select-all-receivables" class="rounded border-slate-300">
               Selecionar todos
             </label>
             <div class="space-y-1 max-h-40 overflow-y-auto border border-app-border rounded p-2">
               {% for row in receivable_rows %}
-                <label class="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" name="receivable_ids" value="{{ row.obj.pk }}" class="receivable-check">
+                <label class="flex items-center gap-2 text-sm cursor-pointer" for="customer-receivable-{{ row.obj.pk }}">
+                  <input type="checkbox" name="receivable_ids" id="customer-receivable-{{ row.obj.pk }}" value="{{ row.obj.pk }}" class="receivable-check rounded border-slate-300">
                   <span>
                     Vence {{ row.obj.due_date|date:'d/m/Y' }} · Locação #{{ row.obj.rental.number }} ·
                     <strong>R$ {{ row.obj.balance|floatformat:2 }}</strong>
@@ -106,7 +101,7 @@
             </div>
           </div>
           <div class="mt-3">
-            <button type="submit" class="btn btn-primary">Baixar selecionados</button>
+            <button type="submit" class="btn btn-primary">Receber selecionados</button>
           </div>
         </form>
       </div>
@@ -141,7 +136,7 @@
                   {% else %}—{% endif %}
                 </td>
                 <td class="text-right">
-                  <a href="{% url 'billing:pay_receivable' row.obj.pk %}?next={{ request.path }}" class="text-link">Baixar</a>
+                  <a href="{% url 'billing:pay_receivable' row.obj.pk %}?next={{ request.path }}" class="text-link">Receber</a>
                 </td>
               </tr>
             {% endfor %}

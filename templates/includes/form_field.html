@@ -1,0 +1,17 @@
+{% load core_tags %}
+
+<div class="field-group {{ field_container_class|default:'' }}">
+  <label class="field-label" for="{{ field.id_for_label }}">
+    {{ field.label }}
+    {% if field.field.required %}
+      <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>
+    {% endif %}
+  </label>
+  {{ field|render_field }}
+  {% if field.help_text %}
+    <p id="{{ field.auto_id }}-help" class="field-help">{{ field.help_text }}</p>
+  {% endif %}
+  {% if field.errors %}
+    <p id="{{ field.auto_id }}-error" class="field-error" role="alert">{{ field.errors|striptags }}</p>
+  {% endif %}
+</div>

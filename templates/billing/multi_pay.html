@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Baixa múltipla · {{ customer.name }} · Noivas &amp; Cia{% endblock %}
+{% block title %}Receber títulos · {{ customer.name }} · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-2xl">
@@ -8,7 +8,7 @@
 
     <div class="page-header">
       <div>
-        <h1 class="page-title">Baixa múltipla</h1>
+        <h1 class="page-title">Receber títulos</h1>
         <p class="page-description">{{ customer.name }}</p>
       </div>
       <a href="{% url 'billing:customer_receivables' customer.pk %}" class="btn btn-secondary">Voltar</a>
@@ -22,12 +22,7 @@
           <!-- Payment fields -->
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {% for field in form %}
-              <div class="field-group">
-                <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-                {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-              </div>
+              {% include 'includes/form_field.html' with field=field only %}
             {% endfor %}
           </div>
 
@@ -35,8 +30,8 @@
           <div class="mt-5">
             <div class="mb-2 flex items-center justify-between">
               <h3 class="section-title">Selecionar títulos</h3>
-              <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer">
-                <input type="checkbox" id="select-all">
+              <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer" for="select-all">
+                <input type="checkbox" id="select-all" class="rounded border-slate-300">
                 Todos
               </label>
             </div>
@@ -83,7 +78,7 @@
           </div>
 
           <div class="mt-4 form-actions">
-            <button type="submit" class="btn btn-primary">Confirmar baixa</button>
+            <button type="submit" class="btn btn-primary">Receber selecionados</button>
             <a href="{% url 'billing:customer_receivables' customer.pk %}" class="btn btn-secondary">Cancelar</a>
           </div>
         </form>

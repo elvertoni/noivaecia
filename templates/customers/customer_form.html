@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load core_tags %}
 
 {% block title %}{% if form.instance.pk %}Editar{% else %}Novo{% endif %} cliente · Noivas &amp; Cia{% endblock %}
 
@@ -20,33 +21,33 @@
       {# Nome #}
       <div class="field-group">
         <label class="field-label" for="{{ form.name.id_for_label }}">Nome <span class="text-red-500">*</span></label>
-        {{ form.name }}
-        {% if form.name.errors %}<p class="field-error">{{ form.name.errors|striptags }}</p>{% endif %}
+        {{ form.name|render_field }}
+        {% if form.name.errors %}<p id="{{ form.name.auto_id }}-error" class="field-error" role="alert">{{ form.name.errors|striptags }}</p>{% endif %}
       </div>
 
       {# Endereço #}
       <div class="field-group">
         <label class="field-label" for="{{ form.address.id_for_label }}">Endereço</label>
-        {{ form.address }}
-        {% if form.address.errors %}<p class="field-error">{{ form.address.errors|striptags }}</p>{% endif %}
+        {{ form.address|render_field }}
+        {% if form.address.errors %}<p id="{{ form.address.auto_id }}-error" class="field-error" role="alert">{{ form.address.errors|striptags }}</p>{% endif %}
       </div>
 
       {# Bairro + Estado + Cidade #}
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div class="field-group">
           <label class="field-label" for="{{ form.district.id_for_label }}">Bairro</label>
-          {{ form.district }}
-          {% if form.district.errors %}<p class="field-error">{{ form.district.errors|striptags }}</p>{% endif %}
+          {{ form.district|render_field }}
+          {% if form.district.errors %}<p id="{{ form.district.auto_id }}-error" class="field-error" role="alert">{{ form.district.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.state.id_for_label }}">Estado</label>
-          {{ form.state }}
-          {% if form.state.errors %}<p class="field-error">{{ form.state.errors|striptags }}</p>{% endif %}
+          {{ form.state|render_field }}
+          {% if form.state.errors %}<p id="{{ form.state.auto_id }}-error" class="field-error" role="alert">{{ form.state.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.city.id_for_label }}">Cidade</label>
-          {{ form.city }}
-          {% if form.city.errors %}<p class="field-error">{{ form.city.errors|striptags }}</p>{% endif %}
+          {{ form.city|render_field }}
+          {% if form.city.errors %}<p id="{{ form.city.auto_id }}-error" class="field-error" role="alert">{{ form.city.errors|striptags }}</p>{% endif %}
         </div>
       </div>
 
@@ -54,21 +55,21 @@
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="field-group">
           <label class="field-label" for="{{ form.rg.id_for_label }}">RG</label>
-          {{ form.rg }}
-          {% if form.rg.errors %}<p class="field-error">{{ form.rg.errors|striptags }}</p>{% endif %}
+          {{ form.rg|render_field }}
+          {% if form.rg.errors %}<p id="{{ form.rg.auto_id }}-error" class="field-error" role="alert">{{ form.rg.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.cpf.id_for_label }}">CPF</label>
-          {{ form.cpf }}
-          {% if form.cpf.errors %}<p class="field-error">{{ form.cpf.errors|striptags }}</p>{% endif %}
+          {{ form.cpf|render_field }}
+          {% if form.cpf.errors %}<p id="{{ form.cpf.auto_id }}-error" class="field-error" role="alert">{{ form.cpf.errors|striptags }}</p>{% endif %}
         </div>
       </div>
 
       {# Celular (principal) #}
       <div class="field-group">
         <label class="field-label" for="{{ form.phone_mobile.id_for_label }}">Celular</label>
-        {{ form.phone_mobile }}
-        {% if form.phone_mobile.errors %}<p class="field-error">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
+        {{ form.phone_mobile|render_field }}
+        {% if form.phone_mobile.errors %}<p id="{{ form.phone_mobile.auto_id }}-error" class="field-error" role="alert">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
       </div>
 
       {# Telefones secundários #}
@@ -77,13 +78,13 @@
         <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div class="field-group">
             <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone residencial</label>
-            {{ form.phone_home }}
-            {% if form.phone_home.errors %}<p class="field-error">{{ form.phone_home.errors|striptags }}</p>{% endif %}
+            {{ form.phone_home|render_field }}
+            {% if form.phone_home.errors %}<p id="{{ form.phone_home.auto_id }}-error" class="field-error" role="alert">{{ form.phone_home.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.phone_work.id_for_label }}">Telefone comercial</label>
-            {{ form.phone_work }}
-            {% if form.phone_work.errors %}<p class="field-error">{{ form.phone_work.errors|striptags }}</p>{% endif %}
+            {{ form.phone_work|render_field }}
+            {% if form.phone_work.errors %}<p id="{{ form.phone_work.auto_id }}-error" class="field-error" role="alert">{{ form.phone_work.errors|striptags }}</p>{% endif %}
           </div>
         </div>
       </details>
@@ -91,8 +92,8 @@
       {# Observações #}
       <div class="field-group">
         <label class="field-label" for="{{ form.notes.id_for_label }}">Observações</label>
-        {{ form.notes }}
-        {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
+        {{ form.notes|render_field }}
+        {% if form.notes.errors %}<p id="{{ form.notes.auto_id }}-error" class="field-error" role="alert">{{ form.notes.errors|striptags }}</p>{% endif %}
       </div>
 
       <div class="form-actions">

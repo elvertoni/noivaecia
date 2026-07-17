@@ -19,8 +19,8 @@
       <h2 class="section-title">Ações disponíveis</h2>
       <div class="space-y-3">
         {% for action in actions %}
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" name="actions" value="{{ action.key }}"
+          <label class="flex items-center gap-3 cursor-pointer" for="action-permission-{{ action.key }}">
+            <input type="checkbox" name="actions" id="action-permission-{{ action.key }}" value="{{ action.key }}"
                    {% if action.allowed %}checked{% endif %}
                    class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
             <span class="text-sm text-app-ink">{{ action.label }}</span>

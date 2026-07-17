@@ -14,26 +14,26 @@
     </div>
   </div>
   {% include 'reports/_print_header.html' %}
-  <form method="get" class="panel-spacious grid grid-cols-2 gap-x-3 gap-y-4 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] md:items-end print:hidden">
+  <form method="get" class="panel-spacious grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] md:items-end print:hidden">
     <div class="field-group">
-      <label class="field-label">Retirada de</label>
-      <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+      <label class="field-label" for="retirados-date-from">Retirada de</label>
+      <input type="date" name="date_from" id="retirados-date-from" value="{{ date_from }}" class="field-input" data-date-br="true">
     </div>
     <div class="field-group">
-      <label class="field-label">Retirada até</label>
-      <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+      <label class="field-label" for="retirados-date-to">Retirada até</label>
+      <input type="date" name="date_to" id="retirados-date-to" value="{{ date_to }}" class="field-input" data-date-br="true">
     </div>
     <div class="field-group">
-      <label class="field-label">Cliente</label>
-      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome">
+      <label class="field-label" for="retirados-customer">Cliente</label>
+      <input type="text" name="customer" id="retirados-customer" value="{{ customer }}" class="field-input" placeholder="Nome">
     </div>
     <div class="field-group">
-      <label class="field-label">Prefixo</label>
-      <input type="text" name="prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
+      <label class="field-label" for="retirados-prefix">Prefixo</label>
+      <input type="text" name="prefix" id="retirados-prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
     </div>
     <div class="field-group">
-      <label class="field-label">Código</label>
-      <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
+      <label class="field-label" for="retirados-code">Código</label>
+      <input type="text" name="code" id="retirados-code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
     </div>
     <div class="flex items-end gap-2 col-span-2 md:col-span-1 print:hidden">
       <button type="submit" class="btn btn-secondary">Filtrar</button>

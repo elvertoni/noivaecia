@@ -121,7 +121,7 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
                     user=self.request.user,
                 )
                 remaining -= to_pay
-            payment_info = f' Pagamento de R$ {payment_amount} registrado.'
+            payment_info = f' Recebimento de R$ {payment_amount} registrado.'
 
         msg = (
             f'Devolução registrada. Dias de atraso: {days_late}; '

@@ -17,24 +17,24 @@
   <div class="panel-spacious">
     <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="field-group">
-        <label class="field-label">De</label>
-        <input type="date" name="date_from" value="{{ filters.date_from }}" class="field-input">
+        <label class="field-label" for="cash-filter-date-from">De</label>
+        <input type="date" name="date_from" id="cash-filter-date-from" value="{{ filters.date_from }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Até</label>
-        <input type="date" name="date_to" value="{{ filters.date_to }}" class="field-input">
+        <label class="field-label" for="cash-filter-date-to">Até</label>
+        <input type="date" name="date_to" id="cash-filter-date-to" value="{{ filters.date_to }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Direção</label>
-        <select name="direction" class="field-input">
+        <label class="field-label" for="cash-filter-direction">Direção</label>
+        <select name="direction" id="cash-filter-direction" class="field-input">
           <option value="">Todas</option>
           <option value="inflow" {% if filters.direction == 'inflow' %}selected{% endif %}>Entrada</option>
           <option value="outflow" {% if filters.direction == 'outflow' %}selected{% endif %}>Saída</option>
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Conta</label>
-        <select name="account" class="field-input">
+        <label class="field-label" for="cash-filter-account">Conta</label>
+        <select name="account" id="cash-filter-account" class="field-input">
           <option value="">Todas</option>
           {% for acc in accounts %}
             <option value="{{ acc.pk }}" {% if filters.account == acc.pk|stringformat:'s' %}selected{% endif %}>{{ acc.name }}</option>
@@ -42,8 +42,8 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Origem</label>
-        <select name="source" class="field-input">
+        <label class="field-label" for="cash-filter-source">Origem</label>
+        <select name="source" id="cash-filter-source" class="field-input">
           <option value="">Todas</option>
           {% for code, label in sources %}
             <option value="{{ code }}" {% if filters.source == code %}selected{% endif %}>{{ label }}</option>
@@ -51,8 +51,8 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Cliente</label>
-        <input type="text" name="q" value="{{ filters.q }}" class="field-input" placeholder="Nome do cliente">
+        <label class="field-label" for="cash-filter-q">Cliente</label>
+        <input type="text" name="q" id="cash-filter-q" value="{{ filters.q }}" class="field-input" placeholder="Nome do cliente">
       </div>
       <div class="field-group self-end">
         <button type="submit" class="btn btn-primary w-full">Filtrar</button>
@@ -64,7 +64,7 @@
   </div>
 
   <!-- Totals -->
-  <div class="grid grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="panel-spacious text-center">
       <p class="stat-label">Total entradas</p>
       <p class="stat-value text-emerald-700">R$ {{ total_inflow|floatformat:2 }}</p>

@@ -8,7 +8,7 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Reconciliação financeira</h1>
-      <p class="page-description">Comparação entre títulos, pagamentos e movimentos · {{ today|date:'d/m/Y' }}</p>
+      <p class="page-description">Comparação entre títulos, recebimentos e movimentos · {{ today|date:'d/m/Y' }}</p>
     </div>
     <div class="flex gap-2">
       <a href="{% url 'billing:reconciliation_export' %}" class="btn btn-secondary">Exportar CSV</a>
@@ -29,12 +29,12 @@
     </div>
 
     <div class="panel-spacious">
-      <p class="stat-label">Total recebido (pagamentos)</p>
+      <p class="stat-label">Total recebido</p>
       <p class="stat-value text-emerald-700">R$ {{ recon.total_payments|floatformat:2 }}</p>
     </div>
 
     <div class="panel-spacious">
-      <p class="stat-label">Líq. pagamentos c/ estorno</p>
+      <p class="stat-label">Líq. recebimentos c/ estorno</p>
       <p class="stat-value {% if recon.net_payments >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ recon.net_payments|floatformat:2 }}</p>
       <p class="text-xs text-app-muted mt-1">Estornos: R$ {{ recon.total_reversals|floatformat:2 }}</p>
     </div>
@@ -55,7 +55,7 @@
     </div>
 
     <div class="panel-spacious">
-      <p class="stat-label">Títulos quitados s/ pagamento</p>
+      <p class="stat-label">Títulos quitados s/ recebimento</p>
       <p class="stat-value {% if recon.paid_no_payments_count > 0 %}text-amber-700{% else %}text-emerald-700{% endif %}">{{ recon.paid_no_payments_count }}</p>
       <p class="text-xs text-app-muted mt-1">R$ {{ recon.paid_no_payments_sum|floatformat:2 }} — importados do legado</p>
     </div>
@@ -74,7 +74,7 @@
           <span class="text-xs text-app-muted">(exibindo 100 primeiros)</span>
         {% endif %}
       </div>
-      <p class="text-sm text-app-muted mb-3">Recebiveis onde o saldo armazenado diverge da soma dos pagamentos registrados.</p>
+      <p class="text-sm text-app-muted mb-3">Recebíveis onde o saldo armazenado diverge da soma dos recebimentos registrados.</p>
       <div class="table-shell">
         <table class="data-table">
           <thead>
@@ -83,8 +83,8 @@
               <th>Locação</th>
               <th>Vencimento</th>
               <th class="text-right">Valor</th>
-              <th class="text-right">Pago (armazenado)</th>
-              <th class="text-right">Soma pagamentos</th>
+              <th class="text-right">Recebido armazenado</th>
+              <th class="text-right">Soma recebimentos</th>
               <th class="text-right">Diferença</th>
             </tr>
           </thead>
@@ -114,10 +114,10 @@
     {% if recon.payments_without_movement_count > 0 %}
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
       <p class="font-semibold text-amber-800">
-        {{ recon.payments_without_movement_count }} pagamento(s) sem movimento de caixa correspondente.
+        {{ recon.payments_without_movement_count }} recebimento(s) sem movimento de caixa correspondente.
       </p>
       <p class="text-sm text-amber-700 mt-1">
-        Estes pagamentos foram registrados mas não geraram movimento em FinancialMovement.
+        Estes recebimentos foram registrados mas não geraram movimento em FinancialMovement.
         Pode ocorrer quando não havia conta caixa ativa no momento do registro.
       </p>
     </div>

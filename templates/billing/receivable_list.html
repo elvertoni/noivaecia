@@ -17,12 +17,7 @@
     <form method="post" action="{% url 'billing:generate' rental.pk %}" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
       {% csrf_token %}
       {% for field in generate_form %}
-        <div class="field-group">
-          <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {{ field }}
-          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-        </div>
+        {% include 'includes/form_field.html' with field=field only %}
       {% endfor %}
       <button type="submit" class="btn btn-primary">Gerar</button>
     </form>
@@ -34,7 +29,7 @@
         <tr>
           <th>Vencimento</th>
           <th class="text-right">Valor</th>
-          <th class="text-right">Pago</th>
+          <th class="text-right">Recebido</th>
           <th class="text-right">Saldo</th>
           <th class="text-right">Total c/ juros</th>
           <th>Último pgto.</th>
@@ -52,7 +47,7 @@
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
               {% if not row.obj.is_paid %}
-                <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Pagar</a>
+                <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Receber</a>
               {% else %}
                 <span class="badge badge-success">Quitado</span>
               {% endif %}

@@ -143,7 +143,7 @@ def reverse_payment(payment, reason, user=None):
             .get(pk=payment.pk)
         )
         if locked_payment.is_reversal or locked_payment.reversed_by_id is not None:
-            raise ValueError('Este pagamento já foi estornado.')
+            raise ValueError('Este recebimento já foi estornado.')
 
         receivable = (
             Receivable.objects.select_for_update()

@@ -17,16 +17,16 @@
   <div class="panel-spacious print:hidden">
     <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="field-group">
-        <label class="field-label">De</label>
-        <input type="date" name="date_from" value="{{ filters.date_from }}" class="field-input">
+        <label class="field-label" for="payment-report-date-from">De</label>
+        <input type="date" name="date_from" id="payment-report-date-from" value="{{ filters.date_from }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Até</label>
-        <input type="date" name="date_to" value="{{ filters.date_to }}" class="field-input">
+        <label class="field-label" for="payment-report-date-to">Até</label>
+        <input type="date" name="date_to" id="payment-report-date-to" value="{{ filters.date_to }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Forma de pagamento</label>
-        <select name="method" class="field-input">
+        <label class="field-label" for="payment-report-method">Forma de recebimento</label>
+        <select name="method" id="payment-report-method" class="field-input">
           <option value="">Todas</option>
           {% for code, label in methods %}
             <option value="{{ code }}" {% if filters.method == code %}selected{% endif %}>{{ label }}</option>
@@ -34,8 +34,8 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Cliente</label>
-        <input type="text" name="q" value="{{ filters.q }}" class="field-input" placeholder="Nome do cliente">
+        <label class="field-label" for="payment-report-q">Cliente</label>
+        <input type="text" name="q" id="payment-report-q" value="{{ filters.q }}" class="field-input" placeholder="Nome do cliente">
       </div>
       <div class="field-group self-end">
         <button type="submit" class="btn btn-primary w-full">Filtrar</button>

@@ -18,12 +18,12 @@
   <!-- Filters -->
   <form method="get" class="flex flex-wrap gap-3 items-end">
     <div class="field-group flex-1 min-w-[160px]">
-      <label class="field-label">Busca</label>
-      <input type="text" name="q" value="{{ q }}" class="field-input" placeholder="Prefixo ou nome">
+      <label class="field-label" for="category-search">Busca</label>
+      <input type="text" name="q" id="category-search" value="{{ q }}" class="field-input" placeholder="Prefixo ou nome">
     </div>
     <div class="field-group flex items-end">
-      <label class="inline-flex items-center gap-2 text-sm text-app-muted">
-        <input type="checkbox" name="placeholder" value="1" {% if only_placeholders %}checked{% endif %} class="rounded border-slate-300">
+      <label class="inline-flex items-center gap-2 text-sm text-app-muted" for="category-placeholder">
+        <input type="checkbox" name="placeholder" id="category-placeholder" value="1" {% if only_placeholders %}checked{% endif %} class="rounded border-slate-300">
         Apenas placeholders
         {% if placeholder_count %}<span class="badge badge-warning">{{ placeholder_count }}</span>{% endif %}
       </label>

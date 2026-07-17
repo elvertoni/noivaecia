@@ -23,6 +23,7 @@ node_modules/
 .agents/
 .impeccable/
 .interface-design/
+.playwright-mcp/
 
 # Root logo (copy lives in static/assets/)
 /logo-noivas-e-cia.svg

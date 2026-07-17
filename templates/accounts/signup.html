@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Novo usuário · Noivas &amp; Cia{% endblock %}
 
@@ -19,13 +20,13 @@
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="field-group">
           <label for="{{ form.email.id_for_label }}" class="field-label">{{ form.email.label }}</label>
-          {{ form.email }}
-          {% if form.email.errors %}<p class="field-error">{{ form.email.errors|striptags }}</p>{% endif %}
+          {{ form.email|render_field }}
+          {% if form.email.errors %}<p id="{{ form.email.auto_id }}-error" class="field-error" role="alert">{{ form.email.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label for="{{ form.first_name.id_for_label }}" class="field-label">{{ form.first_name.label }}</label>
-          {{ form.first_name }}
-          {% if form.first_name.errors %}<p class="field-error">{{ form.first_name.errors|striptags }}</p>{% endif %}
+          {{ form.first_name|render_field }}
+          {% if form.first_name.errors %}<p id="{{ form.first_name.auto_id }}-error" class="field-error" role="alert">{{ form.first_name.errors|striptags }}</p>{% endif %}
         </div>
       </div>
 
@@ -33,7 +34,7 @@
         <div class="field-group">
           <label for="{{ form.password1.id_for_label }}" class="field-label">{{ form.password1.label }}</label>
           <div class="relative">
-            {{ form.password1 }}
+            {{ form.password1|render_field }}
             <button type="button"
                     class="password-toggle"
                     data-password-toggle
@@ -52,14 +53,14 @@
               </svg>
             </button>
           </div>
-          {% if form.password1.help_text %}<div class="field-help password-help">{{ form.password1.help_text|safe }}</div>{% endif %}
-          {% if form.password1.errors %}<p class="field-error">{{ form.password1.errors|striptags }}</p>{% endif %}
+          {% if form.password1.help_text %}<div id="{{ form.password1.auto_id }}-help" class="field-help password-help">{{ form.password1.help_text|safe }}</div>{% endif %}
+          {% if form.password1.errors %}<p id="{{ form.password1.auto_id }}-error" class="field-error" role="alert">{{ form.password1.errors|striptags }}</p>{% endif %}
         </div>
 
         <div class="field-group">
           <label for="{{ form.password2.id_for_label }}" class="field-label">{{ form.password2.label }}</label>
           <div class="relative">
-            {{ form.password2 }}
+            {{ form.password2|render_field }}
             <button type="button"
                     class="password-toggle"
                     data-password-toggle
@@ -78,34 +79,34 @@
               </svg>
             </button>
           </div>
-          {% if form.password2.help_text %}<div class="field-help password-help">{{ form.password2.help_text|safe }}</div>{% endif %}
-          {% if form.password2.errors %}<p class="field-error">{{ form.password2.errors|striptags }}</p>{% endif %}
+          {% if form.password2.help_text %}<div id="{{ form.password2.auto_id }}-help" class="field-help password-help">{{ form.password2.help_text|safe }}</div>{% endif %}
+          {% if form.password2.errors %}<p id="{{ form.password2.auto_id }}-error" class="field-error" role="alert">{{ form.password2.errors|striptags }}</p>{% endif %}
         </div>
       </div>
 
       <div class="field-group">
-        <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
-          {{ form.is_superuser }}
+        <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50" for="{{ form.is_superuser.id_for_label }}">
+          {{ form.is_superuser|render_field }}
           <span>
             {{ form.is_superuser.label }}
-            <span class="block text-xs font-normal text-slate-500">{{ form.is_superuser.help_text }}</span>
+            <span id="{{ form.is_superuser.auto_id }}-help" class="block text-xs font-normal text-slate-500">{{ form.is_superuser.help_text }}</span>
           </span>
         </label>
-        {% if form.is_superuser.errors %}<p class="field-error">{{ form.is_superuser.errors|striptags }}</p>{% endif %}
+        {% if form.is_superuser.errors %}<p id="{{ form.is_superuser.auto_id }}-error" class="field-error" role="alert">{{ form.is_superuser.errors|striptags }}</p>{% endif %}
       </div>
 
       <div class="field-group">
         <span class="field-label">{{ form.module_permissions.label }}</span>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {% for checkbox in form.module_permissions %}
-            <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+            <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50" for="{{ checkbox.id_for_label }}">
               {{ checkbox.tag }}
               {{ checkbox.choice_label }}
             </label>
           {% endfor %}
         </div>
-        {% if form.module_permissions.help_text %}<p class="field-help">{{ form.module_permissions.help_text }}</p>{% endif %}
-        {% if form.module_permissions.errors %}<p class="field-error">{{ form.module_permissions.errors|striptags }}</p>{% endif %}
+        {% if form.module_permissions.help_text %}<p id="{{ form.module_permissions.auto_id }}-help" class="field-help">{{ form.module_permissions.help_text }}</p>{% endif %}
+        {% if form.module_permissions.errors %}<p id="{{ form.module_permissions.auto_id }}-error" class="field-error" role="alert">{{ form.module_permissions.errors|striptags }}</p>{% endif %}
       </div>
 
       <div class="form-actions">

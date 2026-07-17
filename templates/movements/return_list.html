@@ -17,7 +17,7 @@
   </div>
 
   {# Filters #}
-  <form method="get" class="panel-spacious grid grid-cols-2 gap-x-3 gap-y-4 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
+  <form method="get" class="panel-spacious grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
     <div class="field-group">
       <label class="field-label" for="return-date-from">Retirada de</label>
       <input type="date" name="date_from" id="return-date-from" value="{{ date_from }}" class="field-input" data-date-br="true">
@@ -34,7 +34,7 @@
       <label class="field-label" for="return-product">Produto</label>
       <input type="text" name="product" id="return-product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
     </div>
-    <div class="flex items-end gap-2 col-span-2 md:col-span-1">
+    <div class="flex items-end gap-2 sm:col-span-2 md:col-span-1">
       <button type="submit" class="btn btn-secondary">Filtrar</button>
       <a href="{% url 'movements:return_list' %}" class="btn btn-secondary">Limpar</a>
     </div>

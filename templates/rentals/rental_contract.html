@@ -112,7 +112,7 @@
     /* ── Fields ──────────────────────────────────────────────────── */
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
     .field { flex: 1; min-width: 90px; }
-    .field label { font-size: 7.5pt; color: #555; display: block; text-transform: uppercase; letter-spacing: 0.02em; }
+    .field .field-caption { font-size: 7.5pt; color: #555; display: block; text-transform: uppercase; letter-spacing: 0.02em; }
     .field span { font-size: 10pt; font-weight: 600; border-bottom: 1px solid #bbb; display: block; min-height: 14px; padding-bottom: 1px; }
 
     /* ── Tables ──────────────────────────────────────────────────── */
@@ -208,35 +208,35 @@
     <div class="section-title">Locatário</div>
     <div class="row">
       <div class="field" style="flex:3">
-        <label>Nome</label>
+        <span class="field-caption">Nome</span>
         <span>{{ rental.customer.name }}</span>
       </div>
       <div class="field">
-        <label>CPF</label>
+        <span class="field-caption">CPF</span>
         <span>{{ rental.customer.cpf|default:'—' }}</span>
       </div>
       <div class="field">
-        <label>RG</label>
+        <span class="field-caption">RG</span>
         <span>{{ rental.customer.rg|default:'—' }}</span>
       </div>
     </div>
     <div class="row">
       <div class="field" style="flex:2">
-        <label>Endereço</label>
+        <span class="field-caption">Endereço</span>
         <span>{{ rental.customer.address|default:'—' }}</span>
       </div>
       <div class="field">
-        <label>Cidade</label>
+        <span class="field-caption">Cidade</span>
         <span>{{ rental.customer.city|default:'—' }}</span>
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <label>Celular</label>
+        <span class="field-caption">Celular</span>
         <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
       </div>
       <div class="field">
-        <label>Telefone fixo</label>
+        <span class="field-caption">Telefone fixo</span>
         <span>{{ rental.customer.phone_home|default:'—' }}</span>
       </div>
     </div>
@@ -247,15 +247,15 @@
     <div class="section-title">Dados da locação</div>
     <div class="row">
       <div class="field" style="flex:2">
-        <label>Quem vai usar</label>
+        <span class="field-caption">Quem vai usar</span>
         <span>{{ rental.use_for|default:'—' }}</span>
       </div>
       <div class="field">
-        <label>Data de retirada</label>
+        <span class="field-caption">Data de retirada</span>
         <span>{{ rental.pickup_date|date:"d/m/Y" }}</span>
       </div>
       <div class="field">
-        <label>Data de retorno</label>
+        <span class="field-caption">Data de retorno</span>
         <span>{{ rental.return_date|date:"d/m/Y" }}</span>
       </div>
     </div>

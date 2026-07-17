@@ -36,7 +36,7 @@
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>
           <p class="text-sm font-medium text-app-ink">Recalcular saldos dos recebimentos</p>
-          <p class="field-help">Recalcula saldo = valor − pago em cada parcela.</p>
+          <p class="field-help">Recalcula saldo = valor − recebido em cada parcela.</p>
         </div>
         <form method="post" action="{% url 'maintenance:recalc_balances' %}">
           {% csrf_token %}
@@ -67,7 +67,7 @@
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>
           <p class="text-sm font-medium text-app-ink">Reconciliação Financeira</p>
-          <p class="field-help">Compara recebíveis, pagamentos, saldos e movimentos de caixa.</p>
+          <p class="field-help">Compara recebíveis, recebimentos, saldos e movimentos de caixa.</p>
         </div>
         <a href="{% url 'maintenance:reconcile' %}" class="btn btn-secondary">Verificar</a>
       </div>

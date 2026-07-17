@@ -207,7 +207,7 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
             notes=form.cleaned_data.get('notes', ''),
             user=self.request.user,
         )
-        messages.success(self.request, 'Pagamento registrado com sucesso.')
+        messages.success(self.request, 'Recebimento registrado com sucesso.')
 
         next_url = self.request.POST.get('next') or self.request.GET.get('next')
         if next_url:
@@ -287,7 +287,7 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
             remaining -= pay_amount
             paid_count += 1
 
-        messages.success(self.request, f'{paid_count} título(s) baixado(s) com sucesso.')
+        messages.success(self.request, f'{paid_count} título(s) recebido(s) com sucesso.')
         return redirect('billing:customer_receivables', pk=self.customer.pk)
 
 
@@ -302,7 +302,7 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.payment = get_object_or_404(Payment, pk=kwargs['pk'])
         if self.payment.is_reversal or self.payment.reversed_by_id is not None:
-            messages.error(request, 'Este pagamento já foi estornado.')
+            messages.error(request, 'Este recebimento já foi estornado.')
             if self.payment.customer_id:
                 return redirect('billing:customer_receivables', pk=self.payment.customer_id)
             return redirect('billing:receivables')
@@ -557,7 +557,7 @@ class ReconciliationExportView(BillingAccessMixin, View):
 
         writer = csv.writer(response, delimiter=';')
         writer.writerow(['Tipo de divergência', 'ID', 'Locação', 'Vencimento',
-                         'Valor título', 'Pago armazenado', 'Soma pagamentos', 'Diferença'])
+                         'Valor título', 'Recebido armazenado', 'Soma recebimentos', 'Diferença'])
 
         for item in recon['inconsistent_balances']:
             writer.writerow([
@@ -620,7 +620,7 @@ class GenerateReceivablesView(BillingAccessMixin, FormView):
         if has_payments:
             messages.error(
                 self.request,
-                'Não é possível re-gerar as parcelas pois esta locação já possui pagamentos registrados.'
+                'Não é possível re-gerar as parcelas pois esta locação já possui recebimentos registrados.'
             )
             return redirect('billing:list', rental_pk=self.rental.pk)
 
@@ -659,5 +659,5 @@ class PaymentView(BillingAccessMixin, FormView):
         self.receivable.register_payment(
             form.cleaned_data['value'], form.cleaned_data['payment_date']
         )
-        messages.success(self.request, 'Pagamento registrado com sucesso.')
+        messages.success(self.request, 'Recebimento registrado com sucesso.')
         return redirect('billing:list', rental_pk=self.receivable.rental_id)

@@ -17,16 +17,16 @@
   <div class="panel-spacious print:hidden">
     <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="field-group">
-        <label class="field-label">De</label>
-        <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+        <label class="field-label" for="cash-report-date-from">De</label>
+        <input type="date" name="date_from" id="cash-report-date-from" value="{{ date_from }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Até</label>
-        <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+        <label class="field-label" for="cash-report-date-to">Até</label>
+        <input type="date" name="date_to" id="cash-report-date-to" value="{{ date_to }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Conta</label>
-        <select name="account" class="field-input">
+        <label class="field-label" for="cash-report-account">Conta</label>
+        <select name="account" id="cash-report-account" class="field-input">
           <option value="">Todas</option>
           {% for acc in accounts %}
             <option value="{{ acc.pk }}" {% if filters.account == acc.pk|stringformat:'s' %}selected{% endif %}>{{ acc.name }}</option>
@@ -40,7 +40,7 @@
   </div>
 
   <!-- Summary -->
-  <div class="grid grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="panel-spacious text-center">
       <p class="stat-label">Total entradas</p>
       <p class="stat-value text-emerald-700">R$ {{ total_inflow|floatformat:2 }}</p>

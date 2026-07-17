@@ -8,7 +8,7 @@
     <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
     {% if has_payments %}
       <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Esta locação possui pagamentos registrados. Apenas observações podem ser editadas.
+        Esta locação possui recebimentos registrados. Apenas observações podem ser editadas.
       </div>
     {% endif %}
 
@@ -262,7 +262,7 @@
 
       <!-- Down payment (R7.06) -->
       <div class="rounded-xl border border-slate-200 p-4 space-y-4">
-        <h2 class="section-title">Pagamento de entrada <span class="text-sm font-normal text-app-muted">(opcional)</span></h2>
+        <h2 class="section-title">Recebimento de entrada <span class="text-sm font-normal text-app-muted">(opcional)</span></h2>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div class="field-group">
             <label class="field-label" for="{{ form.down_payment_amount.id_for_label }}">{{ form.down_payment_amount.label }}</label>
@@ -300,7 +300,7 @@
 <div id="rental-action-bar"
      role="region"
      aria-label="Ações do formulário"
-     class="fixed bottom-0 left-0 lg:left-64 right-0 z-40 flex items-center justify-end gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-6">
+     class="fixed bottom-0 left-0 lg:left-64 right-0 z-40 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
   {% if not has_payments %}
     <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
   {% endif %}
@@ -443,8 +443,8 @@
           <input type="date" id="browse-date" class="field-input mt-1">
         </div>
       </div>
-      <label class="inline-flex items-center gap-2 text-sm text-app-muted">
-        <input type="checkbox" id="browse-empty"> Mostrar peças sem descrição
+      <label class="inline-flex items-center gap-2 text-sm text-app-muted" for="browse-empty">
+        <input type="checkbox" id="browse-empty" class="rounded border-slate-300"> Mostrar peças sem descrição
       </label>
     </div>
     <div id="browse-results" class="min-h-[8rem] flex-1 space-y-2 overflow-y-auto px-5 py-4"></div>

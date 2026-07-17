@@ -209,6 +209,14 @@
     } else if (hasComma) {
       // Only comma: treat as decimal separator
       s = s.replace(',', '.');
+    } else if (hasDot) {
+      var dotParts = s.split('.');
+      var looksLikeThousands = dotParts.length > 1 && dotParts.slice(1).every(function (part) {
+        return part.length === 3;
+      });
+      if (looksLikeThousands) {
+        s = s.replace(/\./g, '');
+      }
     }
     // else only dot or no separator: already ok
     // Remove any non-numeric chars except dot and minus

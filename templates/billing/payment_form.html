@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 
-{% block title %}Registrar pagamento · Noivas &amp; Cia{% endblock %}
+{% block title %}Registrar recebimento · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-lg">
   <div class="panel">
-    <h1 class="page-title">Registrar pagamento</h1>
+    <h1 class="page-title">Registrar recebimento</h1>
     <p class="page-description">
       Locação #{{ receivable.rental.number }} · vence {{ receivable.due_date|date:'d/m/Y' }}
     </p>
@@ -17,15 +17,10 @@
     <form method="post" class="mt-6 space-y-4">
       {% csrf_token %}
       {% for field in form %}
-        <div class="field-group">
-          <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {{ field }}
-          {% if field.help_text %}<p class="field-help">{{ field.help_text }}</p>{% endif %}
-          {% if field.errors %}<p class="field-error">{{ field.errors|striptags }}</p>{% endif %}
-        </div>
+        {% include 'includes/form_field.html' with field=field only %}
       {% endfor %}
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Registrar pagamento</button>
+        <button type="submit" class="btn btn-primary">Registrar recebimento</button>
         <a href="{% url 'billing:list' receivable.rental_id %}" class="btn btn-secondary">Cancelar</a>
       </div>
     </form>

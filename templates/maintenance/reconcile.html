@@ -5,7 +5,7 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Reconciliação Financeira</h1>
-      <p class="page-description">Comparação entre recebíveis, pagamentos, saldos e movimentos de caixa.</p>
+      <p class="page-description">Comparação entre recebíveis, recebimentos, saldos e movimentos de caixa.</p>
     </div>
     <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Voltar</a>
   </div>
@@ -34,7 +34,7 @@
       {% endif %}
       {% if total_payments is not None %}
         <div class="panel-spacious text-center">
-          <p class="stat-label">Pagamentos</p>
+          <p class="stat-label">Recebimentos</p>
           <p class="stat-value">{{ total_payments }}</p>
         </div>
       {% endif %}

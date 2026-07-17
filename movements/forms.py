@@ -28,9 +28,9 @@ class ReturnForm(forms.ModelForm):
         widget=BRDecimalInput(),
     )
     payment_method = forms.ChoiceField(
-        label='Forma de pagamento', required=False,
+        label='Forma de recebimento', required=False,
         choices=[
-            ('', 'Não registrar pagamento'),
+            ('', 'Não registrar recebimento'),
             ('cash', 'Dinheiro'),
             ('pix', 'Pix'),
             ('card_debit', 'Débito'),
@@ -40,7 +40,7 @@ class ReturnForm(forms.ModelForm):
         ],
     )
     payment_date = forms.DateField(
-        label='Data do pagamento', required=False,
+        label='Data do recebimento', required=False,
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
@@ -63,5 +63,5 @@ class ReturnForm(forms.ModelForm):
         payment_amount = cleaned_data.get('payment_amount')
         payment_method = cleaned_data.get('payment_method')
         if payment_amount and payment_amount > Decimal('0') and not payment_method:
-            self.add_error('payment_method', 'Selecione a forma de pagamento.')
+            self.add_error('payment_method', 'Selecione a forma de recebimento.')
         return cleaned_data

@@ -56,18 +56,18 @@
 
   {# Filters (R9.03) #}
   <div class="panel-spacious">
-    <form method="get" class="grid grid-cols-2 gap-3 md:grid-cols-5">
+    <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
       <div class="field-group">
-        <label class="field-label">De</label>
-        <input type="date" name="date_from" value="{{ date_from }}" class="field-input">
+        <label class="field-label" for="customer-detail-date-from">De</label>
+        <input type="date" name="date_from" id="customer-detail-date-from" value="{{ date_from }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Até</label>
-        <input type="date" name="date_to" value="{{ date_to }}" class="field-input">
+        <label class="field-label" for="customer-detail-date-to">Até</label>
+        <input type="date" name="date_to" id="customer-detail-date-to" value="{{ date_to }}" class="field-input" data-date-br="true">
       </div>
       <div class="field-group">
-        <label class="field-label">Status locação</label>
-        <select name="rental_status" class="field-input">
+        <label class="field-label" for="customer-detail-rental-status">Status locação</label>
+        <select name="rental_status" id="customer-detail-rental-status" class="field-input">
           <option value="">Todos</option>
           {% for val, label in rental_status_choices %}
             <option value="{{ val }}" {% if rental_status == val %}selected{% endif %}>{{ label }}</option>
@@ -75,16 +75,16 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Financeiro</label>
-        <select name="financial_status" class="field-input">
+        <label class="field-label" for="customer-detail-financial-status">Financeiro</label>
+        <select name="financial_status" id="customer-detail-financial-status" class="field-input">
           <option value="">Todos</option>
           <option value="open" {% if financial_status == 'open' %}selected{% endif %}>Em aberto</option>
           <option value="paid" {% if financial_status == 'paid' %}selected{% endif %}>Quitados</option>
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label">Produto</label>
-        <input type="text" name="product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
+        <label class="field-label" for="customer-detail-product">Produto</label>
+        <input type="text" name="product" id="customer-detail-product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
       </div>
       <div class="flex items-end gap-2 md:col-span-5">
         <button type="submit" class="btn btn-secondary">Filtrar</button>
@@ -175,7 +175,7 @@
               <th>Vencimento</th>
               <th>Locação</th>
               <th class="text-right">Valor</th>
-              <th class="text-right">Pago</th>
+              <th class="text-right">Recebido</th>
               <th class="text-right">Saldo</th>
               <th>Situação</th>
             </tr>
@@ -209,7 +209,7 @@
 
   {# Recent payments #}
   <div>
-    <h2 class="section-title mb-3">Pagamentos recentes <span class="text-xs font-normal text-app-muted">(últimos 50)</span></h2>
+    <h2 class="section-title mb-3">Recebimentos recentes <span class="text-xs font-normal text-app-muted">(últimos 50)</span></h2>
     {% if payments %}
       <div class="table-shell">
         <table class="data-table">
@@ -240,7 +240,7 @@
         </table>
       </div>
     {% else %}
-      <div class="panel-spacious text-center text-app-muted">Nenhum pagamento registrado.</div>
+      <div class="panel-spacious text-center text-app-muted">Nenhum recebimento registrado.</div>
     {% endif %}
   </div>
 

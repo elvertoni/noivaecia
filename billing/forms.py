@@ -26,11 +26,11 @@ class PaymentForm(forms.Form):
     """Register a payment against a receivable (RF-21)."""
 
     value = forms.DecimalField(
-        label='Valor pago', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
         widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
-        label='Data do pagamento',
+        label='Data do recebimento',
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
@@ -40,16 +40,16 @@ class ReceivablePayForm(forms.Form):
     """Enhanced payment form that creates a Payment record (R5.06/R5.08)."""
 
     amount = forms.DecimalField(
-        label='Valor pago', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
         widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
-        label='Data do pagamento',
+        label='Data do recebimento',
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(
-        label='Forma de pagamento',
+        label='Forma de recebimento',
         choices=Payment.Method.choices,
         widget=forms.Select(attrs={'class': INPUT_CLASS}),
         initial='cash',
@@ -69,7 +69,7 @@ class ReceivablePayForm(forms.Form):
         widget=forms.Textarea(attrs={'class': INPUT_CLASS, 'rows': 2}),
     )
     confirm_overpayment = forms.BooleanField(
-        label='Confirmar pagamento acima do saldo', required=False,
+        label='Confirmar recebimento acima do saldo', required=False,
     )
 
 
@@ -118,16 +118,16 @@ class MultiPayForm(forms.Form):
     """Multi-receivable payment form (R5.07)."""
 
     total_amount = forms.DecimalField(
-        label='Valor total a pagar', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor total a receber', min_value=0, max_digits=10, decimal_places=2,
         widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
-        label='Data do pagamento',
+        label='Data do recebimento',
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
     method = forms.ChoiceField(
-        label='Forma de pagamento',
+        label='Forma de recebimento',
         choices=Payment.Method.choices,
         widget=forms.Select(attrs={'class': INPUT_CLASS}),
         initial='cash',
@@ -136,4 +136,3 @@ class MultiPayForm(forms.Form):
         label='Observações', required=False,
         widget=forms.Textarea(attrs={'class': INPUT_CLASS, 'rows': 2}),
     )
-

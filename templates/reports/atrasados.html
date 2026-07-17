@@ -14,18 +14,18 @@
     </div>
   </div>
   {% include 'reports/_print_header.html' %}
-  <form method="get" class="panel-spacious grid grid-cols-3 gap-3 print:hidden">
+  <form method="get" class="panel-spacious grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end print:hidden">
     <div class="field-group">
-      <label class="field-label">Cliente</label>
-      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome">
+      <label class="field-label" for="atrasados-customer">Cliente</label>
+      <input type="text" name="customer" id="atrasados-customer" value="{{ customer }}" class="field-input" placeholder="Nome">
     </div>
     <div class="field-group">
-      <label class="field-label">Prefixo</label>
-      <input type="text" name="prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
+      <label class="field-label" for="atrasados-prefix">Prefixo</label>
+      <input type="text" name="prefix" id="atrasados-prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
     </div>
     <div class="field-group">
-      <label class="field-label">Código</label>
-      <input type="text" name="code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
+      <label class="field-label" for="atrasados-code">Código</label>
+      <input type="text" name="code" id="atrasados-code" value="{{ code }}" class="field-input" placeholder="Ex: 1">
     </div>
     <div class="flex items-end gap-2 print:hidden">
       <button type="submit" class="btn btn-secondary">Filtrar</button>

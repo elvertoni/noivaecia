@@ -14,14 +14,14 @@
     </div>
   </div>
   {% include 'reports/_print_header.html' %}
-  <form method="get" class="panel-spacious grid grid-cols-2 gap-3 print:hidden">
+  <form method="get" class="panel-spacious grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] lg:items-end print:hidden">
     <div class="field-group">
-      <label class="field-label">Cliente</label>
-      <input type="text" name="customer" value="{{ customer }}" class="field-input" placeholder="Nome do cliente">
+      <label class="field-label" for="contas-cliente-customer">Cliente</label>
+      <input type="text" name="customer" id="contas-cliente-customer" value="{{ customer }}" class="field-input" placeholder="Nome do cliente">
     </div>
     <div class="field-group">
-      <label class="field-label">Status</label>
-      <select name="status" class="field-input">
+      <label class="field-label" for="contas-cliente-status">Status</label>
+      <select name="status" id="contas-cliente-status" class="field-input">
         <option value="" {% if not status %}selected{% endif %}>Todos</option>
         <option value="open" {% if status == 'open' %}selected{% endif %}>Em aberto</option>
         <option value="paid" {% if status == 'paid' %}selected{% endif %}>Quitados</option>
@@ -39,7 +39,7 @@
         <h2 class="section-title">{{ group.customer.name }}</h2>
         <div class="flex gap-4 text-sm">
           <span><span class="text-app-muted">Cobrado:</span> <strong>R$ {{ group.total_amount|floatformat:2 }}</strong></span>
-          <span><span class="text-app-muted">Pago:</span> <strong class="text-green-600">R$ {{ group.total_paid|floatformat:2 }}</strong></span>
+          <span><span class="text-app-muted">Recebido:</span> <strong class="text-green-600">R$ {{ group.total_paid|floatformat:2 }}</strong></span>
           <span><span class="text-app-muted">Saldo:</span> <strong class="text-red-600">R$ {{ group.total_balance|floatformat:2 }}</strong></span>
         </div>
       </div>
@@ -50,7 +50,7 @@
               <th>Locação</th>
               <th>Vencimento</th>
               <th class="text-right">Valor</th>
-              <th class="text-right">Pago</th>
+              <th class="text-right">Recebido</th>
               <th class="text-right">Saldo</th>
             </tr>
           </thead>
