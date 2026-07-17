@@ -300,8 +300,16 @@
 <div id="rental-action-bar"
      role="region"
      aria-label="Ações do formulário"
-     class="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-6">
+     class="fixed bottom-0 left-0 lg:left-64 right-0 z-40 flex items-center justify-end gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-6">
+  {% if not has_payments %}
+    <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
+  {% endif %}
   <div class="flex items-center gap-3">
+    {% if form.instance.pk %}
+      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
+    {% else %}
+      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+    {% endif %}
     <button type="submit"
             form="rental-form"
             class="btn btn-primary">
@@ -310,15 +318,7 @@
       </svg>
       Salvar locação
     </button>
-    {% if form.instance.pk %}
-      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
-    {% else %}
-      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
-    {% endif %}
   </div>
-  {% if not has_payments %}
-    <p class="hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
-  {% endif %}
 </div>
 
 {% if not has_payments %}
