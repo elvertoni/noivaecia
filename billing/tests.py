@@ -294,6 +294,8 @@ class GenerateReceivablesViewTests(TestCase):
         self.user = User.objects.create_superuser(email='admin@test.com', password='password')
         self.client.login(email='admin@test.com', password='password')
         self.rental = make_rental()
+        self.rental.total_value = Decimal('300.00')
+        self.rental.save()
 
     def test_re_generate_deletes_old_unpaid_receivables(self):
         # Create an existing unpaid receivable (e.g. representing the default 1 installment)
