@@ -4,11 +4,73 @@
   <meta charset="UTF-8">
   <title>Contrato de Locação #{{ rental.number }} · {{ company.name }}</title>
   <style>
-    @page { size: A5; margin: 7mm 6mm; }
+    @page { size: A4 portrait; margin: 7mm 8mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #111; }
     .copy { page-break-after: always; padding-bottom: 4px; }
     .copy:last-child { page-break-after: auto; }
+
+    /* ── Compressão para caber 2 vias em uma folha A4 (até 10 itens) ── */
+    .single-page-a4 {
+      font-size: 8.5pt;
+    }
+    .single-page-a4 .copy {
+      height: 136mm;
+      page-break-after: avoid;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .single-page-a4 .copy:first-child {
+      border-bottom: 1.5px dashed #000;
+      margin-bottom: 6mm;
+      padding-bottom: 6mm;
+      position: relative;
+    }
+    /* Linha de corte ✂ */
+    .single-page-a4 .copy:first-child::after {
+      content: "✂ ----------------- Corte aqui com a régua -----------------";
+      position: absolute;
+      bottom: -6px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 7.5pt;
+      color: #555;
+      background: #fff;
+      display: block;
+      height: 12px;
+      line-height: 12px;
+    }
+    .single-page-a4 .header {
+      padding-bottom: 2px;
+      margin-bottom: 4px;
+    }
+    .single-page-a4 .header-left h1 { font-size: 11pt; }
+    .single-page-a4 .header-left p { font-size: 7.5pt; }
+    .single-page-a4 .header-right { font-size: 7.5pt; }
+    .single-page-a4 .header-right strong { font-size: 9.5pt; }
+    .single-page-a4 .contract-title { font-size: 10.5pt; margin-bottom: 4px; }
+    .single-page-a4 .section { margin-bottom: 4px; }
+    .single-page-a4 .section-title { font-size: 8pt; margin-bottom: 3px; padding-bottom: 0px; }
+    .single-page-a4 .row { gap: 6px; margin-bottom: 2px; }
+    .single-page-a4 .field label { font-size: 7pt; }
+    .single-page-a4 .field span { font-size: 9pt; min-height: 12px; }
+    .single-page-a4 table { font-size: 8pt; }
+    .single-page-a4 table thead th { font-size: 7.5pt; padding: 2px 4px; }
+    .single-page-a4 table tbody td { padding: 2px 4px; }
+    .single-page-a4 table tfoot td { padding: 2px 4px; }
+    .single-page-a4 .clauses {
+      font-size: 7pt;
+      line-height: 1.25;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .single-page-a4 .clauses p { margin-bottom: 0px; }
+    .single-page-a4 .signatures { margin-top: 8px; gap: 12px; }
+    .single-page-a4 .sig-line { margin-top: 16px; font-size: 7.5pt; }
 
     /* ── Header ─────────────────────────────────────────────────── */
     .header {
@@ -113,7 +175,7 @@
     @media print { .no-print { display: none !important; } }
   </style>
 </head>
-<body>
+<body class="{% if rental.items.all|length <= 10 %}single-page-a4{% endif %}">
 
 <div class="no-print">
   <button onclick="window.print()" style="padding:8px 20px;background:#9f1239;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11pt;">Imprimir contrato</button>
