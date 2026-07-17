@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Contrato de Locação #{{ rental.number }} · {{ company.name }}</title>
   <style>
-    @page { size: A4 portrait; margin: 7mm 8mm; }
+    @page { size: A4 portrait; margin: 8mm 9mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #111; }
     .copy { page-break-after: always; padding-bottom: 4px; }
@@ -12,46 +12,57 @@
 
     /* ── Compressão para caber 2 vias em uma folha A4 (até 10 itens) ── */
     .single-page-a4 {
+      --copy-height: 131mm;
+      --cut-gap: 10mm;
       font-size: 8.5pt;
     }
     .single-page-a4 .copy {
-      height: 136mm;
+      height: var(--copy-height);
       page-break-after: avoid;
+      break-after: avoid;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: flex-start;
     }
     .single-page-a4 .copy:first-child {
-      border-bottom: 1.5px dashed #000;
-      margin-bottom: 6mm;
-      padding-bottom: 6mm;
+      margin-bottom: var(--cut-gap);
+      padding-bottom: 0;
       position: relative;
     }
-    /* Linha de corte ✂ */
+    /* Corredor de corte entre as duas vias */
     .single-page-a4 .copy:first-child::after {
-      content: "✂ ----------------- Corte aqui com a régua -----------------";
+      content: "✂ Corte aqui";
       position: absolute;
-      bottom: -6px;
+      bottom: -6mm;
       left: 0;
       right: 0;
       text-align: center;
-      font-size: 7.5pt;
-      color: #555;
+      font-size: 7pt;
+      color: #4b5563;
       background: #fff;
       display: block;
-      height: 12px;
-      line-height: 12px;
+      height: 4mm;
+      line-height: 4mm;
+      border-top: 1px dashed #6b7280;
     }
     .single-page-a4 .header {
       padding-bottom: 2px;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
     .single-page-a4 .header-left h1 { font-size: 11pt; }
     .single-page-a4 .header-left p { font-size: 7.5pt; }
     .single-page-a4 .header-right { font-size: 7.5pt; }
     .single-page-a4 .header-right strong { font-size: 9.5pt; }
-    .single-page-a4 .contract-title { font-size: 10.5pt; margin-bottom: 4px; }
+    .single-page-a4 .contract-title-row { margin-bottom: 4px; }
+    .single-page-a4 .contract-title { font-size: 10.5pt; }
+    .single-page-a4 .copy-label { margin-top: 1px; }
+    .single-page-a4 .print-summary-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 6px;
+      align-items: start;
+    }
     .single-page-a4 .section { margin-bottom: 4px; }
     .single-page-a4 .section-title { font-size: 8pt; margin-bottom: 3px; padding-bottom: 0px; }
     .single-page-a4 .row { gap: 6px; margin-bottom: 2px; }
@@ -69,8 +80,8 @@
       gap: 8px;
     }
     .single-page-a4 .clauses p { margin-bottom: 0px; }
-    .single-page-a4 .signatures { margin-top: 8px; gap: 12px; }
-    .single-page-a4 .sig-line { margin-top: 16px; font-size: 7.5pt; }
+    .single-page-a4 .signatures { margin-top: 6px; gap: 12px; }
+    .single-page-a4 .sig-line { margin-top: 14px; font-size: 7.5pt; }
 
     /* ── Header ─────────────────────────────────────────────────── */
     .header {
@@ -87,13 +98,16 @@
     .header-right strong { font-size: 10.5pt; color: #111; }
 
     /* ── Contract title ─────────────────────────────────────────── */
+    .contract-title-row {
+      text-align: center;
+      margin-bottom: 7px;
+    }
     .contract-title {
       text-align: center;
       font-size: 12pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin-bottom: 7px;
     }
 
     /* ── Sections ────────────────────────────────────────────────── */
@@ -114,6 +128,7 @@
     .field { flex: 1; min-width: 90px; }
     .field .field-caption { font-size: 7.5pt; color: #555; display: block; text-transform: uppercase; letter-spacing: 0.02em; }
     .field span { font-size: 10pt; font-weight: 600; border-bottom: 1px solid #bbb; display: block; min-height: 14px; padding-bottom: 1px; }
+    .print-summary-grid { display: block; }
 
     /* ── Tables ──────────────────────────────────────────────────── */
     table { width: 100%; border-collapse: collapse; font-size: 9pt; }
@@ -166,7 +181,7 @@
       text-align: center;
       font-size: 8pt;
       color: #777;
-      margin-top: 4px;
+      margin-top: 3px;
       font-style: italic;
     }
 
@@ -201,62 +216,69 @@
     </div>
   </div>
 
-  <div class="contract-title">Contrato de Locação de Traje</div>
-
-  <!-- ══ Locatário ══════════════════════════════════════════════ -->
-  <div class="section">
-    <div class="section-title">Locatário</div>
-    <div class="row">
-      <div class="field" style="flex:3">
-        <span class="field-caption">Nome</span>
-        <span>{{ rental.customer.name }}</span>
-      </div>
-      <div class="field">
-        <span class="field-caption">CPF</span>
-        <span>{{ rental.customer.cpf|default:'—' }}</span>
-      </div>
-      <div class="field">
-        <span class="field-caption">RG</span>
-        <span>{{ rental.customer.rg|default:'—' }}</span>
-      </div>
-    </div>
-    <div class="row">
-      <div class="field" style="flex:2">
-        <span class="field-caption">Endereço</span>
-        <span>{{ rental.customer.address|default:'—' }}</span>
-      </div>
-      <div class="field">
-        <span class="field-caption">Cidade</span>
-        <span>{{ rental.customer.city|default:'—' }}</span>
-      </div>
-    </div>
-    <div class="row">
-      <div class="field">
-        <span class="field-caption">Celular</span>
-        <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
-      </div>
-      <div class="field">
-        <span class="field-caption">Telefone fixo</span>
-        <span>{{ rental.customer.phone_home|default:'—' }}</span>
-      </div>
-    </div>
+  <div class="contract-title-row">
+    <div class="contract-title">Contrato de Locação de Traje</div>
+    <div class="copy-label">{{ copy_label }}</div>
   </div>
 
-  <!-- ══ Dados da locação ═══════════════════════════════════════ -->
-  <div class="section">
-    <div class="section-title">Dados da locação</div>
-    <div class="row">
-      <div class="field" style="flex:2">
-        <span class="field-caption">Quem vai usar</span>
-        <span>{{ rental.use_for|default:'—' }}</span>
+  <!-- ══ Locatário ══════════════════════════════════════════════ -->
+  <div class="print-summary-grid">
+    <div class="section">
+      <div class="section-title">Locatário</div>
+      <div class="row">
+        <div class="field" style="flex:3">
+          <span class="field-caption">Nome</span>
+          <span>{{ rental.customer.name }}</span>
+        </div>
+        <div class="field">
+          <span class="field-caption">CPF</span>
+          <span>{{ rental.customer.cpf|default:'—' }}</span>
+        </div>
+        <div class="field">
+          <span class="field-caption">RG</span>
+          <span>{{ rental.customer.rg|default:'—' }}</span>
+        </div>
       </div>
-      <div class="field">
-        <span class="field-caption">Data de retirada</span>
-        <span>{{ rental.pickup_date|date:"d/m/Y" }}</span>
+      <div class="row">
+        <div class="field" style="flex:2">
+          <span class="field-caption">Endereço</span>
+          <span>{{ rental.customer.address|default:'—' }}</span>
+        </div>
+        <div class="field">
+          <span class="field-caption">Cidade</span>
+          <span>{{ rental.customer.city|default:'—' }}</span>
+        </div>
       </div>
-      <div class="field">
-        <span class="field-caption">Data de retorno</span>
-        <span>{{ rental.return_date|date:"d/m/Y" }}</span>
+      <div class="row">
+        <div class="field">
+          <span class="field-caption">Celular</span>
+          <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
+        </div>
+        <div class="field">
+          <span class="field-caption">Telefone fixo</span>
+          <span>{{ rental.customer.phone_home|default:'—' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Dados da locação ═══════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-title">Dados da locação</div>
+      <div class="row">
+        <div class="field" style="flex:2">
+          <span class="field-caption">Quem vai usar</span>
+          <span>{{ rental.use_for|default:'—' }}</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <span class="field-caption">Data de retirada</span>
+          <span>{{ rental.pickup_date|date:"d/m/Y" }}</span>
+        </div>
+        <div class="field">
+          <span class="field-caption">Data de retorno</span>
+          <span>{{ rental.return_date|date:"d/m/Y" }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -355,8 +377,6 @@
       <div class="sig-line">Testemunha 2</div>
     </div>
   </div>
-
-  <div class="copy-label">{{ copy_label }}</div>
 
 </div>
 {% endfor %}
