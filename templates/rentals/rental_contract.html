@@ -1,3 +1,4 @@
+{% load core_tags %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -299,7 +300,7 @@
         <tr>
           <td>{{ item.product.category.prefix }}{{ item.product.code }}</td>
           <td>{{ item.product.description }}{% if item.product.color %} — {{ item.product.color }}{% endif %}{% if item.product.size %} — {{ item.product.size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
-          <td class="text-right">R$ {{ item.value|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ item.value|brl }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="3" style="text-align:center;color:#888;">Sem itens.</td></tr>
@@ -308,7 +309,7 @@
       <tfoot>
         <tr>
           <td colspan="2" class="text-right">Valor total</td>
-          <td class="text-right">R$ {{ rental.total_value|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ rental.total_value|brl }}</td>
         </tr>
       </tfoot>
     </table>
@@ -332,7 +333,7 @@
         <tr>
           <td style="text-align:center">{{ forloop.counter }}ª</td>
           <td>{{ rec.due_date|date:"d/m/Y" }}</td>
-          <td class="text-right">R$ {{ rec.amount|floatformat:2 }}</td>
+          <td class="text-right">R$ {{ rec.amount|brl }}</td>
           <td>{% if rec.is_paid %}Quitada{% else %}Em aberto{% endif %}</td>
         </tr>
         {% endfor %}
@@ -348,8 +349,8 @@
       <p>1. Todas as peças locadas devem ser devolvidas até a data de retorno estipulada acima.</p>
       <p>2. O locatário recebe os itens em perfeito estado e se compromete a devolvê-los nas mesmas condições.</p>
       <p>3. Em caso de dano (manchas, rasgos, furos na barra, ou bijuteria perdida, intencional ou não), o locatário pagará os custos de conserto ou o valor de reposição do item.</p>
-      <p>4. O atraso na devolução sujeita o locatário a multa moratória de {{ company.late_fee_rate|floatformat:2 }}% sobre o valor total da locação, além de juros de mora de {{ company.monthly_interest_rate|floatformat:2 }}% ao mês e correção monetária pelo INPC/IBGE.</p>
-      <p>5. A não devolução dos trajes e/ou acessórios locados em até sete dias corridos da data de devolução implica cobrança de {{ company.loss_penalty_rate|floatformat:2 }}% correspondente ao valor da locação dos trajes.</p>
+      <p>4. O atraso na devolução sujeita o locatário a multa moratória de {{ company.late_fee_rate|brl }}% sobre o valor total da locação, além de juros de mora de {{ company.monthly_interest_rate|brl }}% ao mês e correção monetária pelo INPC/IBGE.</p>
+      <p>5. A não devolução dos trajes e/ou acessórios locados em até sete dias corridos da data de devolução implica cobrança de {{ company.loss_penalty_rate|brl }}% correspondente ao valor da locação dos trajes.</p>
       {% if company.footer_message %}<p>{{ company.footer_message }}</p>{% endif %}
     </div>
   </div>

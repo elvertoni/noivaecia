@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 {% block title %}Locações Realizadas · Relatórios · Noivas &amp; Cia{% endblock %}
 {% block content %}
 <div class="space-y-6">
@@ -63,7 +64,7 @@
             <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
             <td>{{ rental.return_date|date:'d/m/Y' }}</td>
             <td>{{ rental.get_status_display }}</td>
-            <td class="text-right">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ rental.total_value|brl }}</td>
           </tr>
         {% empty %}
           <tr><td colspan="7" class="table-empty">Nenhuma locação encontrada.</td></tr>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Financeiro · Noivas &amp; Cia{% endblock %}
 
@@ -17,40 +18,40 @@
   </div>
 
   <!-- KPI grid -->
-  <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Em aberto</p>
-      <p class="stat-value text-brand-700">R$ {{ open_balance|floatformat:2 }}</p>
+      <p class="stat-value text-brand-700">R$ {{ open_balance|brl }}</p>
       <p class="text-xs text-app-muted mt-1">{{ open_count }} título{{ open_count|pluralize }}</p>
     </div>
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Vencidos</p>
-      <p class="stat-value text-red-700">R$ {{ overdue_balance|floatformat:2 }}</p>
+      <p class="stat-value text-red-700">R$ {{ overdue_balance|brl }}</p>
       <p class="text-xs text-app-muted mt-1">{{ overdue_count }} título{{ overdue_count|pluralize }}</p>
     </div>
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Vence hoje</p>
-      <p class="stat-value text-amber-700">R$ {{ due_today_balance|floatformat:2 }}</p>
+      <p class="stat-value text-amber-700">R$ {{ due_today_balance|brl }}</p>
       <p class="text-xs text-app-muted mt-1">{{ due_today_count }} título{{ due_today_count|pluralize }}</p>
     </div>
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Próx. 7 dias</p>
-      <p class="stat-value text-sky-700">R$ {{ due_week_balance|floatformat:2 }}</p>
+      <p class="stat-value text-sky-700">R$ {{ due_week_balance|brl }}</p>
       <p class="text-xs text-app-muted mt-1">{{ due_week_count }} título{{ due_week_count|pluralize }}</p>
     </div>
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Recebido hoje</p>
-      <p class="stat-value text-emerald-700">R$ {{ received_today|floatformat:2 }}</p>
+      <p class="stat-value text-emerald-700">R$ {{ received_today|brl }}</p>
     </div>
 
     <div class="panel-spacious text-center">
       <p class="stat-label">Recebido no mês</p>
-      <p class="stat-value text-emerald-700">R$ {{ received_month|floatformat:2 }}</p>
+      <p class="stat-value text-emerald-700">R$ {{ received_month|brl }}</p>
     </div>
 
   </div>
@@ -113,7 +114,7 @@
                 <span class="badge badge-danger">Saída</span>
               {% endif %}
             </td>
-            <td class="text-right font-medium">R$ {{ mv.amount|floatformat:2 }}</td>
+            <td class="text-right font-medium">R$ {{ mv.amount|brl }}</td>
           </tr>
           {% endfor %}
         </tbody>

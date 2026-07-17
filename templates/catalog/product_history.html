@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Histórico — {{ product }} · Noivas &amp; Cia{% endblock %}
 
@@ -9,7 +10,7 @@
     <div>
       <h1 class="page-title">{{ product.category.prefix }}{{ product.code }} · {{ product.description }}</h1>
       <p class="page-description">
-        Cor: {{ product.color|default:'—' }} · Tamanho: {{ product.size|default:'—' }} · Valor sugerido: R$ {{ product.value|floatformat:2 }}
+        Cor: {{ product.color|default:'—' }} · Tamanho: {{ product.size|default:'—' }} · Valor sugerido: R$ {{ product.value|brl }}
       </p>
     </div>
     <div class="flex gap-2">
@@ -83,7 +84,7 @@
                     <span class="badge badge-danger">Cancelado</span>
                   {% endif %}
                 </td>
-                <td class="text-right font-medium">R$ {{ item.value|floatformat:2 }}</td>
+                <td class="text-right font-medium">R$ {{ item.value|brl }}</td>
               </tr>
             {% endfor %}
           </tbody>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Movimentação de Caixa · Noivas &amp; Cia{% endblock %}
 
@@ -67,15 +68,15 @@
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="panel-spacious text-center">
       <p class="stat-label">Total entradas</p>
-      <p class="stat-value text-emerald-700">R$ {{ total_inflow|floatformat:2 }}</p>
+      <p class="stat-value text-emerald-700">R$ {{ total_inflow|brl }}</p>
     </div>
     <div class="panel-spacious text-center">
       <p class="stat-label">Total saídas</p>
-      <p class="stat-value text-red-700">R$ {{ total_outflow|floatformat:2 }}</p>
+      <p class="stat-value text-red-700">R$ {{ total_outflow|brl }}</p>
     </div>
     <div class="panel-spacious text-center">
       <p class="stat-label">Saldo</p>
-      <p class="stat-value {% if balance >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ balance|floatformat:2 }}</p>
+      <p class="stat-value {% if balance >= 0 %}text-emerald-700{% else %}text-red-700{% endif %}">R$ {{ balance|brl }}</p>
     </div>
   </div>
 
@@ -109,7 +110,7 @@
                 <span class="badge badge-danger">Saída</span>
               {% endif %}
             </td>
-            <td class="text-right font-medium">R$ {{ mv.amount|floatformat:2 }}</td>
+            <td class="text-right font-medium">R$ {{ mv.amount|brl }}</td>
           </tr>
           {% endfor %}
         </tbody>

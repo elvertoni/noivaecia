@@ -19,60 +19,80 @@
       <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
   </div>
-  <nav class="flex-1 space-y-1 px-3" aria-label="Navegação principal">
-    <a href="{% url 'dashboard' %}" class="nav-link{% if request.resolver_match.url_name == 'dashboard' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+  <nav class="flex-1 overflow-y-auto px-3 pb-4" aria-label="Navegação principal">
+    <a href="{% url 'dashboard' %}" class="nav-link{% if request.resolver_match.url_name == 'dashboard' and not request.resolver_match.app_name %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'dashboard' and not request.resolver_match.app_name %}aria-current="page"{% endif %}>Dashboard</a>
 
     {% if request.user|has_module:'customers' or request.user|has_module:'catalog' or request.user|has_module:'company' %}
-      <p class="nav-section">Cadastros</p>
-      {% if request.user|has_module:'customers' %}
-        <a href="{% url 'customers:list' %}" class="nav-link{% if request.resolver_match.app_name == 'customers' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'customers' %}aria-current="page"{% endif %}>Clientes</a>
-      {% endif %}
-      {% if request.user|has_module:'catalog' %}
-        <a href="{% url 'catalog:category_list' %}" class="nav-link{% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'category_form' or request.resolver_match.url_name == 'category_confirm_delete' or request.resolver_match.url_name == 'category_merge' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'category_list' %}aria-current="page"{% endif %}>Categorias</a>
-        <a href="{% url 'catalog:product_list' %}" class="nav-link{% if request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_form' or request.resolver_match.url_name == 'product_confirm_delete' or request.resolver_match.url_name == 'product_history' or request.resolver_match.url_name == 'placeholder_review' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'product_list' %}aria-current="page"{% endif %}>Produtos</a>
-      {% endif %}
-      {% if request.user|has_module:'company' %}
-        <a href="{% url 'company:edit' %}" class="nav-link{% if request.resolver_match.app_name == 'company' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'company' %}aria-current="page"{% endif %}>Empresa</a>
-      {% endif %}
+      <div class="nav-group">
+        <p class="nav-section" id="nav-section-cadastros">Cadastros</p>
+        <div class="nav-sublinks" role="group" aria-labelledby="nav-section-cadastros">
+          {% if request.user|has_module:'customers' %}
+            <a href="{% url 'customers:list' %}" class="nav-link{% if request.resolver_match.app_name == 'customers' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'customers' %}aria-current="page"{% endif %}>Clientes</a>
+          {% endif %}
+          {% if request.user|has_module:'catalog' %}
+            <a href="{% url 'catalog:category_list' %}" class="nav-link{% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'category_form' or request.resolver_match.url_name == 'category_confirm_delete' or request.resolver_match.url_name == 'category_merge' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'category_list' %}aria-current="page"{% endif %}>Categorias</a>
+            <a href="{% url 'catalog:product_list' %}" class="nav-link{% if request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_form' or request.resolver_match.url_name == 'product_confirm_delete' or request.resolver_match.url_name == 'product_history' or request.resolver_match.url_name == 'placeholder_review' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'product_list' %}aria-current="page"{% endif %}>Produtos</a>
+          {% endif %}
+          {% if request.user|has_module:'company' %}
+            <a href="{% url 'company:edit' %}" class="nav-link{% if request.resolver_match.app_name == 'company' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'company' %}aria-current="page"{% endif %}>Empresa</a>
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
 
     {% if request.user|has_module:'rentals' or request.user|has_module:'movements' %}
-      <p class="nav-section">Operações</p>
-      {% if request.user|has_module:'rentals' %}
-        <a href="{% url 'rentals:list' %}" class="nav-link{% if request.resolver_match.app_name == 'rentals' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'rentals' %}aria-current="page"{% endif %}>Locações</a>
-      {% endif %}
-      {% if request.user|has_module:'movements' %}
-        <a href="{% url 'movements:pickup_list' %}" class="nav-link{% if request.resolver_match.url_name == 'pickup_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'pickup_list' %}aria-current="page"{% endif %}>A Retirar</a>
-        <a href="{% url 'movements:return_list' %}" class="nav-link{% if request.resolver_match.url_name == 'return_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'return_list' %}aria-current="page"{% endif %}>Retirados</a>
-        <a href="{% url 'movements:overdue_list' %}" class="nav-link{% if request.resolver_match.url_name == 'overdue_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'overdue_list' %}aria-current="page"{% endif %}>Atrasados</a>
-      {% endif %}
+      <div class="nav-group">
+        <p class="nav-section" id="nav-section-operacoes">Operações</p>
+        <div class="nav-sublinks" role="group" aria-labelledby="nav-section-operacoes">
+          {% if request.user|has_module:'rentals' %}
+            <a href="{% url 'rentals:list' %}" class="nav-link{% if request.resolver_match.app_name == 'rentals' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'rentals' %}aria-current="page"{% endif %}>Locações</a>
+          {% endif %}
+          {% if request.user|has_module:'movements' %}
+            <a href="{% url 'movements:pickup_list' %}" class="nav-link{% if request.resolver_match.url_name == 'pickup_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'pickup_list' %}aria-current="page"{% endif %}>A Retirar</a>
+            <a href="{% url 'movements:return_list' %}" class="nav-link{% if request.resolver_match.url_name == 'return_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'return_list' %}aria-current="page"{% endif %}>Retirados</a>
+            <a href="{% url 'movements:overdue_list' %}" class="nav-link{% if request.resolver_match.url_name == 'overdue_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'overdue_list' %}aria-current="page"{% endif %}>Atrasados</a>
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
 
     {% if request.user|has_module:'billing' %}
-      <p class="nav-section">Financeiro</p>
-      <a href="{% url 'billing:dashboard' %}" class="nav-link{% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %}aria-current="page"{% endif %}>Painel</a>
-      <a href="{% url 'billing:receivables' %}" class="nav-link{% if request.resolver_match.url_name == 'receivables' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'receivables' %}aria-current="page"{% endif %}>Recebíveis</a>
-      <a href="{% url 'billing:cash_movements' %}" class="nav-link{% if request.resolver_match.url_name == 'cash_movements' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'cash_movements' %}aria-current="page"{% endif %}>Caixa</a>
+      <div class="nav-group">
+        <p class="nav-section" id="nav-section-financeiro">Financeiro</p>
+        <div class="nav-sublinks" role="group" aria-labelledby="nav-section-financeiro">
+          <a href="{% url 'billing:dashboard' %}" class="nav-link{% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'billing' %}aria-current="page"{% endif %}>Painel</a>
+          <a href="{% url 'billing:receivables' %}" class="nav-link{% if request.resolver_match.url_name == 'receivables' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'receivables' %}aria-current="page"{% endif %}>Recebíveis</a>
+          <a href="{% url 'billing:cash_movements' %}" class="nav-link{% if request.resolver_match.url_name == 'cash_movements' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'cash_movements' %}aria-current="page"{% endif %}>Caixa</a>
+        </div>
+      </div>
     {% endif %}
 
     {% if request.user|has_module:'catalog' or request.user|has_module:'reports' %}
-      <p class="nav-section">Consultas</p>
-      {% if request.user|has_module:'catalog' %}
-        <a href="{% url 'catalog:availability' %}" class="nav-link{% if request.resolver_match.url_name == 'availability' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'availability' %}aria-current="page"{% endif %}>Disponibilidade</a>
-      {% endif %}
-      {% if request.user|has_module:'reports' %}
-        <a href="{% url 'reports:index' %}" class="nav-link{% if request.resolver_match.app_name == 'reports' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'reports' %}aria-current="page"{% endif %}>Relatórios</a>
-      {% endif %}
+      <div class="nav-group">
+        <p class="nav-section" id="nav-section-consultas">Consultas</p>
+        <div class="nav-sublinks" role="group" aria-labelledby="nav-section-consultas">
+          {% if request.user|has_module:'catalog' %}
+            <a href="{% url 'catalog:availability' %}" class="nav-link{% if request.resolver_match.url_name == 'availability' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'availability' %}aria-current="page"{% endif %}>Disponibilidade</a>
+          {% endif %}
+          {% if request.user|has_module:'reports' %}
+            <a href="{% url 'reports:index' %}" class="nav-link{% if request.resolver_match.app_name == 'reports' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'reports' %}aria-current="page"{% endif %}>Relatórios</a>
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
 
     {% if request.user.can_manage_users or request.user|has_module:'maintenance' %}
-      <p class="nav-section">Administração</p>
-    {% endif %}
-    {% if request.user.can_manage_users %}
-      <a href="{% url 'user_list' %}" class="nav-link{% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %}aria-current="page"{% endif %}>Usuários</a>
-    {% endif %}
-    {% if request.user|has_module:'maintenance' %}
-      <a href="{% url 'maintenance:index' %}" class="nav-link{% if request.resolver_match.app_name == 'maintenance' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'maintenance' %}aria-current="page"{% endif %}>Manutenção</a>
+      <div class="nav-group">
+        <p class="nav-section" id="nav-section-administracao">Administração</p>
+        <div class="nav-sublinks" role="group" aria-labelledby="nav-section-administracao">
+          {% if request.user.can_manage_users %}
+            <a href="{% url 'user_list' %}" class="nav-link{% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_permissions' %}aria-current="page"{% endif %}>Usuários</a>
+          {% endif %}
+          {% if request.user|has_module:'maintenance' %}
+            <a href="{% url 'maintenance:index' %}" class="nav-link{% if request.resolver_match.app_name == 'maintenance' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'maintenance' %}aria-current="page"{% endif %}>Manutenção</a>
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
   </nav>
   {% if request.user.is_authenticated %}

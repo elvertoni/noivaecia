@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Recebimentos por cliente · Noivas &amp; Cia{% endblock %}
 
@@ -57,11 +58,11 @@
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div class="panel-spacious text-center">
           <p class="stat-label">Saldo em aberto</p>
-          <p class="stat-value text-brand-700">R$ {{ total_balance|floatformat:2 }}</p>
+          <p class="stat-value text-brand-700">R$ {{ total_balance|brl }}</p>
         </div>
         <div class="panel-spacious text-center">
           <p class="stat-label">Total c/ juros</p>
-          <p class="stat-value text-red-700">R$ {{ total_with_interest|floatformat:2 }}</p>
+          <p class="stat-value text-red-700">R$ {{ total_with_interest|brl }}</p>
         </div>
         <div class="panel-spacious text-center sm:col-span-1 col-span-2">
           <p class="stat-label">Títulos abertos</p>
@@ -91,7 +92,7 @@
                   <input type="checkbox" name="receivable_ids" id="customer-receivable-{{ row.obj.pk }}" value="{{ row.obj.pk }}" class="receivable-check rounded border-slate-300">
                   <span>
                     Vence {{ row.obj.due_date|date:'d/m/Y' }} · Locação #{{ row.obj.rental.number }} ·
-                    <strong>R$ {{ row.obj.balance|floatformat:2 }}</strong>
+                    <strong>R$ {{ row.obj.balance|brl }}</strong>
                     {% if row.days_overdue > 0 %}
                       <span class="badge badge-danger">{{ row.days_overdue }}d atraso</span>
                     {% endif %}
@@ -126,10 +127,10 @@
               <tr class="{% if row.days_overdue > 0 %}bg-red-50{% endif %}">
                 <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
                 <td><a href="{% url 'rentals:detail' row.obj.rental_id %}" class="text-link">#{{ row.obj.rental.number }}</a></td>
-                <td class="text-right">R$ {{ row.obj.amount|floatformat:2 }}</td>
-                <td class="text-right font-medium">R$ {{ row.obj.balance|floatformat:2 }}</td>
-                <td class="text-right">R$ {{ row.interest|floatformat:2 }}</td>
-                <td class="text-right font-semibold">R$ {{ row.total_with_interest|floatformat:2 }}</td>
+                <td class="text-right">R$ {{ row.obj.amount|brl }}</td>
+                <td class="text-right font-medium">R$ {{ row.obj.balance|brl }}</td>
+                <td class="text-right">R$ {{ row.interest|brl }}</td>
+                <td class="text-right font-semibold">R$ {{ row.total_with_interest|brl }}</td>
                 <td class="text-right">
                   {% if row.days_overdue > 0 %}
                     <span class="badge badge-danger">{{ row.days_overdue }}d</span>

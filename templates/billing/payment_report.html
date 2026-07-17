@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Recebimentos por Período · Noivas &amp; Cia{% endblock %}
 
@@ -49,7 +50,7 @@
   <!-- Total -->
   <div class="panel-spacious text-center max-w-xs">
     <p class="stat-label">Total recebido</p>
-    <p class="stat-value text-emerald-700">R$ {{ total_received|floatformat:2 }}</p>
+    <p class="stat-value text-emerald-700">R$ {{ total_received|brl }}</p>
   </div>
 
   <!-- Table -->
@@ -74,14 +75,14 @@
             <td>{% if p.receivable %}#{{ p.receivable.rental.number }}{% else %}—{% endif %}</td>
             <td>{{ p.get_method_display }}</td>
             <td class="max-w-xs truncate text-app-muted text-xs">{{ p.notes|default:'—' }}</td>
-            <td class="text-right font-medium text-emerald-700">R$ {{ p.amount|floatformat:2 }}</td>
+            <td class="text-right font-medium text-emerald-700">R$ {{ p.amount|brl }}</td>
           </tr>
           {% endfor %}
         </tbody>
         <tfoot>
           <tr class="font-semibold">
             <td colspan="5" class="text-right">Total:</td>
-            <td class="text-right text-emerald-700">R$ {{ total_received|floatformat:2 }}</td>
+            <td class="text-right text-emerald-700">R$ {{ total_received|brl }}</td>
           </tr>
         </tfoot>
       </table>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Retirados · Noivas &amp; Cia{% endblock %}
 
@@ -72,7 +73,7 @@
                 <span class="badge badge-info">No prazo</span>
               {% endif %}
             </td>
-            <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|brl }}</td>
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary btn-sm">Registrar devolução</a>
             </td>
@@ -93,7 +94,7 @@
             <p class="mt-1 truncate text-sm font-medium text-app-ink">{{ rental.customer.name }}</p>
           </div>
           <div class="shrink-0 text-right text-sm font-semibold text-app-ink">
-            R$ {{ rental.total_value|floatformat:2 }}
+            R$ {{ rental.total_value|brl }}
           </div>
         </div>
 

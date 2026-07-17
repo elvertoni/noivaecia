@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 {% block title %}Devolvidos · Relatórios · Noivas &amp; Cia{% endblock %}
 {% block content %}
 <div class="space-y-6">
@@ -64,7 +65,7 @@
                 {{ rental.return_record.return_date|timeuntil:rental.pickup.pickup_date }}
               {% else %}—{% endif %}
             </td>
-            <td class="text-right">R$ {{ rental.total_value|floatformat:2 }}</td>
+            <td class="text-right">R$ {{ rental.total_value|brl }}</td>
           </tr>
         {% empty %}
           <tr><td colspan="6" class="table-empty">Nenhuma devolução encontrada.</td></tr>
