@@ -108,19 +108,26 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^NBTES'), 'Bandeirantes'),
     (_r(r'^2BTES'), 'Bandeirantes'),
     (_r(r'^\d+BTES'), 'Bandeirantes'),
+    (_r(r'^\.BTES'), 'Bandeirantes'),
+    (_r(r'^0TES($|\s)'), 'Bandeirantes'),
     (_r(r'^BTESD'), 'Bandeirantes'),
     (_r(r'^BTESW'), 'Bandeirantes'),
+    (_r(r'^BTE\s+(CELU|RG\d)'), 'Bandeirantes'),
     (_r(r'^BTE$'), 'Bandeirantes'),
     (_r(r'^BES$'), 'Bandeirantes'),
     (_r(r'^BTEA'), 'Bandeirantes'),
+    (_r(r'^BTS\d'), 'Bandeirantes'),
+    (_r(r'^TES$'), 'Bandeirantes'),
 
     # ── Itambaracá ────────────────────────────────────────────────────────────
     (_r(r'^ITCA'), 'Itambaracá'),
     (_r(r'^ITMCA'), 'Itambaracá'),
     (_r(r'^ITAMBARACA'), 'Itambaracá'),
     (_r(r'^ITANBARACA'), 'Itambaracá'),
+    (_r(r'^ITANBARA$'), 'Itambaracá'),
     (_r(r'^ATANBARACA'), 'Itambaracá'),
     (_r(r'^ITABARACA'), 'Itambaracá'),
+    (_r(r'^ITBACA$'), 'Itambaracá'),
     (_r(r'^ITBCA'), 'Itambaracá'),
     (_r(r'^ITBANCA'), 'Itambaracá'),
     (_r(r'^ITBRACA'), 'Itambaracá'),
@@ -134,6 +141,7 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^ITB$'), 'Itambaracá'),
     (_r(r'^INTCA'), 'Itambaracá'),
     (_r(r'^UTCA$'), 'Itambaracá'),
+    (_r(r'^OTCA$'), 'Itambaracá'),
     (_r(r'^RTCA$'), 'Itambaracá'),
     (_r(r'^ITAC$'), 'Itambaracá'),
     (_r(r'^ITACS$'), 'Itambaracá'),
@@ -235,6 +243,8 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^N FATIMA$'), 'Nova Fátima'),
 
     # ── Santo Antônio da Platina ──────────────────────────────────────────────
+    (_r(r'^STO ANTONIO DA PLATINA'), 'Santo Antônio da Platina'),
+    (_r(r'^SANTO ANTONIO\s+DA PLATINA'), 'Santo Antônio da Platina'),
     (_r(r'^SANTO ANTONIO DA PLATINA'), 'Santo Antônio da Platina'),
     (_r(r'^SANTO  ANTONIO DA PLATINA'), 'Santo Antônio da Platina'),
     (_r(r'^SANTO ANTONIA DA PLATINA'), 'Santo Antônio da Platina'),
@@ -281,6 +291,26 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^IBITI$'), 'Ibaiti'),
     (_r(r'^BAITI$'), 'Ibaiti'),
 
+    # ── Rancho Alegre ────────────────────────────────────────────────────────
+    (_r(r'^RANCHO ALEFRE$'), 'Rancho Alegre'),
+
+    # ── São Jerônimo da Serra ────────────────────────────────────────────────
+    (_r(r'^SAO GERONIMO DA SERA$'), 'São Jerônimo da Serra'),
+    (_r(r'^SAO GERONIMO$'), 'São Jerônimo da Serra'),
+
+    # ── São Sebastião da Amoreira ────────────────────────────────────────────
+    (_r(r'^SAO SEBASTIAO DA MOREIRA$'), 'São Sebastião da Amoreira'),
+    (_r(r'^SAO SEBASTIAO AMOREIRA$'), 'São Sebastião da Amoreira'),
+
+    # ── Porecatu ─────────────────────────────────────────────────────────────
+    (_r(r'^PORECATU\s+PARANA$'), 'Porecatu'),
+
+    # ── Piraquara ────────────────────────────────────────────────────────────
+    (_r(r'^PIRAGUARA PR$'), 'Piraquara'),
+
+    # ── São José dos Pinhais ─────────────────────────────────────────────────
+    (_r(r'^SAO JOSE DOS PINHAIS$'), 'São José dos Pinhais'),
+
     # ── Remaining Paraná cities ───────────────────────────────────────────────
     (_r(r'^JAPIRA'), 'Japira'),
     (_r(r'^JAPIRA P R$'), 'Japira'),
@@ -305,6 +335,7 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^SERTANOPOLES'), 'Sertanópolis'),
     (_r(r'^RIBEIRAO CLARO'), 'Ribeirão Claro'),
     (_r(r'^RIBEIRAO PRETO'), 'Ribeirão Preto'),
+    (_r(r'^RIBERAO PRETO'), 'Ribeirão Preto'),
     (_r(r'^SANTA CRUZ DO RIO PARDO'), 'Santa Cruz do Rio Pardo'),
     (_r(r'^SANTA CRUZ RIO PARDO'), 'Santa Cruz do Rio Pardo'),
     (_r(r'^SANTA CECILIA DO PAVAO'), 'Santa Cecília do Pavão'),
@@ -342,6 +373,16 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^CONCELHEIRO MAIRINK'), 'Conselheiro Mairinck'),
 
     # ── São Paulo state cities ─────────────────────────────────────────────────
+    # ── Araçatuba ─────────────────────────────────────────────────────────────
+    (_r(r'^ARACATUBA'), 'Araçatuba'),
+    # ── Cerquilho ─────────────────────────────────────────────────────────────
+    (_r(r'^CERQUIILHO SP$'), 'Cerquilho'),
+    # ── Ilha Comprida ─────────────────────────────────────────────────────────
+    (_r(r'^ILHA CUMPRIDA$'), 'Ilha Comprida'),
+    # ── Jandira ───────────────────────────────────────────────────────────────
+    (_r(r'^JANDIRA\s+SPX$'), 'Jandira'),
+    # ── Matão ─────────────────────────────────────────────────────────────────
+    (_r(r'^MATAO/SP$'), 'Matão'),
     (_r(r'^SAO PAULO'), 'São Paulo'),
     (_r(r'^CAMPINAS'), 'Campinas'),
     (_r(r'^BAURU'), 'Bauru'),
@@ -386,9 +427,20 @@ RULES: list[tuple[re.Pattern, str]] = [
     (_r(r'^VOTUPORANGA'), 'Votuporanga'),
     (_r(r'^SERTAOZINHO'), 'Sertãozinho'),
     (_r(r'^LENCOIS PAULISTA'), 'Lençóis Paulista'),
+    # ── Pontal ────────────────────────────────────────────────────────────────
+    (_r(r'^SAO JOAQUIM PONTAL$'), 'Pontal'),
+    (_r(r'^S JOAQUIM PONTAL$'), 'Pontal'),
+    (_r(r'^SAO JO POMTAL$'), 'Pontal'),
     (_r(r'^PONTAL'), 'Pontal'),
+    # ── São Bernardo do Campo ────────────────────────────────────────────────
+    (_r(r'^SAO B DO CAMPO S P$'), 'São Bernardo do Campo'),
 
     # ── Mato Grosso / other states ───────────────────────────────────────────
+    # ── Luís Eduardo Magalhães ────────────────────────────────────────────────
+    (_r(r'^LUIZ DUARDO MAGALHAES BAIA$'), 'Luís Eduardo Magalhães'),
+    # ── Poços de Caldas ──────────────────────────────────────────────────────
+    (_r(r'^POCOS DE CAUDAS MINAS$'), 'Poços de Caldas'),
+    (_r(r'^POCOS CAUDA$'), 'Poços de Caldas'),
     (_r(r'^SINOP'), 'Sinop'),
     (_r(r'^NOVA MUTUM'), 'Nova Mutum'),
     (_r(r'^TANGARA DA SERRA'), 'Tangará da Serra'),
