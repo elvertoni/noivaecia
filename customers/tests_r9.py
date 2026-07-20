@@ -105,6 +105,16 @@ class CustomerListSearchTests(TestCase):
         ids = {row['id'] for row in r.json()['results']}
         self.assertIn(customer.pk, ids)
 
+    def test_quick_search_excludes_inactive_customers(self):
+        active = _make_customer(name='Gilda Ativa')
+        inactive = _make_customer(name='Gilda Inativa', is_active=False)
+
+        r = self.client.get(reverse('customers:search'), {'q': 'Gilda'})
+
+        ids = {row['id'] for row in r.json()['results']}
+        self.assertIn(active.pk, ids)
+        self.assertNotIn(inactive.pk, ids)
+
     def test_search_by_phone_home(self):
         r = self.client.get(self.url, {'q': '2222-3333'})
         pks = {c.pk for c in r.context['customers']}

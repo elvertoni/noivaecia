@@ -298,7 +298,8 @@ class CustomerSearchView(View):
             | Q(phone_mobile__icontains=q)
             | Q(phone_work__icontains=q)
         )
-        qs = Customer.objects.all()
+        # Merged/deactivated duplicates must not resurface in the rental picker.
+        qs = Customer.objects.filter(is_active=True)
         if digits:
             q_filter |= (
                 Q(cpf_digits__icontains=digits)
