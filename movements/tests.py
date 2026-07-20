@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.db.models.signals import post_save
 from django.test import TestCase
 
 from customers.models import Customer
@@ -48,3 +49,31 @@ class MovementSignalTests(TestCase):
         Return.objects.create(rental=self.rental, return_date=date(2026, 6, 16))
         self.rental.refresh_from_db()
         self.assertEqual(self.rental.status, Rental.Status.RETURNED)
+
+    def test_raw_pickup_does_not_change_rental_status(self):
+        initial_status = self.rental.status
+        post_save.send(
+            sender=Pickup,
+            instance=Pickup(rental=self.rental, pickup_date=date(2026, 6, 10)),
+            created=True,
+            raw=True,
+            using='default',
+            update_fields=None,
+        )
+
+        self.rental.refresh_from_db()
+        self.assertEqual(self.rental.status, initial_status)
+
+    def test_raw_return_does_not_change_rental_status(self):
+        initial_status = self.rental.status
+        post_save.send(
+            sender=Return,
+            instance=Return(rental=self.rental, return_date=date(2026, 6, 16)),
+            created=True,
+            raw=True,
+            using='default',
+            update_fields=None,
+        )
+
+        self.rental.refresh_from_db()
+        self.assertEqual(self.rental.status, initial_status)
