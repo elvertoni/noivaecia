@@ -40,6 +40,8 @@ _ENTITY_MAP = {
 
 _SUSPICIOUS_MIN_YEAR = 1900
 _SUSPICIOUS_MAX_YEAR = 2035
+_SUSPICIOUS_RESULT_LIMIT = 500
+_DATE_SCAN_BATCH_SIZE = 1000
 
 
 def _brl(value):
@@ -134,64 +136,90 @@ def _placeholder_products():
 
 
 def _check_table_exists(cursor, table_name):
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=%s",
-        [table_name],
+    return table_name in connection.introspection.table_names(cursor)
+
+
+def _date_year(value):
+    if value in (None, ''):
+        return None
+
+    year = getattr(value, 'year', None)
+    if isinstance(year, int):
+        return year
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        return datetime.fromisoformat(text.replace('Z', '+00:00')).year
+    except ValueError:
+        pass
+
+    for date_format in ('%m/%d/%Y %H:%M:%S', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(text, date_format).year
+        except ValueError:
+            continue
+    return None
+
+
+def _is_suspicious_date(value):
+    year = _date_year(value)
+    return year is not None and not (
+        _SUSPICIOUS_MIN_YEAR <= year <= _SUSPICIOUS_MAX_YEAR
     )
-    return cursor.fetchone() is not None
+
+
+def _find_suspicious_dates(cursor, table_name, selected_columns, date_columns):
+    if not _check_table_exists(cursor, table_name):
+        return None, 'tabelas raw não encontradas'
+
+    quote_name = connection.ops.quote_name
+    selected_sql = ', '.join(quote_name(column) for column in selected_columns)
+    present_date_sql = ' OR '.join(
+        f'{quote_name(column)} IS NOT NULL' for column in date_columns
+    )
+    try:
+        cursor.execute(
+            f'SELECT {selected_sql} FROM {quote_name(table_name)} '
+            f'WHERE {present_date_sql} ORDER BY {quote_name("id")}'
+        )
+        columns = [description[0] for description in cursor.description]
+        rows = []
+        while len(rows) < _SUSPICIOUS_RESULT_LIMIT:
+            batch = cursor.fetchmany(_DATE_SCAN_BATCH_SIZE)
+            if not batch:
+                break
+            for values in batch:
+                row = dict(zip(columns, values))
+                if any(_is_suspicious_date(row[column]) for column in date_columns):
+                    rows.append(row)
+                    if len(rows) == _SUSPICIOUS_RESULT_LIMIT:
+                        break
+        return rows, None
+    except Exception as exc:
+        return None, str(exc)
 
 
 def _suspicious_locado(cursor):
     """Return (rows, error_msg). rows is a list of dicts or None on error."""
-    if not _check_table_exists(cursor, 'legacy_locado'):
-        return None, 'tabelas raw não encontradas'
-    try:
-        cursor.execute(
-            """
-            SELECT id, retirada, dev_prevista
-            FROM legacy_locado
-            WHERE
-                (retirada IS NOT NULL AND (
-                    strftime('%Y', retirada) < '1900' OR
-                    strftime('%Y', retirada) > '2035'
-                ))
-                OR
-                (dev_prevista IS NOT NULL AND (
-                    strftime('%Y', dev_prevista) < '1900' OR
-                    strftime('%Y', dev_prevista) > '2035'
-                ))
-            ORDER BY id
-            LIMIT 500
-            """
-        )
-        cols = [d[0] for d in cursor.description]
-        return [dict(zip(cols, row)) for row in cursor.fetchall()], None
-    except Exception as exc:
-        return None, str(exc)
+    return _find_suspicious_dates(
+        cursor,
+        'legacy_locado',
+        ('id', 'retirada', 'dev_prevista'),
+        ('retirada', 'dev_prevista'),
+    )
 
 
 def _suspicious_pagar(cursor):
     """Return (rows, error_msg)."""
-    if not _check_table_exists(cursor, 'legacy_pagar'):
-        return None, 'tabelas raw não encontradas'
-    try:
-        cursor.execute(
-            """
-            SELECT id, vencimento
-            FROM legacy_pagar
-            WHERE
-                vencimento IS NOT NULL AND (
-                    strftime('%Y', vencimento) < '1900' OR
-                    strftime('%Y', vencimento) > '2035'
-                )
-            ORDER BY id
-            LIMIT 500
-            """
-        )
-        cols = [d[0] for d in cursor.description]
-        return [dict(zip(cols, row)) for row in cursor.fetchall()], None
-    except Exception as exc:
-        return None, str(exc)
+    return _find_suspicious_dates(
+        cursor,
+        'legacy_pagar',
+        ('id', 'vencimento'),
+        ('vencimento',),
+    )
 
 
 def _section_counts(count_rows):
