@@ -51,6 +51,7 @@
             <a href="{% url 'movements:pickup_list' %}" class="nav-link{% if request.resolver_match.url_name == 'pickup_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'pickup_list' %}aria-current="page"{% endif %}>A Retirar</a>
             <a href="{% url 'movements:return_list' %}" class="nav-link{% if request.resolver_match.url_name == 'return_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'return_list' %}aria-current="page"{% endif %}>Retirados</a>
             <a href="{% url 'movements:overdue_list' %}" class="nav-link{% if request.resolver_match.url_name == 'overdue_list' %} nav-link-active{% endif %}" {% if request.resolver_match.url_name == 'overdue_list' %}aria-current="page"{% endif %}>Atrasados</a>
+            <a href="{% url 'notifications:whatsapp_panel' %}" class="nav-link{% if request.resolver_match.app_name == 'notifications' %} nav-link-active{% endif %}" {% if request.resolver_match.app_name == 'notifications' %}aria-current="page"{% endif %}>Avisos WhatsApp</a>
           {% endif %}
         </div>
       </div>

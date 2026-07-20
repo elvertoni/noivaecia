@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% load core_tags %}
+
+{% block title %}Avisos WhatsApp · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Avisos WhatsApp</h1>
+      <p class="page-description">Confira quem vai receber o aviso antes de disparar.</p>
+    </div>
+  </div>
+
+  {# ── Retiradas de amanhã ─────────────────────────────────────────── #}
+  <section class="panel-spacious space-y-4">
+    <div>
+      <h2 class="text-lg font-semibold text-app-ink">Retiradas de amanhã ({{ tomorrow|date:'d/m/Y' }})</h2>
+      <p class="text-sm text-slate-600">Locações pendentes com retirada marcada para amanhã, ainda sem aviso enviado.</p>
+    </div>
+
+    {% if pickup_items %}
+      <form method="post" action="{% url 'notifications:dispatch' %}">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="pickup_reminder">
+
+        <div class="table-shell hidden md:block">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="pickup-checkbox" aria-label="Selecionar todos"></th>
+                <th>Cliente</th>
+                <th>Locação</th>
+                <th>Retirada</th>
+                <th>Telefone</th>
+                <th>Mensagem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in pickup_items %}
+                <tr>
+                  <td><input type="checkbox" name="rental_ids" value="{{ item.rental.pk }}" class="pickup-checkbox" aria-label="Selecionar {{ item.customer.name }}"></td>
+                  <td>{{ item.customer.name }}</td>
+                  <td><a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link">#{{ item.rental.number }}</a></td>
+                  <td>{{ item.rental.pickup_date|date:'d/m/Y' }}</td>
+                  <td class="whitespace-nowrap">{{ item.phone }}</td>
+                  <td class="max-w-xs truncate text-sm text-slate-600" title="{{ item.message }}">{{ item.message|truncatechars:60 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="space-y-3 md:hidden">
+          {% for item in pickup_items %}
+            <article class="rounded-xl border border-app-border bg-app-surface p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <label class="flex items-center gap-2">
+                    <input type="checkbox" name="rental_ids" value="{{ item.rental.pk }}" class="pickup-checkbox">
+                    <span class="truncate text-sm font-medium text-app-ink">{{ item.customer.name }}</span>
+                  </label>
+                  <a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link text-sm">#{{ item.rental.number }}</a>
+                </div>
+                <div class="shrink-0 text-right text-sm text-app-ink">{{ item.rental.pickup_date|date:'d/m/Y' }}</div>
+              </div>
+              <p class="mt-2 text-sm text-slate-600">{{ item.phone }}</p>
+              <p class="mt-2 truncate text-sm text-slate-600" title="{{ item.message }}">{{ item.message|truncatechars:60 }}</p>
+            </article>
+          {% endfor %}
+        </div>
+
+        <div class="mt-4 flex gap-2">
+          <button type="submit" class="btn btn-primary">Enviar selecionados</button>
+          <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma retirada para avisar amanhã.</div>
+    {% endif %}
+  </section>
+
+  {# ── Devoluções de hoje ──────────────────────────────────────────── #}
+  <section class="panel-spacious space-y-4">
+    <div>
+      <h2 class="text-lg font-semibold text-app-ink">Devoluções de hoje ({{ today|date:'d/m/Y' }}) — peças ainda não devolvidas</h2>
+      <p class="text-sm text-slate-600">Locações retiradas com devolução marcada para hoje, ainda sem aviso enviado.</p>
+      <p class="mt-1 text-xs text-slate-500">Dica: enviar a partir das 15:00.</p>
+    </div>
+
+    {% if return_items %}
+      <form method="post" action="{% url 'notifications:dispatch' %}">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="return_reminder">
+
+        <div class="table-shell hidden md:block">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="return-checkbox" aria-label="Selecionar todos"></th>
+                <th>Cliente</th>
+                <th>Locação</th>
+                <th>Devolução</th>
+                <th>Telefone</th>
+                <th>Mensagem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in return_items %}
+                <tr>
+                  <td><input type="checkbox" name="rental_ids" value="{{ item.rental.pk }}" class="return-checkbox" aria-label="Selecionar {{ item.customer.name }}"></td>
+                  <td>{{ item.customer.name }}</td>
+                  <td><a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link">#{{ item.rental.number }}</a></td>
+                  <td>{{ item.rental.return_date|date:'d/m/Y' }}</td>
+                  <td class="whitespace-nowrap">{{ item.phone }}</td>
+                  <td class="max-w-xs truncate text-sm text-slate-600" title="{{ item.message }}">{{ item.message|truncatechars:60 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="space-y-3 md:hidden">
+          {% for item in return_items %}
+            <article class="rounded-xl border border-app-border bg-app-surface p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <label class="flex items-center gap-2">
+                    <input type="checkbox" name="rental_ids" value="{{ item.rental.pk }}" class="return-checkbox">
+                    <span class="truncate text-sm font-medium text-app-ink">{{ item.customer.name }}</span>
+                  </label>
+                  <a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link text-sm">#{{ item.rental.number }}</a>
+                </div>
+                <div class="shrink-0 text-right text-sm text-app-ink">{{ item.rental.return_date|date:'d/m/Y' }}</div>
+              </div>
+              <p class="mt-2 text-sm text-slate-600">{{ item.phone }}</p>
+              <p class="mt-2 truncate text-sm text-slate-600" title="{{ item.message }}">{{ item.message|truncatechars:60 }}</p>
+            </article>
+          {% endfor %}
+        </div>
+
+        <div class="mt-4 flex gap-2">
+          <button type="submit" class="btn btn-primary">Enviar selecionados</button>
+          <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma devolução para avisar hoje.</div>
+    {% endif %}
+  </section>
+
+  {# ── Enviados recentemente ───────────────────────────────────────── #}
+  <section class="panel-spacious space-y-4">
+    <h2 class="text-lg font-semibold text-app-ink">Enviados recentemente</h2>
+
+    <div class="table-shell hidden md:block">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Locação</th>
+            <th>Tipo</th>
+            <th>Situação</th>
+            <th>Quando</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for msg in recent_messages %}
+            <tr>
+              <td>{{ msg.customer.name }}</td>
+              <td><a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link">#{{ msg.rental.number }}</a></td>
+              <td>{{ msg.get_kind_display }}</td>
+              <td>
+                {% if msg.status == 'sent' %}
+                  <span class="badge badge-success">Enviado</span>
+                {% else %}
+                  <span class="badge badge-danger">Falhou</span>
+                {% endif %}
+              </td>
+              <td>{{ msg.created_at|date:'d/m/Y H:i' }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="table-empty">Nenhum aviso enviado ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="space-y-3 md:hidden">
+      {% for msg in recent_messages %}
+        <article class="rounded-xl border border-app-border bg-app-surface p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-app-ink">{{ msg.customer.name }}</p>
+              <a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link text-sm">#{{ msg.rental.number }}</a>
+            </div>
+            {% if msg.status == 'sent' %}
+              <span class="badge badge-success">Enviado</span>
+            {% else %}
+              <span class="badge badge-danger">Falhou</span>
+            {% endif %}
+          </div>
+          <p class="mt-2 text-sm text-slate-600">{{ msg.get_kind_display }} · {{ msg.created_at|date:'d/m/Y H:i' }}</p>
+        </article>
+      {% empty %}
+        <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhum aviso enviado ainda.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    document.querySelectorAll('.select-all-checkbox').forEach(function (master) {
+      master.addEventListener('change', function () {
+        var target = master.getAttribute('data-target');
+        document.querySelectorAll('.' + target).forEach(function (checkbox) {
+          checkbox.checked = master.checked;
+        });
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -19,9 +19,15 @@ exists, so this module never recomputes a business rule on its own:
   filters ``Rental`` directly by ``status``/``return_date`` using the same
   semantics.
 """
+import re
 from datetime import date as date_cls, timedelta
 from decimal import Decimal
 
+from django.db import transaction
+from django.utils import timezone
+
+from notifications import evolution
+from notifications.models import CustomerMessage
 from reports.services import report_a_retirar, report_contas_vencimento
 from rentals.models import Rental
 
@@ -173,3 +179,186 @@ def build_daily_report(on_date=None):
         )
 
     return '\n'.join(parts).rstrip()
+
+
+# ── Customer-facing WhatsApp messages (pickup/return reminders) ────────────
+#
+# These functions are the backend primitives for the customer-notification
+# feature (see whats.md §9.1): a message on the eve of the pickup date and a
+# reminder on the return date itself. UI/views/scheduling are a later step —
+# this module only builds phone numbers/message text and dispatches sends,
+# recording every attempt in ``CustomerMessage``.
+
+
+def format_whatsapp_number(digits):
+    """Turn a customer's ``phone_mobile_digits`` into a Brazilian E.164
+    number, or ``None`` when it cannot be made into a valid one.
+
+    Rules: strip non-digits; a number already starting with ``55`` and 12-13
+    digits long is used as-is; a bare 10 or 11 digit number (DDD+phone) gets
+    ``55`` prefixed; anything else is invalid.
+    """
+    digits = re.sub(r'\D', '', digits or '')
+    if digits.startswith('55') and len(digits) in (12, 13):
+        return digits
+    if len(digits) in (10, 11):
+        return f'55{digits}'
+    return None
+
+
+def _first_name(customer):
+    """First name, nicely capitalized (e.g. ``'MARIA SILVA'`` -> ``'Maria'``)."""
+    name = (customer.name or '').strip()
+    if not name:
+        return ''
+    return name.split()[0].capitalize()
+
+
+def render_pickup_message(rental):
+    """Render the eve-of-pickup WhatsApp message for ``rental``."""
+    nome = _first_name(rental.customer)
+    data = rental.pickup_date.strftime('%d/%m')
+    item_count = rental.items.count()
+    sua_peca = 'sua peça' if item_count <= 1 else 'suas peças'
+    return (
+        f'Oi, {nome}! 💛 Aqui é a Ana, da Noivas & Cia. Passando pra avisar '
+        f'com carinho que a partir de amanhã, {data}, você já pode retirar '
+        f'{sua_peca} aqui na loja — está tudo pronto e esperando por você! '
+        'Estamos felizes demais em fazer parte desse seu momento. Qualquer '
+        'dúvida, é só me chamar por aqui. Um abraço carinhoso 🌸'
+    )
+
+
+def render_return_message(rental):
+    """Render the return-day WhatsApp message for ``rental``."""
+    nome = _first_name(rental.customer)
+    item_count = rental.items.count()
+    da_peca = 'da sua peça' if item_count <= 1 else 'das suas peças'
+    return (
+        f'Oi, {nome}! 💛 Aqui é a Ana, da Noivas & Cia. Espero de coração que '
+        'seu evento tenha sido lindo! 🥂 Passei só pra lembrar, com todo '
+        f'carinho, que a devolução {da_peca} está marcada para hoje. Quando '
+        'puder trazer, a gente agradece muito — assim já fica tudo certinho '
+        'pra encantar outra pessoa. Estou por aqui pro que precisar. Um '
+        'beijo! 🌷'
+    )
+
+
+def _already_sent_rental_ids(kind):
+    return CustomerMessage.objects.filter(
+        kind=kind, status=CustomerMessage.Status.SENT,
+    ).values_list('rental_id', flat=True)
+
+
+def pickup_reminder_queue(today=None):
+    """Rentals eligible for the eve-of-pickup reminder: ``pending`` rentals
+    whose ``pickup_date`` is tomorrow, with a valid phone and no prior
+    ``SENT`` pickup reminder for that rental."""
+    today = today or timezone.localdate()
+    target_date = today + timedelta(days=1)
+    rentals = (
+        Rental.objects.filter(status=Rental.Status.PENDING, pickup_date=target_date)
+        .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.PICKUP_REMINDER))
+        .select_related('customer')
+        .order_by('customer__name')
+    )
+    queue = []
+    for rental in rentals:
+        phone = format_whatsapp_number(rental.customer.phone_mobile_digits)
+        if not phone:
+            continue
+        queue.append({
+            'rental': rental,
+            'customer': rental.customer,
+            'phone': phone,
+            'message': render_pickup_message(rental),
+        })
+    return queue
+
+
+def return_reminder_queue(today=None):
+    """Rentals eligible for the return-day reminder: ``picked_up`` rentals
+    whose ``return_date`` is today, with a valid phone and no prior ``SENT``
+    return reminder for that rental."""
+    today = today or timezone.localdate()
+    rentals = (
+        Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date=today)
+        .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.RETURN_REMINDER))
+        .select_related('customer')
+        .order_by('customer__name')
+    )
+    queue = []
+    for rental in rentals:
+        phone = format_whatsapp_number(rental.customer.phone_mobile_digits)
+        if not phone:
+            continue
+        queue.append({
+            'rental': rental,
+            'customer': rental.customer,
+            'phone': phone,
+            'message': render_return_message(rental),
+        })
+    return queue
+
+
+_MESSAGE_RENDERERS = {
+    CustomerMessage.Kind.PICKUP_REMINDER: render_pickup_message,
+    CustomerMessage.Kind.RETURN_REMINDER: render_return_message,
+}
+
+
+def dispatch_customer_message(rental, kind, user=None):
+    """Send (or record the failure to send) a customer WhatsApp message for
+    ``rental``, and return the resulting ``CustomerMessage``.
+
+    Idempotent: a rental that already has a ``SENT`` ``CustomerMessage`` for
+    ``kind`` is returned as-is, without calling the Evolution API again.
+    An invalid phone number short-circuits to a ``FAILED`` record without any
+    network call.
+    """
+    with transaction.atomic():
+        existing = CustomerMessage.objects.filter(
+            rental=rental, kind=kind, status=CustomerMessage.Status.SENT,
+        ).first()
+        if existing:
+            return existing
+
+        customer = rental.customer
+        render = _MESSAGE_RENDERERS[kind]
+        phone = format_whatsapp_number(customer.phone_mobile_digits)
+
+        if not phone:
+            return CustomerMessage.objects.create(
+                rental=rental,
+                customer=customer,
+                kind=kind,
+                phone=customer.phone_mobile_digits or '',
+                status=CustomerMessage.Status.FAILED,
+                error='telefone inválido',
+                sent_by=user,
+            )
+
+        message = render(rental)
+        try:
+            message_id = evolution.send_text(phone, message)
+        except evolution.EvolutionError as exc:
+            return CustomerMessage.objects.create(
+                rental=rental,
+                customer=customer,
+                kind=kind,
+                phone=phone,
+                status=CustomerMessage.Status.FAILED,
+                error=str(exc),
+                sent_by=user,
+            )
+
+        return CustomerMessage.objects.create(
+            rental=rental,
+            customer=customer,
+            kind=kind,
+            phone=phone,
+            status=CustomerMessage.Status.SENT,
+            message_id=str(message_id),
+            sent_at=timezone.now(),
+            sent_by=user,
+        )

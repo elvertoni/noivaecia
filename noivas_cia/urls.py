@@ -29,6 +29,7 @@ urlpatterns = [
     path('empresa/', include('company.urls')),
     path('locacoes/', include('rentals.urls')),
     path('movimentacao/', include('movements.urls')),
+    path('avisos-whatsapp/', include('notifications.urls')),
     path('financeiro/', include('billing.urls')),
     path('relatorios/', include('reports.urls')),
     path('manutencao/', include('maintenance.urls')),
