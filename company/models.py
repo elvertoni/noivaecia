@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.db import models, transaction
 
 from core.models import TimeStampedModel
@@ -37,6 +39,17 @@ class Company(TimeStampedModel):
         help_text='Percentual do valor do item cobrado em caso de perda ou não devolução.',
     )
     footer_message = models.CharField('mensagem de rodapé', max_length=255, blank=True)
+
+    # WhatsApp daily report (RF-notifications)
+    whatsapp_reports_enabled = models.BooleanField(
+        'enviar relatório diário por WhatsApp', default=False,
+    )
+    whatsapp_report_number = models.CharField(
+        'número do WhatsApp (com DDI, ex: 5543999998888)', max_length=20, blank=True,
+    )
+    whatsapp_report_time = models.TimeField(
+        'horário do envio diário', default=time(7, 30),
+    )
 
     class Meta:
         verbose_name = 'empresa'

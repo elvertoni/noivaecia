@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'billing',
     'reports',
     'maintenance',
+    'notifications',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -152,6 +153,12 @@ else:
     )
 
 BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', BASE_DIR / 'var' / 'backups'))
+
+# Evolution API (WhatsApp) — daily report notifications. Feature stays inert
+# until all three are set and Company.whatsapp_reports_enabled is on.
+EVOLUTION_API_URL = os.environ.get('EVOLUTION_API_URL', '').strip().rstrip('/')
+EVOLUTION_API_KEY = os.environ.get('EVOLUTION_API_KEY', '').strip()
+EVOLUTION_INSTANCE = os.environ.get('EVOLUTION_INSTANCE', '').strip()
 
 AUTH_PASSWORD_VALIDATORS = [
     {
