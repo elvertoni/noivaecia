@@ -91,7 +91,9 @@
               {% endif %}
             </td>
             <td class="text-right">
-              {% if not row.obj.is_paid %}
+              {% if row.obj.is_written_off %}
+                <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
+              {% elif not row.obj.is_paid %}
                 <a href="{% url 'billing:pay_receivable' row.obj.pk %}" class="text-link">Receber</a>
               {% else %}
                 <span class="badge badge-success">Quitado</span>
@@ -118,7 +120,9 @@
             </p>
           </div>
           <div class="shrink-0 text-right">
-            {% if row.days_overdue > 0 %}
+            {% if row.obj.is_written_off %}
+              <span class="badge badge-warning">Baixado</span>
+            {% elif row.days_overdue > 0 %}
               <span class="badge badge-danger">{{ row.days_overdue }}d</span>
             {% elif row.obj.is_paid %}
               <span class="badge badge-success">Quitado</span>

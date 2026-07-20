@@ -37,6 +37,11 @@ class Receivable(TimeStampedModel):
     paid_amount = models.DecimalField('valor pago', max_digits=10, decimal_places=2, default=0)
     balance = models.DecimalField('saldo', max_digits=10, decimal_places=2, default=0)
     last_payment_date = models.DateField('último pagamento', null=True, blank=True)
+    # R6.xx — write-off of uncollectible legacy receivables: keeps amount and
+    # paid_amount intact for history, but forces balance to zero so every
+    # "open" query (balance > 0) excludes the row without further filtering.
+    written_off_at = models.DateTimeField('baixado em', null=True, blank=True)
+    written_off_reason = models.TextField('motivo da baixa', blank=True)
     # R3.01 — legacy migration metadata
     legacy_id = models.PositiveIntegerField('ID legado', null=True, blank=True, db_index=True)
     legacy_source = models.CharField('origem legada', max_length=50, blank=True)
@@ -63,12 +68,19 @@ class Receivable(TimeStampedModel):
         return f'Recebimento · Locação #{self.rental.number} · vence {self.due_date}'
 
     def save(self, *args, **kwargs):
-        self.balance = (self.amount or Decimal('0')) - (self.paid_amount or Decimal('0'))
+        if self.written_off_at:
+            self.balance = Decimal('0')
+        else:
+            self.balance = (self.amount or Decimal('0')) - (self.paid_amount or Decimal('0'))
         super().save(*args, **kwargs)
 
     @property
     def is_paid(self):
         return self.balance <= 0
+
+    @property
+    def is_written_off(self):
+        return self.written_off_at is not None
 
     def register_payment(self, value, payment_date):
         """Apply a payment, updating paid amount, balance and last payment date (RF-21)."""
@@ -88,7 +100,10 @@ class Receivable(TimeStampedModel):
         )
         total = totals['total'] or Decimal('0')
         self.paid_amount = total
-        self.balance = (self.amount or Decimal('0')) - self.paid_amount
+        if self.written_off_at:
+            self.balance = Decimal('0')
+        else:
+            self.balance = (self.amount or Decimal('0')) - self.paid_amount
         self.last_payment_date = totals['last_date']
         if save:
             self.save(update_fields=['paid_amount', 'balance', 'last_payment_date', 'updated_at'])

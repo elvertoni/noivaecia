@@ -46,7 +46,9 @@
             <td class="text-right font-medium text-app-ink">R$ {{ row.total_with_interest }}</td>
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
-              {% if not row.obj.is_paid %}
+              {% if row.obj.is_written_off %}
+                <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
+              {% elif not row.obj.is_paid %}
                 <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Receber</a>
               {% else %}
                 <span class="badge badge-success">Quitado</span>

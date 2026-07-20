@@ -263,8 +263,13 @@ def reconcile_financial():
     )
 
     # Divergence 1: paid receivables (balance <= 0) with no Payment records
-    # These are legacy-imported receivables forced closed by pago=0 logic
-    paid_no_payments = Receivable.objects.filter(balance__lte=0).exclude(payments__isnull=False)
+    # These are legacy-imported receivables forced closed by pago=0 logic.
+    # Written-off receivables also have balance forced to zero without any
+    # Payment — exclude them so the divergence keeps its original meaning.
+    paid_no_payments = (
+        Receivable.objects.filter(balance__lte=0, written_off_at__isnull=True)
+        .exclude(payments__isnull=False)
+    )
     paid_no_payments_count = paid_no_payments.count()
     paid_no_payments_sum = (
         paid_no_payments.aggregate(v=Sum('amount'))['v'] or Decimal('0')
