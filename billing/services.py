@@ -11,8 +11,10 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 from company.models import Company
+from core.models import AuditLog
 
 from .models import CashAccount, FinancialMovement, Payment, Receivable
 
@@ -186,6 +188,53 @@ def reverse_payment(payment, reason, user=None):
                 created_by=user,
             )
     return reversal
+
+
+def reconcile_overpayment(receivable, reason, user=None):
+    """Write off a negative receivable balance and record the adjustment.
+
+    The amount and paid amount remain unchanged as historical evidence. The
+    receivable write-off fields make the derived balance zero, matching the
+    existing write-off invariant. A locked recheck makes repeated calls safe.
+    """
+    reason = (reason or '').strip()
+    if not reason:
+        raise ValueError('A reconciliation reason is required.')
+
+    with transaction.atomic():
+        locked_receivable = (
+            Receivable.objects.select_for_update()
+            .select_related('rental')
+            .get(pk=receivable.pk)
+        )
+        if locked_receivable.balance >= 0:
+            return False
+
+        previous_balance = locked_receivable.balance
+        reconciled_at = timezone.now()
+        locked_receivable.written_off_at = reconciled_at
+        locked_receivable.written_off_reason = reason
+        locked_receivable.save(update_fields=[
+            'written_off_at',
+            'written_off_reason',
+            'balance',
+            'updated_at',
+        ])
+        AuditLog.record(
+            user=user,
+            action='reconcile_overpayment',
+            obj=locked_receivable,
+            reason=reason,
+            metadata={
+                'amount': str(locked_receivable.amount),
+                'paid_amount': str(locked_receivable.paid_amount),
+                'previous_balance': str(previous_balance),
+                'overpayment_amount': str(abs(previous_balance)),
+                'reconciled_at': reconciled_at.isoformat(),
+            },
+        )
+
+    return True
 
 
 def compute_moratoria(receivable, on_date=None, company=None):
