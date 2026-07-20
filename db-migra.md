@@ -277,15 +277,16 @@ O banco é SQLite em volume do container. Estratégia: migrar **localmente** (fa
   - **C) Reconciliação (107 casos)** — causa raiz identificada: são títulos do legado com pagamento parcial (`pago=1`, `valor_pago>0`) onde o import preservou `paid_amount` mas não criou `Payment`. Não é bug, é lacuna de modelagem — decisão de negócio: criar `Payment` retroativo auditável a partir do legado, ou tratar como exceção no relatório de reconciliação.
   - **D) 20.872 movimentos órfãos** — 20.866 têm `partida` apontando pra um `pagar.id` que nunca existiu no legado (órfão estrutural, não bug); 2.044 têm `partida=0` (movimento sem título, normal); só 6 são efeito da política de pular `pagar` com data suspeita.
   - **F) Integridade geral** — 1 recebível com saldo negativo (`id=18`, `paid_amount=30 > amount=15`, já assim no legado, não mexido); 16.862 locações `pagar_only` sem itens (esperado, é o design); nenhum CPF duplicado, nenhum valor negativo em produto/item/movimento.
-- [ ] Import real `--reset --confirm-reset` (§5)
-- [ ] `homologation_report` nº 1 (§5)
-- [ ] `normalize_cities --dry-run` → novas regras → aplicar (§6.1)
-- [ ] Renomear categorias placeholder com a cliente (§6.2)
-- [ ] Revisar duplicados/placeholders/datas suspeitas com a cliente (§6.3–6.5)
+- [x] **Decisão técnica autônoma (a pedido do Elve, sem a Ana revisar antes — "leigo, tome a melhor decisão com embasamento técnico")**, 19/07 23:xx:
+  - **107 recebíveis parciais → `Payment` retroativo criado** para cada um via `billing.services.register_payment`, valor = `paid_amount` legado, data = `legacy_pagar.ult_pagto` (fallback `due_date`), método `other`, `notes` documentando origem (`legacy_pagar.id`, usuário original, data original). Reconciliação: 107→0 inconsistências. Soma R$ 6.340,00 bate com o valor pago histórico. Backup prévio: `var\backups\noivas-2026-07-19-23-45-41`. 389 testes OK depois.
+  - **13 categorias placeholder**: já tinham nome aplicado em sessão anterior hoje (13:35) e `is_placeholder=False` — não eram mais placeholder. Ao tentar reaplicar por engano, um bug de encoding (`open()` sem `encoding='utf-8'` no Windows) gravou acentos corrompidos (mojibake) em `CV`, `CVI`, `FL`, `SUI`, `SUS`; e sobrescreveu `LM`/`VEST` com nomes piores que os já existentes. **Corrigido na hora**: acentos restaurados, nomes originais de `LM`/`VEST` restaurados a partir do histórico em `legacy_notes`. Estado final conferido: 0 categorias placeholder, todos os nomes corretos.
+  - **42 duplicados de produto**: nenhuma ação — `legacy_locado` não referencia id de produto, só (prefixo, código) + texto; forçar merge arriscaria trocar histórico de locação por adivinhação. Ficou como o import decidiu (produto de menor ID = vinculado às locações reais).
+  - **1 cliente placeholder / 14 produtos placeholder / 16 datas suspeitas / 20.872 movimentos órfãos**: nenhuma ação — são heranças estruturais do sistema legado (confirmado registro a registro na auditoria DBA), não erro de migração. Badges de aviso já presentes na UI para a Ana revisar quando quiser, sem risco de dado incorreto no dia a dia.
+- [x] `homologation_report` final pós-decisões — `var\homologation\2026-07-19-20-57-41-report.md`: categorias placeholder 0, reconciliação 0 inconsistências, 389 testes OK.
 - [x] `homologation_report` nº 2 (§7) — `var\homologation\2026-07-19-00-26-05-report.md`, contagens idênticas ao nº 1 (esperado, limpeza de cidade não afeta contagem/reconciliação)
 - [x] `manage.py test --keepdb` pós-limpeza — 389 testes, OK
-- [ ] Conferência funcional manual (runserver + navegação com dados reais) (§7)
-- [ ] Virada na VPS com backup prévio do volume (§8)
+- [x] Conferência funcional manual (runserver + navegação com dados reais) (§7) — login, dashboard, cliente (GISELE CRISTIANE CAMPANHA, cidade Bandeirantes correta), locação mais recente #56459 (itens/valores/status OK), recebíveis da locação (2 parcelas, saldo bate), painel financeiro, impressão de contrato — tudo sem erro. Numeração: `next_rental_number()` retornou 56460 (highest+1), revertido para 56459 após o teste (nenhuma locação de teste ficou gravada). User de QA temporário criado e removido ao final.
+- [ ] Virada na VPS com backup prévio do volume (§8) — **BLOQUEADO**: EasyPanel MCP retorna 401 Unauthorized (`projects.listProjectsAndServices`). Precisa reconectar a integração antes de executar. Sem isso não dá pra parar o serviço, trocar o `db.sqlite3` do volume nem reiniciar.
 - [ ] Smoke test em produção + registro do horário de corte (§8)
 
 ---
