@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
+from unittest.mock import Mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -13,8 +14,19 @@ from catalog.models import Category, Product
 from customers.models import Customer
 from movements.models import Pickup
 from rentals.models import Rental, RentalItem
+from rentals.signals import sync_rental_total
 
 User = get_user_model()
+
+
+class RentalItemSignalTests(TestCase):
+    def test_fixture_load_skips_total_recalculation(self):
+        rental = Mock()
+        item = Mock(rental=rental)
+
+        sync_rental_total(RentalItem, item, raw=True)
+
+        rental.recalculate_total.assert_not_called()
 
 
 def make_uploaded_image(name='comprovante.png', size=(2200, 1000), image_format='PNG'):
