@@ -52,6 +52,12 @@
         <a href="{% url 'dashboard' %}" class="btn btn-secondary">Voltar</a>
       </div>
     </form>
+
+    <form method="post" action="{% url 'company:resend_whatsapp_report' %}" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary">Reenviar relatório de hoje agora</button>
+      <p class="page-description">Envia de novo pra todos os números configurados, mesmo que já tenham recebido hoje.</p>
+    </form>
   </div>
 </div>
 {% endblock %}
