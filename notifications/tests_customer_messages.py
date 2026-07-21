@@ -245,6 +245,27 @@ class PickupReminderQueueTests(TestCase):
         queue = pickup_reminder_queue()
         self.assertEqual(len(queue), 1)
 
+    def test_sent_message_with_deleted_rental_does_not_empty_the_queue(self):
+        """A SENT CustomerMessage whose rental was later deleted (rental_id
+        goes NULL via on_delete=SET_NULL) must not blank out every other
+        rental's eligibility: NULL inside a NOT IN (...) makes the whole
+        clause match nothing in SQL, which previously zeroed the queue."""
+        orphan_customer = _make_customer(name='Cliente Removida')
+        orphan_rental = _make_rental(20, orphan_customer, Rental.Status.PENDING,
+                                      pickup_date=TODAY + timedelta(days=1), return_date=TODAY + timedelta(days=7))
+        CustomerMessage.objects.create(
+            rental=orphan_rental, customer=orphan_customer, kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='5543999998888', status=CustomerMessage.Status.SENT,
+        )
+        orphan_rental.delete()
+
+        customer = _make_customer(name='Zilda Torres')
+        rental = _make_rental(21, customer, Rental.Status.PENDING,
+                               pickup_date=TODAY + timedelta(days=1), return_date=TODAY + timedelta(days=7))
+        queue = pickup_reminder_queue(TODAY)
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]['rental'], rental)
+
 
 # ── return_reminder_queue ────────────────────────────────────────────────────
 

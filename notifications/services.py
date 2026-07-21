@@ -320,7 +320,7 @@ def render_return_message(rental, template=None):
 
 def _already_sent_rental_ids(kind):
     return CustomerMessage.objects.filter(
-        kind=kind, status=CustomerMessage.Status.SENT,
+        kind=kind, status=CustomerMessage.Status.SENT, rental__isnull=False,
     ).values_list('rental_id', flat=True)
 
 
