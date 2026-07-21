@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import BRMoneyField, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import Pickup, Return
 
@@ -22,10 +22,9 @@ class PickupForm(forms.ModelForm):
 class ReturnForm(forms.ModelForm):
     """Return form. days_late and penalty_applied are computed in the view."""
 
-    payment_amount = forms.DecimalField(
+    payment_amount = BRMoneyField(
         label='Valor recebido agora', required=False, min_value=Decimal('0'),
         decimal_places=2, max_digits=10,
-        widget=BRDecimalInput(),
     )
     payment_method = forms.ChoiceField(
         label='Forma de recebimento', required=False,

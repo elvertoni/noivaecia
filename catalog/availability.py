@@ -5,6 +5,8 @@ whose rental is still active (neither returned nor cancelled) and whose
 pickup/return window contains that date.
 """
 
+from datetime import timedelta
+
 from rentals.models import Rental, RentalItem
 
 # A rental no longer holds its items once it is returned or cancelled.
@@ -50,3 +52,28 @@ def find_overlapping_rental(product, pickup_date, return_date, exclude_rental_id
         qs = qs.exclude(rental_id=exclude_rental_id)
     item = qs.first()
     return item.rental if item else None
+
+
+def find_upcoming_pickups(product_ids, today, within_days=10):
+    """Map each product id in ``product_ids`` to its nearest booked pickup.
+
+    A product is "upcoming" when a still-pending rental has it scheduled for
+    pickup within ``within_days`` days from ``today``. Used to flag pieces
+    still out with the customer that are already committed to another rental
+    (R10.03 devolução alert).
+    """
+    cutoff = today + timedelta(days=within_days)
+    items = (
+        RentalItem.objects.filter(
+            product_id__in=product_ids,
+            rental__status=Rental.Status.PENDING,
+            rental__pickup_date__gte=today,
+            rental__pickup_date__lte=cutoff,
+        )
+        .select_related('rental')
+        .order_by('rental__pickup_date', 'rental__number')
+    )
+    result = {}
+    for item in items:
+        result.setdefault(item.product_id, item.rental)
+    return result

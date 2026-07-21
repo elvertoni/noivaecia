@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import BRMoneyField, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import CashAccount, FinancialMovement, Payment
 
@@ -25,9 +25,8 @@ class GenerateReceivablesForm(forms.Form):
 class PaymentForm(forms.Form):
     """Register a payment against a receivable (RF-21)."""
 
-    value = forms.DecimalField(
+    value = BRMoneyField(
         label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
-        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do recebimento',
@@ -39,9 +38,8 @@ class PaymentForm(forms.Form):
 class ReceivablePayForm(forms.Form):
     """Enhanced payment form that creates a Payment record (R5.06/R5.08)."""
 
-    amount = forms.DecimalField(
+    amount = BRMoneyField(
         label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
-        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do recebimento',
@@ -54,15 +52,13 @@ class ReceivablePayForm(forms.Form):
         widget=forms.Select(attrs={'class': INPUT_CLASS}),
         initial='cash',
     )
-    interest_amount = forms.DecimalField(
+    interest_amount = BRMoneyField(
         label='Juros', min_value=0, max_digits=10, decimal_places=2,
         required=False, initial=0,
-        widget=BRDecimalInput(),
     )
-    discount_amount = forms.DecimalField(
+    discount_amount = BRMoneyField(
         label='Desconto', min_value=0, max_digits=10, decimal_places=2,
         required=False, initial=0,
-        widget=BRDecimalInput(),
     )
     notes = forms.CharField(
         label='Observações', required=False,
@@ -100,9 +96,8 @@ class ManualMovementForm(forms.Form):
         choices=FinancialMovement.Direction.choices,
         widget=forms.Select(attrs={'class': INPUT_CLASS}),
     )
-    amount = forms.DecimalField(
+    amount = BRMoneyField(
         label='Valor', min_value=Decimal('0.01'), max_digits=10, decimal_places=2,
-        widget=BRDecimalInput(),
     )
     description = forms.CharField(
         label='Histórico', max_length=500,
@@ -117,9 +112,8 @@ class ManualMovementForm(forms.Form):
 class MultiPayForm(forms.Form):
     """Multi-receivable payment form (R5.07)."""
 
-    total_amount = forms.DecimalField(
+    total_amount = BRMoneyField(
         label='Valor total a receber', min_value=0, max_digits=10, decimal_places=2,
-        widget=BRDecimalInput(),
     )
     payment_date = forms.DateField(
         label='Data do recebimento',

@@ -118,6 +118,46 @@ class ReturnListViewTests(TestCase):
         self.assertNotIn(self.pending.pk, pks)
 
 
+class ReturnListUrgentPickupTests(TestCase):
+    """A piece still out is flagged urgent when already booked for pickup soon."""
+
+    def setUp(self):
+        _make_company()
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.url = reverse('movements:return_list')
+        category = Category.objects.create(prefix='VN', name='Vestidos')
+        self.product = Product.objects.create(category=category, code=1, description='Vestido A', value=100)
+
+    def test_flags_urgent_when_product_booked_within_10_days(self):
+        out_rental = _make_rental(410, status='picked_up')
+        RentalItem.objects.create(rental=out_rental, product=self.product, value=Decimal('100'))
+        booked = _make_rental(411, status='pending', pickup_date=TODAY + timedelta(days=5))
+        RentalItem.objects.create(rental=booked, product=self.product, value=Decimal('100'))
+
+        r = self.client.get(self.url)
+        rental = next(x for x in r.context['rentals'] if x.pk == out_rental.pk)
+        self.assertEqual(rental.urgent_pickup.pk, booked.pk)
+
+    def test_no_flag_when_next_pickup_is_beyond_window(self):
+        out_rental = _make_rental(412, status='picked_up')
+        RentalItem.objects.create(rental=out_rental, product=self.product, value=Decimal('100'))
+        far_booked = _make_rental(413, status='pending', pickup_date=TODAY + timedelta(days=20))
+        RentalItem.objects.create(rental=far_booked, product=self.product, value=Decimal('100'))
+
+        r = self.client.get(self.url)
+        rental = next(x for x in r.context['rentals'] if x.pk == out_rental.pk)
+        self.assertIsNone(rental.urgent_pickup)
+
+    def test_no_flag_when_product_not_booked(self):
+        out_rental = _make_rental(414, status='picked_up')
+        RentalItem.objects.create(rental=out_rental, product=self.product, value=Decimal('100'))
+
+        r = self.client.get(self.url)
+        rental = next(x for x in r.context['rentals'] if x.pk == out_rental.pk)
+        self.assertIsNone(rental.urgent_pickup)
+
+
 # ── R10.04 OverdueListView ────────────────────────────────────────────────────
 
 class OverdueListViewTests(TestCase):

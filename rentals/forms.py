@@ -7,7 +7,13 @@ from django.core.files.base import ContentFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from catalog.models import Product
-from core.ui import BRDecimalInput, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import (
+    BRMoneyField,
+    DATE_INPUT_ATTRS,
+    DATE_INPUT_FORMATS,
+    INPUT_CLASS,
+    configure_br_decimal_field,
+)
 
 from customers.models import Customer
 from .models import Rental, RentalItem
@@ -18,11 +24,14 @@ PROOF_PHOTO_JPEG_QUALITY = 84
 
 
 def _style(form):
-    for field in form.fields.values():
+    for field_name, field in form.fields.items():
         if isinstance(field.widget, forms.Textarea):
             field.widget.attrs.setdefault('rows', 2)
-        if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
-            field.widget = BRDecimalInput()
+        if isinstance(field, forms.DecimalField):
+            configure_br_decimal_field(
+                field,
+                currency=field_name in {'down_payment_amount', 'penalty_value', 'value'},
+            )
         css = field.widget.attrs.get('class', '')
         field.widget.attrs['class'] = (css + ' ' + INPUT_CLASS).strip()
 
@@ -94,7 +103,7 @@ class RentalForm(forms.ModelForm):
     )
 
     # Extra: down payment (R7.06)
-    down_payment_amount = forms.DecimalField(
+    down_payment_amount = BRMoneyField(
         label='Valor da entrada', max_digits=10, decimal_places=2,
         min_value=0, required=False,
     )

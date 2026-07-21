@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import CreateView, ListView, TemplateView
 
+from catalog.availability import find_upcoming_pickups
 from core.mixins import ModuleAccessMixin
 from customers.models import _normalize_name
 from rentals.models import Rental
@@ -182,6 +183,7 @@ class ReturnListView(MovementsAccessMixin, ListView):
     template_name = 'movements/return_list.html'
     context_object_name = 'rentals'
     paginate_by = 30
+    URGENT_PICKUP_WINDOW_DAYS = 10
 
     def get_queryset(self):
         qs = (
@@ -210,6 +212,14 @@ class ReturnListView(MovementsAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         today = date_cls.today()
+        rentals = ctx[self.context_object_name]
+        product_ids = {item.product_id for rental in rentals for item in rental.items.all()}
+        upcoming = find_upcoming_pickups(product_ids, today, within_days=self.URGENT_PICKUP_WINDOW_DAYS)
+        for rental in rentals:
+            rental.urgent_pickup = next(
+                (upcoming[item.product_id] for item in rental.items.all() if item.product_id in upcoming),
+                None,
+            )
         ctx.update({
             'date_from': self.request.GET.get('date_from', ''),
             'date_to': self.request.GET.get('date_to', ''),

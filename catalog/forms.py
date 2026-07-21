@@ -1,17 +1,17 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from core.ui import BRDecimalInput, INPUT_CLASS
+from core.ui import INPUT_CLASS, configure_br_decimal_field
 
 from .models import Category, Product
 
 
 def _style_fields(form):
-    for field in form.fields.values():
+    for field_name, field in form.fields.items():
         if isinstance(field.widget, forms.Textarea):
             field.widget.attrs.setdefault('rows', 3)
-        if isinstance(field, forms.DecimalField) and not isinstance(field.widget, BRDecimalInput):
-            field.widget = BRDecimalInput()
+        if isinstance(field, forms.DecimalField):
+            configure_br_decimal_field(field, currency=field_name == 'value')
         field.widget.attrs['class'] = INPUT_CLASS
 
 
