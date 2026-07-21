@@ -8,7 +8,13 @@ from unittest import mock
 
 from django.test import SimpleTestCase, override_settings
 
-from notifications.evolution import EvolutionError, connect_instance_qrcode, get_connection_state, send_text
+from notifications.evolution import (
+    EvolutionError,
+    connect_instance_qrcode,
+    get_connection_state,
+    logout_instance,
+    send_text,
+)
 
 FAKE_SETTINGS = dict(
     EVOLUTION_API_URL='http://work_evolution-api:8080',
@@ -170,3 +176,18 @@ class ConnectInstanceQrCodeTests(SimpleTestCase):
         with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)):
             result = connect_instance_qrcode()
         self.assertEqual(result['base64'], 'data:image/png;base64,abc')
+
+
+@override_settings(**FAKE_SETTINGS)
+class LogoutInstanceTests(SimpleTestCase):
+    def test_logout_instance_uses_delete_endpoint(self):
+        payload = {'success': True, 'message': 'Instance logged out successfully'}
+        with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)) as mocked:
+            result = logout_instance()
+        self.assertEqual(result, payload)
+        request = mocked.call_args[0][0]
+        self.assertEqual(request.get_method(), 'DELETE')
+        self.assertEqual(
+            request.full_url,
+            'http://work_evolution-api:8080/instance/logout/noivascia',
+        )

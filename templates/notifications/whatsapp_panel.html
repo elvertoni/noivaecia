@@ -30,6 +30,13 @@
             <span class="badge badge-warning">{{ evolution_connection_state }}</span>
           {% endif %}
         {% endif %}
+        {% if evolution_configured and evolution_connection_state == 'open' %}
+          <form method="post" action="{% url 'notifications:connection' %}" onsubmit="return confirm('Desconectar este WhatsApp para conectar outro número?');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="logout">
+            <button type="submit" class="btn btn-danger">Desconectar</button>
+          </form>
+        {% endif %}
         {% if evolution_configured and evolution_connection_state != 'open' %}
           <form method="get">
             <input type="hidden" name="connect" value="1">
@@ -65,7 +72,7 @@
         </div>
       {% endif %}
     {% elif evolution_connection_state == 'open' %}
-      <p class="text-sm text-slate-600">A instância já está conectada.</p>
+      <p class="text-sm text-slate-600">A instância já está conectada. Para trocar de número, desconecte e gere um novo QR Code.</p>
     {% endif %}
   </section>
 

@@ -11,6 +11,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
@@ -158,3 +159,25 @@ class WhatsAppDispatchView(NotificationsAccessMixin, View):
                 f'{sent_count} aviso(s) enviado(s), {failed_count} falha(s).',
             )
         return redirect('notifications:whatsapp_panel')
+
+
+class WhatsAppConnectionView(NotificationsAccessMixin, View):
+    """Disconnect the Evolution instance so another WhatsApp number can pair."""
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get('action')
+        if action != 'logout':
+            messages.error(request, 'Ação de conexão inválida.')
+            return redirect('notifications:whatsapp_panel')
+
+        try:
+            evolution.logout_instance()
+        except evolution.EvolutionError as exc:
+            messages.error(request, f'Não foi possível desconectar o WhatsApp: {exc}')
+            return redirect('notifications:whatsapp_panel')
+
+        messages.success(
+            request,
+            'WhatsApp desconectado. Gere um novo QR Code para conectar outro número.',
+        )
+        return redirect(f"{reverse('notifications:whatsapp_panel')}?connect=1")

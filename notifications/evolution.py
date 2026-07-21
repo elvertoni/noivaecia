@@ -100,6 +100,11 @@ def connect_instance_qrcode():
     }
 
 
+def logout_instance():
+    """Disconnect the configured WhatsApp instance from Evolution API."""
+    return _request('DELETE', '/instance/logout/{instance}')
+
+
 def get_connection_state():
     """Return the instance connection state (e.g. ``'open'``/``'close'``)."""
     payload = _request('GET', '/instance/connectionState/{instance}')

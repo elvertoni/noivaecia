@@ -167,6 +167,18 @@ class PanelQueueRenderingTests(TestCase):
         state.assert_called_once()
         qrcode.assert_called_once()
 
+    @override_settings(
+        EVOLUTION_API_URL='http://work_evolution-api:8080',
+        EVOLUTION_API_KEY='secret',
+        EVOLUTION_INSTANCE='noivascia',
+    )
+    @mock.patch('notifications.views.evolution.get_connection_state', return_value='open')
+    def test_panel_shows_disconnect_when_connected(self, state):
+        r = self.client.get(self.url)
+        self.assertContains(r, 'Conectado')
+        self.assertContains(r, 'Desconectar')
+        self.assertContains(r, reverse('notifications:connection'))
+
 
 @override_settings()
 class DispatchViewTests(TestCase):
@@ -278,4 +290,33 @@ class DispatchViewTests(TestCase):
             'kind': CustomerMessage.Kind.PICKUP_REMINDER,
             'rental_ids': [rental.pk],
         })
+        self.assertEqual(r.status_code, 403)
+
+
+class ConnectionViewTests(TestCase):
+    def setUp(self):
+        _make_company()
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.url = reverse('notifications:connection')
+        self.panel_url = reverse('notifications:whatsapp_panel')
+
+    @mock.patch('notifications.views.evolution.logout_instance')
+    def test_logout_disconnects_and_redirects_to_qrcode(self, logout):
+        r = self.client.post(self.url, {'action': 'logout'}, follow=False)
+        logout.assert_called_once()
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.url, f'{self.panel_url}?connect=1')
+
+    @mock.patch('notifications.views.evolution.logout_instance')
+    def test_invalid_connection_action_does_not_call_api(self, logout):
+        r = self.client.post(self.url, {'action': 'connect'}, follow=False)
+        logout.assert_not_called()
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r.url, self.panel_url)
+
+    def test_gating_blocks_connection_for_user_without_module(self):
+        outsider = _make_user(module_key='catalog')
+        self.client.force_login(outsider)
+        r = self.client.post(self.url, {'action': 'logout'})
         self.assertEqual(r.status_code, 403)
