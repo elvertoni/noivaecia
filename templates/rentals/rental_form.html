@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %} · Noivas &amp; Cia{% endblock %}
 
@@ -6,7 +7,7 @@
 <div class="mx-auto max-w-5xl">
   <div class="panel">
     <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
-    {% if has_payments %}
+    {% if header_locked %}
       <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Esta locação possui recebimentos registrados. Apenas observações podem ser editadas.
       </div>
@@ -15,7 +16,7 @@
     <form id="rental-form" method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
       {% if form.non_field_errors %}
-        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+        <div class="alert alert-error" role="alert">{{ form.non_field_errors }}</div>
       {% endif %}
 
       <!-- Customer search (R7.02) -->
@@ -36,36 +37,37 @@
                    aria-expanded="false"
                    aria-controls="customer-search-results"
                    aria-required="true"
+                   {% if header_locked %}disabled aria-disabled="true"{% endif %}
                    {% if form.customer.errors %}aria-invalid="true"{% endif %}
                    aria-describedby="customer-search-status{% if form.customer.errors %} customer-search-error{% endif %}">
             <div id="customer-search-results" class="autocomplete-results hidden" role="listbox"></div>
           </div>
           <p id="customer-search-status" class="sr-only" aria-live="polite"></p>
-          {% if form.customer.errors %}<p id="customer-search-error" class="field-error">{{ form.customer.errors|striptags }}</p>{% endif %}
+          {% if form.customer.errors %}<p id="customer-search-error" class="field-error" role="alert">{{ form.customer.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- use_for -->
         <div class="field-group">
           <label class="field-label" for="{{ form.use_for.id_for_label }}">{{ form.use_for.label }}</label>
-          {{ form.use_for }}
-          {% if form.use_for.errors %}<p class="field-error">{{ form.use_for.errors|striptags }}</p>{% endif %}
+          {{ form.use_for|render_field }}
+          {% if form.use_for.errors %}<p class="field-error" role="alert">{{ form.use_for.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- Dates -->
         <div class="field-group">
           <label class="field-label" for="{{ form.pickup_date.id_for_label }}">{{ form.pickup_date.label }}</label>
-          {{ form.pickup_date }}
-          {% if form.pickup_date.errors %}<p class="field-error">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
+          {{ form.pickup_date|render_field }}
+          {% if form.pickup_date.errors %}<p class="field-error" role="alert">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.return_date.id_for_label }}">{{ form.return_date.label }}</label>
-          {{ form.return_date }}
-          {% if form.return_date.errors %}<p class="field-error">{{ form.return_date.errors|striptags }}</p>{% endif %}
+          {{ form.return_date|render_field }}
+          {% if form.return_date.errors %}<p class="field-error" role="alert">{{ form.return_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.penalty_value.id_for_label }}">{{ form.penalty_value.label }}</label>
-          {{ form.penalty_value }}
-          {% if form.penalty_value.errors %}<p class="field-error">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
+          {{ form.penalty_value|render_field }}
+          {% if form.penalty_value.errors %}<p class="field-error" role="alert">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
       </div>
 
@@ -107,7 +109,7 @@
 
         {{ items.management_form }}
         {% if items.non_form_errors %}
-          <div class="mt-2 alert alert-error">
+          <div class="mt-2 alert alert-error" role="alert">
             {% for error in items.non_form_errors %}<p>{{ error }}</p>{% endfor %}
           </div>
         {% endif %}
@@ -205,27 +207,27 @@
                     <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
                   </div>
                   <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
-                  {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                  {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
                 </div>
 
                 <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div class="field-group sm:col-span-2">
                     <label class="field-label" for="{{ item_form.description.id_for_label }}">{{ item_form.description.label }}</label>
-                    {{ item_form.description }}
-                    {% if item_form.description.errors %}<p class="field-error">{{ item_form.description.errors|striptags }}</p>{% endif %}
+                    {{ item_form.description|render_field }}
+                    {% if item_form.description.errors %}<p class="field-error" role="alert">{{ item_form.description.errors|striptags }}</p>{% endif %}
                   </div>
                   <div class="field-group">
                     <label class="field-label" for="{{ item_form.value.id_for_label }}">{{ item_form.value.label }}</label>
-                    {{ item_form.value }}
-                    {% if item_form.value.errors %}<p class="field-error">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                    {{ item_form.value|render_field }}
+                    {% if item_form.value.errors %}<p class="field-error" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
                   </div>
                 </div>
 
                 <div class="field-group mt-3">
                   <label class="field-label" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
-                  {{ item_form.proof_photo_upload }}
+                  {{ item_form.proof_photo_upload|render_field }}
                   {% if item_form.proof_photo_upload.help_text %}<p class="field-help">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
-                  {% if item_form.proof_photo_upload.errors %}<p class="field-error">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+                  {% if item_form.proof_photo_upload.errors %}<p class="field-error" role="alert">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
                 </div>
               </div>
             </div>
@@ -247,15 +249,15 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div class="field-group">
             <label class="field-label" for="{{ form.installment_count.id_for_label }}">{{ form.installment_count.label }}</label>
-            {{ form.installment_count }}
+            {{ form.installment_count|render_field }}
             {% if form.installment_count.help_text %}<p class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
-            {% if form.installment_count.errors %}<p class="field-error">{{ form.installment_count.errors|striptags }}</p>{% endif %}
+            {% if form.installment_count.errors %}<p class="field-error" role="alert">{{ form.installment_count.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.first_due_date.id_for_label }}">{{ form.first_due_date.label }}</label>
-            {{ form.first_due_date }}
+            {{ form.first_due_date|render_field }}
             {% if form.first_due_date.help_text %}<p class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
-            {% if form.first_due_date.errors %}<p class="field-error">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
+            {% if form.first_due_date.errors %}<p class="field-error" role="alert">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
           </div>
         </div>
       </div>
@@ -266,18 +268,18 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div class="field-group">
             <label class="field-label" for="{{ form.down_payment_amount.id_for_label }}">{{ form.down_payment_amount.label }}</label>
-            {{ form.down_payment_amount }}
-            {% if form.down_payment_amount.errors %}<p class="field-error">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
+            {{ form.down_payment_amount|render_field }}
+            {% if form.down_payment_amount.errors %}<p class="field-error" role="alert">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.down_payment_method.id_for_label }}">{{ form.down_payment_method.label }}</label>
-            {{ form.down_payment_method }}
-            {% if form.down_payment_method.errors %}<p class="field-error">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
+            {{ form.down_payment_method|render_field }}
+            {% if form.down_payment_method.errors %}<p class="field-error" role="alert">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.down_payment_date.id_for_label }}">{{ form.down_payment_date.label }}</label>
-            {{ form.down_payment_date }}
-            {% if form.down_payment_date.errors %}<p class="field-error">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
+            {{ form.down_payment_date|render_field }}
+            {% if form.down_payment_date.errors %}<p class="field-error" role="alert">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
           </div>
         </div>
       </div>
@@ -286,8 +288,8 @@
       <!-- Observações — campo reduzido (auto-expand ao digitar) -->
       <div class="field-group">
         <label class="field-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
-        {{ form.notes }}
-        {% if form.notes.errors %}<p class="field-error">{{ form.notes.errors|striptags }}</p>{% endif %}
+        {{ form.notes|render_field }}
+        {% if form.notes.errors %}<p class="field-error" role="alert">{{ form.notes.errors|striptags }}</p>{% endif %}
       </div>
 
       <!-- Espaço reservado para o footer fixo não sobrepor o conteúdo -->
@@ -393,17 +395,17 @@
       <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="field-group sm:col-span-2">
           <label class="field-label" for="{{ f.description.id_for_label }}">{{ f.description.label }}</label>
-          {{ f.description }}
+          {{ f.description|render_field }}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ f.value.id_for_label }}">{{ f.value.label }}</label>
-          {{ f.value }}
+          {{ f.value|render_field }}
         </div>
       </div>
 
       <div class="field-group mt-3">
         <label class="field-label" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
-        {{ f.proof_photo_upload }}
+        {{ f.proof_photo_upload|render_field }}
         {% if f.proof_photo_upload.help_text %}<p class="field-help">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
       </div>
     </div>
@@ -489,6 +491,11 @@
     el.className = className;
     el.textContent = text || '';
     return el;
+  }
+
+  function formatMoney(value) {
+    const formatter = window.NoivasCiaForms && window.NoivasCiaForms.formatBRDecimal;
+    return formatter ? formatter(value) : value;
   }
 
   function setHiddenSelectValue(select, value, label) {
@@ -978,7 +985,7 @@
       renderOption: function (option, product) {
         option.appendChild(createText('font-medium text-app-ink', product.code));
         option.appendChild(createText('ml-2 text-app-ink', product.text));
-        option.appendChild(createText('ml-2 text-xs text-app-muted', `${product.sub} · R$ ${product.value}`));
+        option.appendChild(createText('ml-2 text-xs text-app-muted', `${product.sub} · R$ ${formatMoney(product.value)}`));
       },
       onSelect: function (product) {
         applyProductToRow(row, product);
@@ -1004,7 +1011,9 @@
     if (searchInput) searchInput.value = label;
     if (availBadge) checkAvailability(product.id, row, availBadge);
     const valueInput = row.querySelector('input[name$="-value"]');
-    if (valueInput && !valueInput.value) valueInput.value = product.value;
+    if (valueInput && !valueInput.value) {
+      valueInput.value = formatMoney(product.value);
+    }
 
     const concluirBtn = row.querySelector('.btn-concluir-item');
     if (concluirBtn) concluirBtn.classList.remove('hidden');
@@ -1067,7 +1076,11 @@
       })
       .then(function (data) {
         if (currentRequestId !== row._availabilityRequestId) return;
-        if (data.available) {
+        if (data.error === 'invalid_date') {
+          setBadge(badge, 'error', 'Informe datas de retirada e retorno válidas.');
+        } else if (data.error) {
+          setBadge(badge, 'error', 'Não foi possível verificar a disponibilidade.');
+        } else if (data.available) {
           setBadge(badge, 'free', '✓ Peça disponível para a data de retirada.');
         } else {
           setBadge(
@@ -1180,7 +1193,7 @@
         line1.appendChild(createText('text-app-ink', p.text));
         const line2 = document.createElement('p');
         line2.className = 'text-xs text-app-muted';
-        line2.textContent = `${p.color || '—'} · ${p.size || '—'} · R$ ${p.value}`;
+        line2.textContent = `${p.color || '—'} · ${p.size || '—'} · R$ ${formatMoney(p.value)}`;
         info.appendChild(line1);
         info.appendChild(line2);
 

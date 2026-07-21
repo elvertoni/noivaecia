@@ -1,9 +1,11 @@
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.core.validators import MinValueValidator
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from catalog.models import Product
@@ -133,6 +135,8 @@ class RentalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _style(self)
+        self.fields['penalty_value'].min_value = Decimal('0')
+        self.fields['penalty_value'].validators.append(MinValueValidator(Decimal('0')))
         for field_name in ('pickup_date', 'return_date'):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
@@ -163,6 +167,11 @@ class RentalForm(forms.ModelForm):
         dp_method = cleaned.get('down_payment_method')
         dp_date = cleaned.get('down_payment_date')
         if dp_amount and dp_amount > 0:
+            if not cleaned.get('installment_count'):
+                self.add_error(
+                    'installment_count',
+                    'Informe ao menos uma parcela para registrar a entrada.',
+                )
             if not dp_method:
                 self.add_error('down_payment_method', 'Informe a forma de recebimento da entrada.')
             if not dp_date:
@@ -189,6 +198,13 @@ class RentalItemForm(forms.ModelForm):
         self.processed_proof_photo = None
         self.clear_proof_photo = False
         _style(self)
+        self.fields['value'].min_value = Decimal('0')
+        self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
+        # A new line must not silently become a R$ 0,00 item.  Leaving this
+        # blank lets the picker copy the product's suggested price, while
+        # non-JavaScript users still receive the normal required-field error.
+        if not self.is_bound and not self.instance.pk:
+            self.initial['value'] = ''
         # Hidden select populated by the AJAX product search; keep only the selected
         # product in the queryset to avoid rendering thousands of options per row.
         self.fields['product'].widget.attrs['class'] = 'hidden'
@@ -263,6 +279,10 @@ class BaseRentalItemFormSet(forms.BaseInlineFormSet):
       piece = one line), surfacing the error on the offending item.
     """
 
+    default_error_messages = {
+        'too_few_forms': 'Inclua ao menos uma peça na locação.',
+    }
+
     def get_queryset(self):
         qs = super().get_queryset()
         return qs.filter(product__isnull=False).select_related('product__category')
@@ -297,6 +317,8 @@ RentalItemFormSet = forms.inlineformset_factory(
     formset=BaseRentalItemFormSet,
     extra=1,
     can_delete=True,
+    min_num=1,
+    validate_min=True,
 )
 
 

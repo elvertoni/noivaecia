@@ -1,6 +1,4 @@
 import re
-from datetime import date as date_cls
-
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db import transaction
@@ -13,6 +11,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, T
 
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from core.models import AuditLog
+from core.ui import parse_br_date
 
 from rentals.models import RentalItem
 from customers.models import _normalize_name
@@ -249,14 +248,20 @@ class AvailabilityView(CatalogAccessMixin, TemplateView):
         if not (prefix and code and date_str):
             return context
 
-        try:
-            on_date = date_cls.fromisoformat(date_str)
-        except ValueError:
+        on_date = parse_br_date(date_str)
+        if on_date is None:
             context['error'] = 'Data inválida.'
             return context
 
+        # ``code`` is received as text and can otherwise make the integer
+        # model lookup raise a ValueError instead of showing a form error.
+        numeric_code = code.lstrip('0') or '0'
+        if not code.isdigit() or len(numeric_code) > 10 or int(numeric_code) > 2147483647:
+            context['error'] = 'Informe um código de produto válido.'
+            return context
+
         products = list(
-            Product.objects.filter(category__prefix__iexact=prefix, code=code)
+            Product.objects.filter(category__prefix__iexact=prefix, code=int(numeric_code))
             .select_related('category')
         )
         if not products:
@@ -315,7 +320,9 @@ class CategoryMergeView(CatalogAccessMixin, View):
     template_name = 'catalog/category_merge.html'
 
     def get(self, request, *args, **kwargs):
-        form = CategoryMergeForm()
+        source_id = request.GET.get('source', '')
+        initial = {'source': source_id} if source_id.isdigit() else None
+        form = CategoryMergeForm(initial=initial)
         return self._render(request, form)
 
     def post(self, request, *args, **kwargs):
@@ -409,10 +416,14 @@ def product_text_filter(q):
     code_match = re.match(r'^([A-Za-z]+)?\s*0*(\d+)$', q)
     if code_match:
         prefix, code = code_match.groups()
-        code_filter = Q(code=int(code))
-        if prefix:
-            code_filter &= Q(category__prefix__iexact=prefix)
-        q_filter |= code_filter
+        numeric_code = code.lstrip('0') or '0'
+        if len(numeric_code) <= 10:
+            code_value = int(numeric_code)
+            if code_value <= 2147483647:
+                code_filter = Q(code=code_value)
+                if prefix:
+                    code_filter &= Q(category__prefix__iexact=prefix)
+                q_filter |= code_filter
     return q_filter
 
 
@@ -479,12 +490,8 @@ class ProductBrowseView(View):
         pickup_date = None
         return_date = None
         if pickup_date_str and return_date_str:
-            try:
-                pickup_date = date_cls.fromisoformat(pickup_date_str)
-                return_date = date_cls.fromisoformat(return_date_str)
-            except ValueError:
-                pickup_date = None
-                return_date = None
+            pickup_date = parse_br_date(pickup_date_str)
+            return_date = parse_br_date(return_date_str)
 
         # ``scoped``: q + visibility only (drives the category facet).
         scoped = Product.objects.select_related('category')
@@ -605,11 +612,10 @@ class ProductAvailabilityJsonView(View):
         return_date_str = request.GET.get('return_date', '').strip() or pickup_date_str
         if not product_id or not pickup_date_str or not return_date_str:
             return JsonResponse({'available': True})
-        try:
-            pickup_date = date_cls.fromisoformat(pickup_date_str)
-            return_date = date_cls.fromisoformat(return_date_str)
-        except ValueError:
-            return JsonResponse({'available': True})
+        pickup_date = parse_br_date(pickup_date_str)
+        return_date = parse_br_date(return_date_str)
+        if pickup_date is None or return_date is None:
+            return JsonResponse({'available': False, 'error': 'invalid_date'})
         try:
             val = int(product_id)
             if val > 2147483647:

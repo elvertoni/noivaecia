@@ -71,11 +71,12 @@ class CustomerForm(forms.ModelForm):
         required=False,
         widget=forms.Select(),
     )
-    # CharField + Select widget: Django não valida as choices (JS as popula dinamicamente)
+    # A text input keeps city entry usable when JavaScript is unavailable. The
+    # template adds a state-aware datalist when JavaScript is available.
     city = forms.CharField(
         label='Cidade',
         required=False,
-        widget=forms.Select(choices=[('', 'Selecione a cidade')]),
+        widget=forms.TextInput(),
     )
 
     class Meta:
@@ -101,33 +102,56 @@ class CustomerForm(forms.ModelForm):
         self.fields['name'].widget.attrs.update({
             'placeholder': 'Ex.: Maria da Silva',
             'autofocus': True,
+            'autocomplete': 'name',
         })
-        self.fields['address'].widget.attrs['placeholder'] = 'Ex.: Rua das Flores, 123, Ap. 5'
-        self.fields['district'].widget.attrs['placeholder'] = 'Ex.: Centro'
-        self.fields['city'].widget.attrs['id'] = 'id_city'
+        self.fields['address'].widget.attrs.update({
+            'placeholder': 'Ex.: Rua das Flores, 123, Ap. 5',
+            'autocomplete': 'street-address',
+        })
+        self.fields['district'].widget.attrs.update({
+            'placeholder': 'Ex.: Centro',
+            'autocomplete': 'address-level3',
+        })
+        self.fields['state'].widget.attrs['autocomplete'] = 'address-level1'
+        self.fields['city'].widget.attrs.update({
+            'autocomplete': 'address-level2',
+            'list': 'customer-city-options',
+        })
         self.fields['rg'].widget.attrs.update({
             'placeholder': 'Ex.: 12.345.678-9',
             'maxlength': '15',
+            'inputmode': 'numeric',
             'data-mask': 'rg',
         })
         self.fields['cpf'].widget.attrs.update({
             'placeholder': 'Ex.: 000.000.000-00',
             'maxlength': '14',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
             'data-mask': 'cpf',
         })
         self.fields['phone_home'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 3542-1234',
-            'maxlength': '15',
+            'maxlength': '20',
+            'type': 'tel',
+            'inputmode': 'tel',
+            'autocomplete': 'tel',
             'data-mask': 'phone',
         })
         self.fields['phone_mobile'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 99123-4567',
-            'maxlength': '16',
+            'maxlength': '20',
+            'type': 'tel',
+            'inputmode': 'tel',
+            'autocomplete': 'tel',
             'data-mask': 'phone',
         })
         self.fields['phone_work'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 3542-5678',
-            'maxlength': '15',
+            'maxlength': '20',
+            'type': 'tel',
+            'inputmode': 'tel',
+            'autocomplete': 'tel',
             'data-mask': 'phone',
         })
         self.fields['notes'].widget.attrs['placeholder'] = 'Observações adicionais...'
@@ -136,6 +160,8 @@ class CustomerForm(forms.ModelForm):
         cpf = self.cleaned_data.get('cpf', '').strip()
         if not cpf:
             return cpf
+        if not re.fullmatch(r'[\d.\-\s]+', cpf):
+            raise forms.ValidationError('CPF inválido. Use apenas números e a pontuação do CPF.')
         d = _digits(cpf)
         if not _validate_cpf(d):
             raise forms.ValidationError('CPF inválido. Verifique os dígitos informados.')
@@ -163,7 +189,11 @@ class CustomerForm(forms.ModelForm):
         phone = (value or '').strip()
         if not phone:
             return phone
+        if not re.fullmatch(r'[\d\s().+\-]+', phone):
+            raise forms.ValidationError('Telefone inválido. Use apenas números e símbolos de telefone.')
         d = _digits(phone)
+        if d.startswith('55') and len(d) in (12, 13):
+            d = d[2:]
         if len(d) < 10 or len(d) > 11:
             raise forms.ValidationError(
                 'Telefone inválido. Informe DDD + número com 10 ou 11 dígitos.'

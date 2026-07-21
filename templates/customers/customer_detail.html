@@ -57,6 +57,13 @@
 
   {# Filters (R9.03) #}
   <div class="panel-spacious">
+    {% if filter_errors %}
+      <div class="alert alert-error" role="alert">
+        <ul class="list-disc pl-5">
+          {% for error in filter_errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     <form method="get" class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
       <div class="field-group">
         <label class="field-label" for="customer-detail-date-from">De</label>

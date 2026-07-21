@@ -20,7 +20,7 @@
 
       {# Nome #}
       <div class="field-group">
-        <label class="field-label" for="{{ form.name.id_for_label }}">Nome <span class="text-red-500">*</span></label>
+        <label class="field-label" for="{{ form.name.id_for_label }}">Nome <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span></label>
         {{ form.name|render_field }}
         {% if form.name.errors %}<p id="{{ form.name.auto_id }}-error" class="field-error" role="alert">{{ form.name.errors|striptags }}</p>{% endif %}
       </div>
@@ -47,6 +47,7 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.city.id_for_label }}">Cidade</label>
           {{ form.city|render_field }}
+          <datalist id="customer-city-options"></datalist>
           {% if form.city.errors %}<p id="{{ form.city.auto_id }}-error" class="field-error" role="alert">{{ form.city.errors|striptags }}</p>{% endif %}
         </div>
       </div>
@@ -110,31 +111,27 @@
   'use strict';
 
   const selectEstado = document.getElementById('{{ form.state.id_for_label }}');
-  const selectCidade = document.getElementById('{{ form.city.id_for_label }}');
+  const inputCidade = document.getElementById('{{ form.city.id_for_label }}');
+  const cityOptions = document.getElementById('customer-city-options');
 
   function popularCidades(uf, valorAtual) {
     const lista = (typeof CIDADES_BR !== 'undefined' && CIDADES_BR[uf]) || [];
-    selectCidade.innerHTML = '';
-    const vazio = document.createElement('option');
-    vazio.value = '';
-    vazio.textContent = 'Selecione a cidade';
-    selectCidade.appendChild(vazio);
+    cityOptions.innerHTML = '';
     lista.forEach(function (cidade) {
       const opt = document.createElement('option');
       opt.value = cidade;
-      opt.textContent = cidade;
-      selectCidade.appendChild(opt);
+      cityOptions.appendChild(opt);
     });
-    if (valorAtual) selectCidade.value = valorAtual;
+    if (valorAtual) inputCidade.value = valorAtual;
   }
 
-  if (selectEstado && selectCidade) {
+  if (selectEstado && inputCidade && cityOptions) {
     const cidadeInicial = '{{ form.city.value|default:"Bandeirantes" }}';
     popularCidades(selectEstado.value || 'PR', cidadeInicial);
 
     selectEstado.addEventListener('change', function () {
       popularCidades(this.value, '');
-      selectCidade.focus();
+      inputCidade.focus();
     });
   }
 
@@ -158,7 +155,9 @@
   }
 
   function maskPhone(v) {
-    const d = onlyDigits(v).slice(0, 11);
+    let d = onlyDigits(v);
+    if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
+    d = d.slice(0, 11);
     if (d.length <= 2) return d.length ? '(' + d : '';
     if (d.length <= 6) return '(' + d.slice(0,2) + ') ' + d.slice(2);
     if (d.length <= 10) return '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);

@@ -252,6 +252,14 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
     form_class = RentalForm
     template_name = 'rentals/rental_form.html'
 
+    protected_field_names = (
+        'customer',
+        'use_for',
+        'pickup_date',
+        'return_date',
+        'penalty_value',
+    )
+
     def get_object(self, queryset=None):
         rental = super().get_object(queryset)
         if rental.status == Rental.Status.CANCELLED:
@@ -262,10 +270,21 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             raise Http404
         return rental
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Once any payment exists, altering the commercial terms makes the
+        # contract, receivables and payment history disagree.  Disabled Django
+        # fields also ignore forged POST values, keeping this rule server-side.
+        if self.object.receivables.filter(payments__isnull=False).exists():
+            for field_name in self.protected_field_names:
+                form.fields[field_name].disabled = True
+        return form
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         has_payments = self.object.receivables.filter(payments__isnull=False).exists()
         context['has_payments'] = has_payments
+        context['header_locked'] = has_payments
         if 'items' not in context:
             if self.request.POST:
                 context['items'] = RentalItemEditFormSet(
@@ -281,13 +300,12 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         context = self.get_context_data()
         items = context['items']
 
-        # Block item/date edits if payments exist and status != pending
-        if context['has_payments'] and self.object.status != Rental.Status.PENDING:
-            messages.error(
-                self.request,
-                'Existem pagamentos registrados. Somente observações podem ser editadas.',
-            )
-            return self.form_invalid(form)
+        if context['has_payments']:
+            # The protected fields are disabled in ``get_form``, so this saves
+            # only the editable notes field even when a client forges a POST.
+            rental = form.save()
+            messages.success(self.request, f'Locação #{rental.number} atualizada.')
+            return HttpResponseRedirect(rental.get_absolute_url())
 
         if not items.is_valid():
             return self.form_invalid(form)

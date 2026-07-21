@@ -7,6 +7,7 @@ from django.db.models import Q, Sum
 
 from billing.models import Receivable
 from customers.models import _normalize_name
+from core.ui import parse_br_date
 from rentals.models import Rental, RentalItem
 
 
@@ -42,6 +43,12 @@ def _apply_rental_filters(
     max_results=DEFAULT_REPORT_LIMIT,
 ):
     needs_distinct = False
+    date_from_raw = date_from
+    date_to_raw = date_to
+    date_from = parse_br_date(date_from)
+    date_to = parse_br_date(date_to)
+    if (date_from_raw and not date_from) or (date_to_raw and not date_to):
+        return qs.none()
     if date_from:
         qs = qs.filter(**{f'{date_field}__gte': date_from})
     if date_to:
@@ -131,6 +138,16 @@ def report_contas_vencimento(
         .select_related('rental__customer')
         .order_by('due_date', 'rental__number')
     )
+    date_from_raw = date_from
+    date_to_raw = date_to
+    date_from = parse_br_date(date_from)
+    date_to = parse_br_date(date_to)
+    if (date_from_raw and not date_from) or (date_to_raw and not date_to):
+        return qs.none(), {
+            't_amount': Decimal('0'),
+            't_paid': Decimal('0'),
+            't_balance': Decimal('0'),
+        }
     if date_from:
         qs = qs.filter(due_date__gte=date_from)
     if date_to:

@@ -11,6 +11,7 @@ from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
+from core.ui import parse_br_date
 
 from .forms import CustomerForm
 from .models import Customer, _normalize_name
@@ -23,6 +24,11 @@ def _fmt_cpf(digits):
 
 def _digits(value):
     return re.sub(r'\D', '', value or '')
+
+
+def _parse_history_date(value):
+    """Accept ISO and Brazilian dates from the customer-history filter."""
+    return parse_br_date(value)
 
 
 class CustomerListView(ModuleAccessMixin, ListView):
@@ -185,8 +191,19 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         customer = self.object
 
         # Filters (R9.03)
-        date_from = self.request.GET.get('date_from', '').strip()
-        date_to = self.request.GET.get('date_to', '').strip()
+        date_from_raw = self.request.GET.get('date_from', '').strip()
+        date_to_raw = self.request.GET.get('date_to', '').strip()
+        date_from = _parse_history_date(date_from_raw)
+        date_to = _parse_history_date(date_to_raw)
+        filter_errors = []
+        if date_from_raw and not date_from:
+            filter_errors.append('Informe a data inicial no formato dd/mm/aaaa.')
+        if date_to_raw and not date_to:
+            filter_errors.append('Informe a data final no formato dd/mm/aaaa.')
+        if date_from and date_to and date_from > date_to:
+            filter_errors.append('A data inicial não pode ser posterior à data final.')
+            date_from = None
+            date_to = None
         rental_status = self.request.GET.get('rental_status', '').strip()
         financial_status = self.request.GET.get('financial_status', '').strip()
         product_q = self.request.GET.get('product', '').strip()
@@ -264,8 +281,9 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
             'total_paid': rec_totals['total_paid'] or Decimal('0'),
             'total_balance': rec_totals['total_balance'] or Decimal('0'),
             # filter echoes for template
-            'date_from': date_from,
-            'date_to': date_to,
+            'date_from': date_from.isoformat() if date_from else date_from_raw,
+            'date_to': date_to.isoformat() if date_to else date_to_raw,
+            'filter_errors': filter_errors,
             'rental_status': rental_status,
             'financial_status': financial_status,
             'product_q': product_q,

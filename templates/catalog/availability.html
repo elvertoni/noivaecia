@@ -17,18 +17,18 @@
       </div>
       <div class="field-group">
         <label class="field-label" for="availability-code">Código</label>
-        <input type="text" name="code" id="availability-code" value="{{ code }}" class="field-input" placeholder="Ex: 42">
+        <input type="text" name="code" id="availability-code" value="{{ code }}" class="field-input" placeholder="Ex: 42" inputmode="numeric" pattern="[0-9]*">
       </div>
       <div class="field-group">
         <label class="field-label" for="availability-date">Data</label>
-        <input type="date" name="date" id="availability-date" value="{{ date }}" class="field-input" data-date-br="true">
+        <input type="text" name="date" id="availability-date" value="{{ date }}" class="field-input" data-date-br="true" inputmode="numeric" autocomplete="off" placeholder="dd/mm/aaaa" maxlength="10">
       </div>
     </div>
     <button type="submit" class="mt-4 btn btn-primary">Consultar</button>
   </form>
 
   {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="alert alert-error" role="alert">{{ error }}</div>
   {% endif %}
 
   {# R8.03 — disambiguation when multiple products share prefix+code #}

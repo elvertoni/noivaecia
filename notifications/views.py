@@ -15,16 +15,22 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from core.mixins import ModuleAccessMixin
-from rentals.models import Rental
-
 from .models import CustomerMessage
-from .services import dispatch_customer_message, pickup_reminder_queue, return_reminder_queue
+from .services import (
+    MessageTemplateError,
+    dispatch_customer_message,
+    get_default_message_template,
+    pickup_reminder_queue,
+    return_reminder_queue,
+    validate_message_template,
+)
 
 # Anti-ban throttle between real sends. A module-level constant so tests can
 # override it (or ``time.sleep`` itself) to avoid slowing the suite down.
 SEND_SPACING_SECONDS = 0.3
 
 RECENT_MESSAGES_LIMIT = 20
+_TEMPLATE_DRAFT_SESSION_KEY = 'notifications_message_template_drafts'
 
 _QUEUE_BUILDERS = {
     CustomerMessage.Kind.PICKUP_REMINDER: pickup_reminder_queue,
@@ -44,11 +50,20 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         today = timezone.localdate()
+        template_drafts = self.request.session.pop(_TEMPLATE_DRAFT_SESSION_KEY, {})
         ctx.update({
             'pickup_items': pickup_reminder_queue(today=today),
             'return_items': return_reminder_queue(today=today),
             'tomorrow': today + timedelta(days=1),
             'today': today,
+            'pickup_message_template': template_drafts.get(
+                CustomerMessage.Kind.PICKUP_REMINDER,
+                get_default_message_template(CustomerMessage.Kind.PICKUP_REMINDER),
+            ),
+            'return_message_template': template_drafts.get(
+                CustomerMessage.Kind.RETURN_REMINDER,
+                get_default_message_template(CustomerMessage.Kind.RETURN_REMINDER),
+            ),
             'recent_messages': (
                 CustomerMessage.objects.select_related('rental', 'customer')
                 .order_by('-created_at')[:RECENT_MESSAGES_LIMIT]
@@ -66,19 +81,48 @@ class WhatsAppDispatchView(NotificationsAccessMixin, View):
             messages.error(request, 'Tipo de aviso inválido.')
             return redirect('notifications:whatsapp_panel')
 
+        message_template = request.POST.get('message_template')
+        if message_template is None:
+            message_template = get_default_message_template(kind)
+        try:
+            message_template = validate_message_template(message_template)
+        except MessageTemplateError as exc:
+            request.session[_TEMPLATE_DRAFT_SESSION_KEY] = {kind: message_template}
+            messages.error(request, str(exc))
+            return redirect('notifications:whatsapp_panel')
+
+        queue = _QUEUE_BUILDERS[kind]()
+        eligible_rentals = {
+            str(item['rental'].pk): item['rental']
+            for item in queue
+        }
         if request.POST.get('send_all'):
-            queue = _QUEUE_BUILDERS[kind]()
-            rentals = [item['rental'] for item in queue]
+            rentals = list(eligible_rentals.values())
         else:
             rental_ids = request.POST.getlist('rental_ids')
-            rentals = list(Rental.objects.filter(pk__in=rental_ids))
+            requested_ids = list(dict.fromkeys(rental_ids))
+            rentals = [
+                eligible_rentals[rental_id]
+                for rental_id in requested_ids
+                if rental_id in eligible_rentals
+            ]
+            if len(rentals) != len(requested_ids):
+                messages.warning(
+                    request,
+                    'Uma ou mais locações não estão disponíveis para este aviso.',
+                )
 
         sent_count = 0
         failed_count = 0
         for index, rental in enumerate(rentals):
             if index:
                 time.sleep(SEND_SPACING_SECONDS)
-            record = dispatch_customer_message(rental, kind, user=request.user)
+            record = dispatch_customer_message(
+                rental,
+                kind,
+                user=request.user,
+                message_template=message_template,
+            )
             if record.status == CustomerMessage.Status.SENT:
                 sent_count += 1
             else:

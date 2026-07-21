@@ -257,6 +257,23 @@ class CustomerHistoryFiltersTests(TestCase):
         r = self.client.get(self.url, {'financial_status': 'paid'})
         self.assertNotIn(self.rec, r.context['receivables'])
 
+    def test_accepts_brazilian_date_format_for_history_filters(self):
+        r = self.client.get(self.url, {
+            'date_from': '01/06/2026',
+            'date_to': '01/06/2026',
+        })
+
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(self.rental, r.context['rentals'])
+        self.assertEqual(r.context['date_from'], '2026-06-01')
+        self.assertEqual(r.context['date_to'], '2026-06-01')
+
+    def test_invalid_history_date_returns_feedback_without_a_server_error(self):
+        r = self.client.get(self.url, {'date_from': '31/02/2026'})
+
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Informe a data inicial no formato dd/mm/aaaa.')
+
 
 # ── R9.06 Delete guard ────────────────────────────────────────────────────────
 

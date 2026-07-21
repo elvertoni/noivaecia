@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from accounts.models import ModulePermission
 from catalog.availability import find_overlapping_rental, find_rental_for
+from catalog.forms import CategoryForm, ProductForm
 from catalog.models import Category, Product
 from customers.models import Customer
 from rentals.models import Rental, RentalItem
@@ -23,6 +24,34 @@ class CatalogModelTests(TestCase):
         Product.objects.create(category=category, code=1, description='A', value=10)
         Product.objects.create(category=category, code=1, description='B', value=20)
         self.assertEqual(Product.objects.filter(category=category, code=1).count(), 2)
+
+
+class CatalogFormValidationTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(prefix='VES', name='Vestidos')
+
+    def test_category_prefix_is_canonical_and_case_insensitively_unique(self):
+        duplicate = CategoryForm(data={'prefix': ' ves ', 'name': 'Outra'})
+        self.assertFalse(duplicate.is_valid())
+        self.assertIn('Já existe uma categoria', duplicate.errors['prefix'][0])
+
+        form = CategoryForm(data={'prefix': 'trn', 'name': 'Ternos'})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data['prefix'], 'TRN')
+
+    def test_product_value_cannot_be_negative(self):
+        form = ProductForm(data={
+            'category': self.category.pk,
+            'code': 1,
+            'description': 'Vestido',
+            'color': '',
+            'size': '',
+            'value': '-1,00',
+            'notes': '',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('value', form.errors)
 
 
 class AvailabilityTests(TestCase):
@@ -154,6 +183,22 @@ class ProductBrowseViewTests(TestCase):
         self.assertEqual(results['BMA500']['rental']['customer'], 'Maria')
         self.assertTrue(results['BMA501']['available'])
 
+    def test_availability_inline_accepts_brazilian_dates(self):
+        rental = Rental.objects.create(
+            number=4, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+        RentalItem.objects.create(rental=rental, product=self.b54_cinza, value=120)
+
+        results = {
+            row['code']: row for row in self._get(
+                prefix='BMA', date='15/06/2026',
+            )['results']
+        }
+
+        self.assertFalse(results['BMA500']['available'])
+
     def test_availability_inline_uses_full_rental_window(self):
         rental = Rental.objects.create(
             number=3, customer=self.customer,
@@ -268,3 +313,30 @@ class ProductAvailabilityJsonTests(TestCase):
         self.assertEqual(data['rental_number'], 20)
         self.assertEqual(data['pickup_date'], '2026-06-15')
         self.assertEqual(data['return_date'], '2026-06-20')
+
+    def test_accepts_brazilian_dates(self):
+        rental = Rental.objects.create(
+            number=21,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 15),
+            return_date=date(2026, 6, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+        RentalItem.objects.create(rental=rental, product=self.product, value=300)
+
+        response = self.client.get(self.url, {
+            'product_id': self.product.pk,
+            'pickup_date': '10/06/2026',
+            'return_date': '16/06/2026',
+        })
+
+        self.assertFalse(response.json()['available'])
+
+    def test_rejects_invalid_dates_without_claiming_availability(self):
+        response = self.client.get(self.url, {
+            'product_id': self.product.pk,
+            'pickup_date': '31/02/2026',
+            'return_date': '01/03/2026',
+        })
+
+        self.assertJSONEqual(response.content, {'available': False, 'error': 'invalid_date'})

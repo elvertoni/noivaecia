@@ -2,10 +2,12 @@
 import csv
 from datetime import date as date_cls
 
+from django.contrib import messages
 from django.http import StreamingHttpResponse
 from django.views.generic import TemplateView
 
 from core.mixins import ModuleAccessMixin
+from core.ui import parse_br_date
 
 from .services import (
     DEFAULT_REPORT_LIMIT,
@@ -44,6 +46,15 @@ class _BaseReportView(ReportsAccessMixin, TemplateView):
 
     def _p(self, key, default=''):
         return self.request.GET.get(key, default).strip()
+
+    def _date_input(self, key):
+        value = parse_br_date(self._p(key))
+        return value.isoformat() if value else ''
+
+    def get(self, request, *args, **kwargs):
+        if any(self._p(key) and not parse_br_date(self._p(key)) for key in ('date_from', 'date_to')):
+            messages.error(request, 'Informe as datas no formato dd/mm/aaaa.')
+        return super().get(request, *args, **kwargs)
 
     def _csv_response(self, rows, headers):
         """Stream CSV rows with UTF-8 BOM for Excel (R11.10)."""
@@ -104,8 +115,8 @@ class ARetirarReportView(_BaseReportView):
         ctx = super().get_context_data(**kwargs)
         ctx.update({
             'rentals': self._get_data(),
-            'date_from': self._p('date_from'),
-            'date_to': self._p('date_to'),
+            'date_from': self._date_input('date_from'),
+            'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
@@ -152,8 +163,8 @@ class RetiradosReportView(_BaseReportView):
         ctx = super().get_context_data(**kwargs)
         ctx.update({
             'rentals': self._get_data(),
-            'date_from': self._p('date_from'),
-            'date_to': self._p('date_to'),
+            'date_from': self._date_input('date_from'),
+            'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
@@ -205,8 +216,8 @@ class DevolvidosReportView(_BaseReportView):
         ctx = super().get_context_data(**kwargs)
         ctx.update({
             'rentals': self._get_data(),
-            'date_from': self._p('date_from'),
-            'date_to': self._p('date_to'),
+            'date_from': self._date_input('date_from'),
+            'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
@@ -299,8 +310,8 @@ class LocacoesReportView(_BaseReportView):
         ctx = super().get_context_data(**kwargs)
         ctx.update({
             'rentals': self._get_data(),
-            'date_from': self._p('date_from'),
-            'date_to': self._p('date_to'),
+            'date_from': self._date_input('date_from'),
+            'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'status': self._p('status'),
             'status_choices': RentalModel.Status.choices,
@@ -350,8 +361,8 @@ class ContasVencimentoReportView(_BaseReportView):
         ctx.update({
             'receivables': receivables,
             'totals': totals,
-            'date_from': self._p('date_from'),
-            'date_to': self._p('date_to'),
+            'date_from': self._date_input('date_from'),
+            'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'overdue': self._p('overdue'),
             'today': date_cls.today(),

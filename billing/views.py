@@ -7,9 +7,11 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import FormView, ListView, TemplateView, View
 
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
+from core.ui import parse_br_date
 from company.models import Company
 from customers.models import Customer, _normalize_name
 from rentals.models import Rental
@@ -36,6 +38,23 @@ from .services import (
 
 class BillingAccessMixin(ModuleAccessMixin):
     module_key = 'billing'
+
+
+def _filters_for_display(request):
+    """Keep date inputs valid after filters arrive in Brazilian notation."""
+    filters = request.GET.copy()
+    for key in ('date_from', 'date_to'):
+        value = parse_br_date(filters.get(key))
+        if value:
+            filters[key] = value.isoformat()
+    return filters
+
+
+def _has_invalid_date_filter(request):
+    return any(
+        request.GET.get(key, '').strip() and not parse_br_date(request.GET.get(key))
+        for key in ('date_from', 'date_to')
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -74,8 +93,11 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
         if self.request.GET.get('overdue'):
             qs = qs.filter(due_date__lt=date_cls.today(), balance__gt=0)
 
-        date_from = self.request.GET.get('date_from')
-        date_to = self.request.GET.get('date_to')
+        date_from = parse_br_date(self.request.GET.get('date_from'))
+        date_to = parse_br_date(self.request.GET.get('date_to'))
+        if _has_invalid_date_filter(self.request):
+            messages.error(self.request, 'Informe as datas no formato dd/mm/aaaa.')
+            return qs.none()
         if date_from:
             qs = qs.filter(due_date__gte=date_from)
         if date_to:
@@ -99,10 +121,9 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
             for rec in context['receivables']
         ]
         context['rows'] = rows
-        context['filters'] = self.request.GET
+        context['filters'] = _filters_for_display(self.request)
         context['today'] = date_cls.today()
         return context
-
 
 class CustomerReceivableView(BillingAccessMixin, TemplateView):
     """Receivables filtered by customer, plus totals (R5.05)."""
@@ -210,7 +231,11 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         messages.success(self.request, 'Recebimento registrado com sucesso.')
 
         next_url = self.request.POST.get('next') or self.request.GET.get('next')
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
             return redirect(next_url)
         return redirect('billing:customer_receivables', pk=self.receivable.rental.customer_id)
 
@@ -260,32 +285,48 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
             messages.error(self.request, 'Selecione pelo menos um título.')
             return self.form_invalid(form)
 
-        selected = (
-            Receivable.objects.filter(
-                pk__in=receivable_ids,
-                rental__customer=self.customer,
-                balance__gt=0,
+        with transaction.atomic():
+            # Lock and recalculate the selected balances inside the transaction.
+            # A second cashier may have paid one of these titles after the page
+            # was opened, so a pre-lock total must never drive the allocation.
+            selected = list(
+                Receivable.objects.select_for_update()
+                .filter(
+                    pk__in=receivable_ids,
+                    rental__customer=self.customer,
+                    balance__gt=0,
+                )
+                .select_related('rental')
+                .order_by('due_date')
             )
-            .select_related('rental')
-            .order_by('due_date')
-        )
+            selected_total = sum((rec.balance for rec in selected), Decimal('0'))
+            if not selected_total:
+                form.add_error('total_amount', 'Nenhum título em aberto foi selecionado.')
+                return self.form_invalid(form)
 
-        remaining = form.cleaned_data['total_amount']
-        paid_count = 0
-        for rec in selected:
-            if remaining <= 0:
-                break
-            pay_amount = min(remaining, rec.balance)
-            register_payment(
-                receivable=rec,
-                amount=pay_amount,
-                payment_date=form.cleaned_data['payment_date'],
-                method=form.cleaned_data['method'],
-                notes=form.cleaned_data.get('notes', ''),
-                user=self.request.user,
-            )
-            remaining -= pay_amount
-            paid_count += 1
+            if form.cleaned_data['total_amount'] > selected_total:
+                form.add_error(
+                    'total_amount',
+                    f'O valor informado é maior que o saldo dos títulos selecionados (R$ {selected_total:.2f}).',
+                )
+                return self.form_invalid(form)
+
+            remaining = form.cleaned_data['total_amount']
+            paid_count = 0
+            for rec in selected:
+                if remaining <= 0:
+                    break
+                pay_amount = min(remaining, rec.balance)
+                register_payment(
+                    receivable=rec,
+                    amount=pay_amount,
+                    payment_date=form.cleaned_data['payment_date'],
+                    method=form.cleaned_data['method'],
+                    notes=form.cleaned_data.get('notes', ''),
+                    user=self.request.user,
+                )
+                remaining -= pay_amount
+                paid_count += 1
 
         messages.success(self.request, f'{paid_count} título(s) recebido(s) com sucesso.')
         return redirect('billing:customer_receivables', pk=self.customer.pk)
@@ -341,8 +382,11 @@ class CashMovementListView(BillingAccessMixin, ListView):
             'account', 'customer', 'receivable', 'rental'
         ).order_by('-date', '-created_at')
 
-        date_from = self.request.GET.get('date_from')
-        date_to = self.request.GET.get('date_to')
+        date_from = parse_br_date(self.request.GET.get('date_from'))
+        date_to = parse_br_date(self.request.GET.get('date_to'))
+        if _has_invalid_date_filter(self.request):
+            messages.error(self.request, 'Informe as datas no formato dd/mm/aaaa.')
+            return qs.none()
         if date_from:
             qs = qs.filter(date__gte=date_from)
         if date_to:
@@ -382,7 +426,7 @@ class CashMovementListView(BillingAccessMixin, ListView):
             'balance': inflow - outflow,
             'accounts': CashAccount.objects.filter(active=True),
             'sources': FinancialMovement.Source.choices,
-            'filters': self.request.GET,
+            'filters': _filters_for_display(self.request),
         })
         return context
 
@@ -401,12 +445,6 @@ class ManualCashMovementView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        from customers.models import Customer as CustomerModel
-        customer = None
-        name = form.cleaned_data.get('customer_name', '').strip()
-        if name:
-            customer = CustomerModel.objects.filter(name_search__icontains=_normalize_name(name)).first()
-
         movement = FinancialMovement.objects.create(
             date=form.cleaned_data['date'],
             account=form.cleaned_data['account'],
@@ -414,7 +452,7 @@ class ManualCashMovementView(BillingAccessMixin, ActionRequiredMixin, FormView):
             amount=form.cleaned_data['amount'],
             description=form.cleaned_data['description'],
             source=FinancialMovement.Source.MANUAL,
-            customer=customer,
+            customer=form.cleaned_data.get('customer'),
             created_by=self.request.user,
         )
         from core.models import AuditLog
@@ -444,8 +482,11 @@ class PaymentReportView(BillingAccessMixin, ListView):
             .order_by('-payment_date', '-created_at')
         )
 
-        date_from = self.request.GET.get('date_from')
-        date_to = self.request.GET.get('date_to')
+        date_from = parse_br_date(self.request.GET.get('date_from'))
+        date_to = parse_br_date(self.request.GET.get('date_to'))
+        if _has_invalid_date_filter(self.request):
+            messages.error(self.request, 'Informe as datas no formato dd/mm/aaaa.')
+            return qs.none()
         if date_from:
             qs = qs.filter(payment_date__gte=date_from)
         if date_to:
@@ -468,7 +509,7 @@ class PaymentReportView(BillingAccessMixin, ListView):
         context.update({
             'total_received': total,
             'methods': Payment.Method.choices,
-            'filters': self.request.GET,
+            'filters': _filters_for_display(self.request),
             'today': date_cls.today(),
         })
         return context
@@ -482,10 +523,14 @@ class CashMovementReportView(BillingAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         today = date_cls.today()
-        date_from = self.request.GET.get('date_from', today.replace(day=1).isoformat())
-        date_to = self.request.GET.get('date_to', today.isoformat())
+        invalid_dates = _has_invalid_date_filter(self.request)
+        date_from = parse_br_date(self.request.GET.get('date_from')) or today.replace(day=1)
+        date_to = parse_br_date(self.request.GET.get('date_to')) or today
 
         qs = FinancialMovement.objects.filter(date__gte=date_from, date__lte=date_to)
+        if invalid_dates:
+            messages.error(self.request, 'Informe as datas no formato dd/mm/aaaa.')
+            qs = qs.none()
 
         account_id = self.request.GET.get('account')
         if account_id and account_id.isdigit():
@@ -520,8 +565,8 @@ class CashMovementReportView(BillingAccessMixin, TemplateView):
         movements = qs.select_related('account', 'customer').order_by('-date', '-created_at')[:200]
 
         context.update({
-            'date_from': date_from,
-            'date_to': date_to,
+            'date_from': date_from.isoformat(),
+            'date_to': date_to.isoformat(),
             'total_inflow': inflow,
             'total_outflow': outflow,
             'balance': inflow - outflow,
@@ -608,6 +653,7 @@ class GenerateReceivablesView(BillingAccessMixin, FormView):
     """Generate installments for a rental (RF-19 / 8.1.3)."""
 
     form_class = GenerateReceivablesForm
+    template_name = 'billing/receivable_list.html'
 
     def dispatch(self, request, *args, **kwargs):
         self.rental = get_object_or_404(Rental, pk=kwargs['rental_pk'])
@@ -636,14 +682,28 @@ class GenerateReceivablesView(BillingAccessMixin, FormView):
 
     def form_invalid(self, form):
         messages.error(self.request, 'Não foi possível gerar as parcelas.')
-        return redirect('billing:list', rental_pk=self.rental.pk)
+        return self.render_to_response(self.get_context_data(form=form))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        company = Company.load()
+        context.update({
+            'rental': self.rental,
+            'rows': [
+                {'obj': receivable, **interest_breakdown(receivable, company=company)}
+                for receivable in self.rental.receivables.select_related('rental__customer')
+            ],
+            'generate_form': context['form'],
+        })
+        return context
 
 
-class PaymentView(BillingAccessMixin, FormView):
+class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
     """Legacy payment view kept for backward compatibility (RF-21)."""
 
     form_class = PaymentForm
     template_name = 'billing/payment_form.html'
+    action_key = 'billing.receive'
 
     def dispatch(self, request, *args, **kwargs):
         self.receivable = get_object_or_404(Receivable, pk=kwargs['pk'])
@@ -656,8 +716,12 @@ class PaymentView(BillingAccessMixin, FormView):
         return context
 
     def form_valid(self, form):
-        self.receivable.register_payment(
-            form.cleaned_data['value'], form.cleaned_data['payment_date']
+        register_payment(
+            receivable=self.receivable,
+            amount=form.cleaned_data['value'],
+            payment_date=form.cleaned_data['payment_date'],
+            method=Payment.Method.CASH,
+            user=self.request.user,
         )
         messages.success(self.request, 'Recebimento registrado com sucesso.')
         return redirect('billing:list', rental_pk=self.receivable.rental_id)

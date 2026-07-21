@@ -23,7 +23,7 @@ class ReturnForm(forms.ModelForm):
     """Return form. days_late and penalty_applied are computed in the view."""
 
     payment_amount = BRMoneyField(
-        label='Valor recebido agora', required=False, min_value=Decimal('0'),
+        label='Valor recebido agora', required=False, min_value=Decimal('0.01'),
         decimal_places=2, max_digits=10,
     )
     payment_method = forms.ChoiceField(
@@ -49,7 +49,8 @@ class ReturnForm(forms.ModelForm):
         fields = ('return_date',)
         widgets = {'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy())}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, rental=None, **kwargs):
+        self.rental = rental
         super().__init__(*args, **kwargs)
         self.fields['return_date'].input_formats = DATE_INPUT_FORMATS
         self.fields['return_date'].widget.attrs['class'] = INPUT_CLASS
@@ -61,6 +62,15 @@ class ReturnForm(forms.ModelForm):
         cleaned_data = super().clean()
         payment_amount = cleaned_data.get('payment_amount')
         payment_method = cleaned_data.get('payment_method')
+        return_date = cleaned_data.get('return_date')
         if payment_amount and payment_amount > Decimal('0') and not payment_method:
             self.add_error('payment_method', 'Selecione a forma de recebimento.')
+        if payment_method and not payment_amount and 'payment_amount' not in self.errors:
+            self.add_error('payment_amount', 'Informe um valor para registrar o recebimento.')
+        if self.rental and return_date and hasattr(self.rental, 'pickup'):
+            if return_date < self.rental.pickup.pickup_date:
+                self.add_error(
+                    'return_date',
+                    'A data de devolução não pode ser anterior à retirada registrada.',
+                )
         return cleaned_data

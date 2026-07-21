@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from accounts.models import ModulePermission
+from customers.forms import CustomerForm
 from customers.models import Customer
 
 User = get_user_model()
@@ -45,6 +46,50 @@ class CustomerCrudTests(TestCase):
         response = self.client.get('/clientes/?q=9999999999')
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'Ana Souza')
+
+    def test_create_form_keeps_city_entry_available_without_javascript(self):
+        response = self.client.get('/clientes/novo/')
+
+        self.assertContains(response, 'list="customer-city-options"')
+        self.assertContains(response, '<datalist id="customer-city-options">', html=False)
+
+
+class CustomerFormNormalizationTests(TestCase):
+    def test_accepts_phone_with_brazilian_country_code_and_saves_local_format(self):
+        form = CustomerForm(data={
+            'name': 'Maria Silva',
+            'address': '',
+            'district': '',
+            'state': 'PR',
+            'city': 'Bandeirantes',
+            'rg': '',
+            'cpf': '',
+            'phone_home': '',
+            'phone_mobile': '+55 (43) 99999-8888',
+            'phone_work': '',
+            'notes': '',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['phone_mobile'], '(43) 99999-8888')
+
+    def test_invalid_cpf_returns_a_field_error(self):
+        form = CustomerForm(data={
+            'name': 'Maria Silva',
+            'address': '',
+            'district': '',
+            'state': 'PR',
+            'city': 'Bandeirantes',
+            'rg': '',
+            'cpf': '111.111.111-11',
+            'phone_home': '',
+            'phone_mobile': '',
+            'phone_work': '',
+            'notes': '',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cpf', form.errors)
 
 
 class CustomerLegacyFieldTests(TestCase):

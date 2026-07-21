@@ -10,9 +10,11 @@ from django.urls import reverse
 from PIL import Image
 
 from accounts.models import ActionPermission, ModulePermission
+from billing.models import Payment, Receivable
 from catalog.models import Category, Product
 from customers.models import Customer
 from movements.models import Pickup
+from rentals.forms import RentalForm, RentalItemForm
 from rentals.models import Rental, RentalItem
 from rentals.signals import sync_rental_total
 
@@ -81,6 +83,57 @@ class RentalModelTests(TestCase):
         self.assertIn('rental_customer_pickup_idx', index_names)
 
 
+class RentalFormValidationTests(TestCase):
+    def setUp(self):
+        self.customer = Customer.objects.create(name='Maria')
+
+    def _header_data(self, **overrides):
+        data = {
+            'customer': self.customer.pk,
+            'use_for': '',
+            'pickup_date': '10/06/2026',
+            'return_date': '15/06/2026',
+            'penalty_value': '0,00',
+            'notes': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_monetary_penalty_cannot_be_negative(self):
+        form = RentalForm(data=self._header_data(penalty_value='-1,00'))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('penalty_value', form.errors)
+
+    def test_down_payment_requires_a_receivable(self):
+        form = RentalForm(data=self._header_data(
+            installment_count='',
+            down_payment_amount='100,00',
+            down_payment_method='pix',
+            down_payment_date='10/06/2026',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('installment_count', form.errors)
+
+    def test_new_item_value_starts_blank_instead_of_zero(self):
+        form = RentalItemForm()
+
+        self.assertEqual(form['value'].value(), '')
+
+    def test_rental_item_value_cannot_be_negative(self):
+        category = Category.objects.create(prefix='VN', name='Vestidos')
+        product = Product.objects.create(category=category, code=1, description='A', value=300)
+        # Formsets provide a prefix, so bind this direct form the same way.
+        form = RentalItemForm(data={
+            'items-0-product': product.pk,
+            'items-0-description': '',
+            'items-0-value': '-1,00',
+        }, prefix='items-0')
+        self.assertFalse(form.is_valid())
+        self.assertIn('value', form.errors)
+
+
 class RentalCreateFlowTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='u@b.com', password='Senha12345')
@@ -124,6 +177,27 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
         # Proof photo is served as a streaming FileResponse.
         self.assertGreater(len(b''.join(response.streaming_content)), 0)
+
+    def test_create_requires_at_least_one_item(self):
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-15',
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '1',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': '',
+            'items-0-description': '',
+            'items-0-value': '',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Inclua ao menos uma peça na locação.')
+        self.assertEqual(Rental.objects.count(), 0)
 
     def test_clear_rental_item_proof_photo(self):
         import os
@@ -554,3 +628,46 @@ class RentalItemEditingTests(TestCase):
         # Filled row 0 is re-rendered; blank row 1 is suppressed.
         self.assertContains(response, 'name="items-0-product"')
         self.assertNotContains(response, 'name="items-1-product"')
+
+    def test_paid_rental_allows_notes_only_and_ignores_forged_contract_changes(self):
+        rental, _ = self._rental_with_items([self.p1], number=140)
+        rental.use_for = 'Casamento'
+        rental.penalty_value = Decimal('50')
+        rental.save()
+        receivable = Receivable.objects.create(
+            rental=rental,
+            due_date=date(2026, 6, 15),
+            amount=Decimal('300'),
+        )
+        Payment.objects.create(
+            receivable=receivable,
+            customer=self.customer,
+            rental=rental,
+            payment_date=date(2026, 6, 10),
+            amount=Decimal('100'),
+            method=Payment.Method.PIX,
+            user=self.user,
+        )
+        other_customer = Customer.objects.create(name='Joana')
+
+        response = self.client.get(reverse('rentals:update', args=[rental.pk]))
+        self.assertTrue(response.context['form'].fields['pickup_date'].disabled)
+        self.assertTrue(response.context['form'].fields['customer'].disabled)
+
+        response = self.client.post(reverse('rentals:update', args=[rental.pk]), {
+            'customer': other_customer.pk,
+            'use_for': 'Outro evento',
+            'pickup_date': '2026-07-01',
+            'return_date': '2026-07-05',
+            'penalty_value': '999,99',
+            'notes': 'Pagamento confirmado no balcão.',
+        })
+
+        self.assertRedirects(response, rental.get_absolute_url())
+        rental.refresh_from_db()
+        self.assertEqual(rental.customer, self.customer)
+        self.assertEqual(rental.use_for, 'Casamento')
+        self.assertEqual(rental.pickup_date, date(2026, 6, 10))
+        self.assertEqual(rental.return_date, date(2026, 6, 15))
+        self.assertEqual(rental.penalty_value, Decimal('50'))
+        self.assertEqual(rental.notes, 'Pagamento confirmado no balcão.')

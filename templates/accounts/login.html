@@ -21,7 +21,7 @@
   {% endif %}
 
   <div class="field-group">
-    <label for="{{ form.username.id_for_label }}" class="field-label">{{ form.username.label }}</label>
+    <label for="{{ form.username.id_for_label }}" class="field-label">{{ form.username.label }}{% if form.username.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
     {{ form.username|render_field }}
     {% if form.username.errors %}
       <p id="{{ form.username.auto_id }}-error" class="field-error" role="alert">{{ form.username.errors|striptags }}</p>
@@ -30,7 +30,7 @@
 
   <div class="field-group">
     <div class="flex items-center justify-between gap-3">
-      <label for="{{ form.password.id_for_label }}" class="field-label">{{ form.password.label }}</label>
+      <label for="{{ form.password.id_for_label }}" class="field-label">{{ form.password.label }}{% if form.password.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
       <a href="{% url 'password_reset' %}" class="text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline">
         Esqueci minha senha
       </a>

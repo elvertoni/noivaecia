@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 
 from core.ui import INPUT_CLASS, configure_br_decimal_field
 
@@ -24,6 +27,21 @@ class CategoryForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         _style_fields(self)
 
+    def clean_prefix(self):
+        """Keep category identifiers canonical and unambiguous.
+
+        Availability and product lookup treat prefixes case-insensitively.  A
+        case-sensitive duplicate therefore looks like one category in the UI
+        while remaining two distinct records in the database.
+        """
+        prefix = self.cleaned_data['prefix'].upper()
+        duplicate = Category.objects.filter(prefix__iexact=prefix)
+        if self.instance.pk:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise ValidationError('Já existe uma categoria com este prefixo.')
+        return prefix
+
 
 class ProductForm(forms.ModelForm):
     class Meta:
@@ -37,6 +55,8 @@ class ProductForm(forms.ModelForm):
             'Valor sugerido para novas locações. Não altera o valor já cobrado em locações existentes.'
         )
         _style_fields(self)
+        self.fields['value'].min_value = Decimal('0')
+        self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
 
 
 class CategoryMergeForm(forms.Form):

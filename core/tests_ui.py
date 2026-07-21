@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.test import SimpleTestCase
 
-from core.ui import BRMoneyField, normalize_br_decimal
+from core.ui import BRMoneyField, normalize_br_decimal, parse_br_date
 
 
 class BrazilianDecimalTests(SimpleTestCase):
@@ -40,3 +40,14 @@ class BrazilianDecimalTests(SimpleTestCase):
         self.assertIn('1.234,50', rendered)
         self.assertIn('aria-describedby="id_amount-currency"', rendered)
         self.assertIn('id="id_amount-currency"', rendered)
+
+
+class BrazilianDateTests(SimpleTestCase):
+    def test_parses_iso_and_brazilian_dates(self):
+        self.assertEqual(parse_br_date('2026-07-20').isoformat(), '2026-07-20')
+        self.assertEqual(parse_br_date('20/07/2026').isoformat(), '2026-07-20')
+        self.assertEqual(parse_br_date('20/07/26').isoformat(), '2026-07-20')
+
+    def test_returns_none_for_invalid_date_values(self):
+        self.assertIsNone(parse_br_date('31/02/2026'))
+        self.assertIsNone(parse_br_date('20-07-2026'))

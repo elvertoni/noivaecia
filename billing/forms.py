@@ -26,7 +26,7 @@ class PaymentForm(forms.Form):
     """Register a payment against a receivable (RF-21)."""
 
     value = BRMoneyField(
-        label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor recebido', min_value=Decimal('0.01'), max_digits=10, decimal_places=2,
     )
     payment_date = forms.DateField(
         label='Data do recebimento',
@@ -39,7 +39,7 @@ class ReceivablePayForm(forms.Form):
     """Enhanced payment form that creates a Payment record (R5.06/R5.08)."""
 
     amount = BRMoneyField(
-        label='Valor recebido', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor recebido', min_value=Decimal('0.01'), max_digits=10, decimal_places=2,
     )
     payment_date = forms.DateField(
         label='Data do recebimento',
@@ -105,15 +105,38 @@ class ManualMovementForm(forms.Form):
     )
     customer_name = forms.CharField(
         label='Cliente (opcional)', required=False,
+        help_text='Informe o nome completo exatamente como está cadastrado.',
         widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
     )
+
+    def clean_customer_name(self):
+        """Link manual movements only to an unambiguous registered customer."""
+        from customers.models import Customer, _normalize_name
+
+        customer_name = self.cleaned_data['customer_name'].strip()
+        if not customer_name:
+            self.cleaned_data['customer'] = None
+            return customer_name
+
+        customers = Customer.objects.filter(name_search=_normalize_name(customer_name))
+        if not customers.exists():
+            raise forms.ValidationError(
+                'Cliente não encontrado. Informe o nome completo cadastrado ou deixe o campo em branco.'
+            )
+        if customers.count() > 1:
+            raise forms.ValidationError(
+                'Há mais de um cliente com este nome. Deixe o campo em branco e registre o vínculo depois.'
+            )
+
+        self.cleaned_data['customer'] = customers.get()
+        return customer_name
 
 
 class MultiPayForm(forms.Form):
     """Multi-receivable payment form (R5.07)."""
 
     total_amount = BRMoneyField(
-        label='Valor total a receber', min_value=0, max_digits=10, decimal_places=2,
+        label='Valor total a receber', min_value=Decimal('0.01'), max_digits=10, decimal_places=2,
     )
     payment_date = forms.DateField(
         label='Data do recebimento',

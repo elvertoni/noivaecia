@@ -9,7 +9,7 @@
       <p class="page-description">Locações com devolução efetiva registrada.</p>
     </div>
     <div class="flex gap-2 print:hidden">
-      <a href="?date_from={{ date_from }}&date_to={{ date_to }}&customer={{ customer }}&prefix={{ prefix }}&code={{ code }}&format=csv" class="btn btn-secondary">Exportar CSV</a>
+      <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -62,7 +62,7 @@
             <td>{% if rental.return_record %}{{ rental.return_record.return_date|date:'d/m/Y' }}{% else %}—{% endif %}</td>
             <td class="text-app-muted text-sm">
               {% if rental.pickup and rental.return_record %}
-                {{ rental.return_record.return_date|timeuntil:rental.pickup.pickup_date }}
+                {{ rental.pickup.pickup_date|timeuntil:rental.return_record.return_date }}
               {% else %}—{% endif %}
             </td>
             <td class="text-right">R$ {{ rental.total_value|brl }}</td>

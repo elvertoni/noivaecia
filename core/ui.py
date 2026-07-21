@@ -1,6 +1,7 @@
 """Shared formatting helpers and widgets for server-rendered UI components."""
 
 import re
+from datetime import date as date_cls
 
 from django import forms
 from django.utils.html import format_html
@@ -15,6 +16,39 @@ DECIMAL_INPUT_ATTRS = {
     'data-decimal-br': 'true',
     'class': INPUT_CLASS,
 }
+
+
+def parse_br_date(value):
+    """Return a valid date from ISO or Brazilian input, otherwise ``None``.
+
+    Native date inputs submit ISO values, while the progressive enhancement in
+    ``app.js`` displays Brazilian dates. Filters must safely support either
+    representation because they do not have a Django form to validate them.
+    """
+    if isinstance(value, date_cls):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    raw = value.strip()
+    if not raw:
+        return None
+
+    iso_match = re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})', raw)
+    br_match = re.fullmatch(r'(\d{2})/(\d{2})/(\d{2}|\d{4})', raw)
+    if iso_match:
+        year, month, day = (int(part) for part in iso_match.groups())
+    elif br_match:
+        day, month, year = (int(part) for part in br_match.groups())
+        if year < 100:
+            year += 2000 if year <= 69 else 1900
+    else:
+        return None
+
+    try:
+        return date_cls(year, month, day)
+    except ValueError:
+        return None
 
 
 class BRDecimalInput(forms.TextInput):

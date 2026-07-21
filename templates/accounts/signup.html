@@ -19,12 +19,12 @@
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="field-group">
-          <label for="{{ form.email.id_for_label }}" class="field-label">{{ form.email.label }}</label>
+          <label for="{{ form.email.id_for_label }}" class="field-label">{{ form.email.label }}{% if form.email.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
           {{ form.email|render_field }}
           {% if form.email.errors %}<p id="{{ form.email.auto_id }}-error" class="field-error" role="alert">{{ form.email.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
-          <label for="{{ form.first_name.id_for_label }}" class="field-label">{{ form.first_name.label }}</label>
+          <label for="{{ form.first_name.id_for_label }}" class="field-label">{{ form.first_name.label }}{% if form.first_name.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
           {{ form.first_name|render_field }}
           {% if form.first_name.errors %}<p id="{{ form.first_name.auto_id }}-error" class="field-error" role="alert">{{ form.first_name.errors|striptags }}</p>{% endif %}
         </div>
@@ -32,7 +32,7 @@
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="field-group">
-          <label for="{{ form.password1.id_for_label }}" class="field-label">{{ form.password1.label }}</label>
+          <label for="{{ form.password1.id_for_label }}" class="field-label">{{ form.password1.label }}{% if form.password1.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
           <div class="relative">
             {{ form.password1|render_field }}
             <button type="button"
@@ -58,7 +58,7 @@
         </div>
 
         <div class="field-group">
-          <label for="{{ form.password2.id_for_label }}" class="field-label">{{ form.password2.label }}</label>
+          <label for="{{ form.password2.id_for_label }}" class="field-label">{{ form.password2.label }}{% if form.password2.field.required %} <span class="text-red-600" aria-hidden="true">*</span><span class="sr-only"> obrigatório</span>{% endif %}</label>
           <div class="relative">
             {{ form.password2|render_field }}
             <button type="button"

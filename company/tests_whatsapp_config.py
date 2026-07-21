@@ -66,6 +66,27 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['whatsapp_report_number'], '')
 
+    def test_enabled_report_requires_a_destination_number(self):
+        form = CompanyForm(data=self._base_data(
+            whatsapp_reports_enabled=True,
+            whatsapp_report_number='',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('whatsapp_report_number', form.errors)
+
+    def test_accepts_and_formats_valid_cnpj(self):
+        form = CompanyForm(data=self._base_data(cnpj='11222333000181'))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['cnpj'], '11.222.333/0001-81')
+
+    def test_rejects_invalid_cnpj(self):
+        form = CompanyForm(data=self._base_data(cnpj='11.111.111/1111-11'))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cnpj', form.errors)
+
     def test_toggle_defaults_to_false_when_absent(self):
         data = self._base_data()
         del data['whatsapp_reports_enabled']
