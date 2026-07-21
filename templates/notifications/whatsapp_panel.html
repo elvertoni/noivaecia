@@ -11,6 +11,9 @@
       <h1 class="page-title">Avisos WhatsApp</h1>
       <p class="page-description">Confira quem vai receber o aviso antes de disparar.</p>
     </div>
+    <div class="flex shrink-0">
+      <button type="button" id="open-template-editor" class="btn btn-secondary" aria-haspopup="dialog" aria-controls="message-template-dialog" aria-expanded="false">Editar templates</button>
+    </div>
   </div>
 
   {# ── Retiradas de amanhã ─────────────────────────────────────────── #}
@@ -21,7 +24,7 @@
     </div>
 
     {% if pickup_items %}
-      <form method="post" action="{% url 'notifications:dispatch' %}">
+      <form id="pickup-dispatch-form" method="post" action="{% url 'notifications:dispatch' %}">
         {% csrf_token %}
         <input type="hidden" name="kind" value="pickup_reminder">
 
@@ -71,24 +74,6 @@
           {% endfor %}
         </div>
 
-        <div class="mt-5 border-t border-slate-200 pt-5">
-          <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-            <div>
-              <label for="pickup-message-template" class="field-label">Mensagem de retirada</label>
-              <p id="pickup-message-template-help" class="mt-1 field-help">Edite a mensagem antes do envio. Cada placeholder é preenchido para a respectiva locação.</p>
-            </div>
-            <p class="text-xs font-medium text-slate-600">Válida apenas para este envio</p>
-          </div>
-          <textarea id="pickup-message-template" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-36 resize-y leading-6" aria-describedby="pickup-message-template-help pickup-message-placeholders">{{ pickup_message_template }}</textarea>
-          <p id="pickup-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
-            <span class="font-medium text-slate-700">Placeholders:</span>
-            <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
-            <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
-            <code class="font-mono font-semibold text-slate-700">{data_retirada}</code> e
-            <code class="font-mono font-semibold text-slate-700">{itens}</code>.
-          </p>
-        </div>
-
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Enviar selecionados</button>
           <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
@@ -108,7 +93,7 @@
     </div>
 
     {% if return_items %}
-      <form method="post" action="{% url 'notifications:dispatch' %}">
+      <form id="return-dispatch-form" method="post" action="{% url 'notifications:dispatch' %}">
         {% csrf_token %}
         <input type="hidden" name="kind" value="return_reminder">
 
@@ -156,24 +141,6 @@
               <p class="mt-2 truncate text-sm text-slate-600" title="{{ item.message }}">{{ item.message|truncatechars:60 }}</p>
             </article>
           {% endfor %}
-        </div>
-
-        <div class="mt-5 border-t border-slate-200 pt-5">
-          <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-            <div>
-              <label for="return-message-template" class="field-label">Mensagem de devolução</label>
-              <p id="return-message-template-help" class="mt-1 field-help">Edite a mensagem antes do envio. Cada placeholder é preenchido para a respectiva locação.</p>
-            </div>
-            <p class="text-xs font-medium text-slate-600">Válida apenas para este envio</p>
-          </div>
-          <textarea id="return-message-template" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-36 resize-y leading-6" aria-describedby="return-message-template-help return-message-placeholders">{{ return_message_template }}</textarea>
-          <p id="return-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
-            <span class="font-medium text-slate-700">Placeholders:</span>
-            <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
-            <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
-            <code class="font-mono font-semibold text-slate-700">{data_devolucao}</code> e
-            <code class="font-mono font-semibold text-slate-700">{itens}</code>.
-          </p>
         </div>
 
         <div class="form-actions">
@@ -256,6 +223,54 @@
   </section>
 </div>
 
+<dialog id="message-template-dialog" class="m-auto w-11/12 max-w-4xl rounded-xl border border-slate-300 bg-app-surface p-0 text-app-ink shadow-sm backdrop:bg-slate-950/30" aria-labelledby="message-template-dialog-title">
+  <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+    <div>
+      <h2 id="message-template-dialog-title" class="section-title">Editar templates de WhatsApp</h2>
+      <p class="mt-1 text-sm leading-6 text-app-muted">Os placeholders são preenchidos automaticamente para cada locação no momento do envio.</p>
+    </div>
+  </div>
+
+  <div class="max-h-[70vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+    <section aria-labelledby="pickup-template-title">
+      <div class="flex items-baseline justify-between gap-4">
+        <h3 id="pickup-template-title" class="text-base font-semibold text-app-ink">Retirada</h3>
+        <span class="text-xs font-medium text-slate-600">Enviada antes da retirada</span>
+      </div>
+      <label for="pickup-message-template" class="sr-only">Template de retirada</label>
+      <textarea id="pickup-message-template" form="pickup-dispatch-form" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-40 resize-y leading-6" aria-describedby="pickup-message-placeholders">{{ pickup_message_template }}</textarea>
+      <p id="pickup-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
+        <span class="font-medium text-slate-700">Placeholders:</span>
+        <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
+        <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
+        <code class="font-mono font-semibold text-slate-700">{data_retirada}</code> e
+        <code class="font-mono font-semibold text-slate-700">{itens}</code>.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-6" aria-labelledby="return-template-title">
+      <div class="flex items-baseline justify-between gap-4">
+        <h3 id="return-template-title" class="text-base font-semibold text-app-ink">Devolução</h3>
+        <span class="text-xs font-medium text-slate-600">Enviada no dia da devolução</span>
+      </div>
+      <label for="return-message-template" class="sr-only">Template de devolução</label>
+      <textarea id="return-message-template" form="return-dispatch-form" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-40 resize-y leading-6" aria-describedby="return-message-placeholders">{{ return_message_template }}</textarea>
+      <p id="return-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
+        <span class="font-medium text-slate-700">Placeholders:</span>
+        <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
+        <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
+        <code class="font-mono font-semibold text-slate-700">{data_devolucao}</code> e
+        <code class="font-mono font-semibold text-slate-700">{itens}</code>.
+      </p>
+    </section>
+  </div>
+
+  <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
+    <button type="button" id="cancel-template-editor" class="btn btn-ghost">Cancelar</button>
+    <button type="button" id="save-template-editor" class="btn btn-primary">Usar templates</button>
+  </div>
+</dialog>
+
 <script>
   (function () {
     document.querySelectorAll('.select-all-checkbox').forEach(function (master) {
@@ -265,6 +280,56 @@
           checkbox.checked = master.checked;
         });
       });
+    });
+
+    var editorButton = document.getElementById('open-template-editor');
+    var dialog = document.getElementById('message-template-dialog');
+    var saveButton = document.getElementById('save-template-editor');
+    var cancelButton = document.getElementById('cancel-template-editor');
+    var templates = dialog.querySelectorAll('textarea[name="message_template"]');
+    var savedValues = [];
+
+    function rememberTemplates() {
+      savedValues = Array.prototype.map.call(templates, function (template) {
+        return template.value;
+      });
+    }
+
+    function restoreTemplates() {
+      templates.forEach(function (template, index) {
+        template.value = savedValues[index];
+      });
+    }
+
+    function closeEditor(restore) {
+      if (restore) {
+        restoreTemplates();
+      }
+      dialog.close();
+      editorButton.setAttribute('aria-expanded', 'false');
+      editorButton.focus();
+    }
+
+    rememberTemplates();
+
+    editorButton.addEventListener('click', function () {
+      dialog.showModal();
+      editorButton.setAttribute('aria-expanded', 'true');
+      templates[0].focus();
+    });
+
+    saveButton.addEventListener('click', function () {
+      rememberTemplates();
+      closeEditor(false);
+    });
+
+    cancelButton.addEventListener('click', function () {
+      closeEditor(true);
+    });
+
+    dialog.addEventListener('cancel', function (event) {
+      event.preventDefault();
+      closeEditor(true);
     });
   })();
 </script>

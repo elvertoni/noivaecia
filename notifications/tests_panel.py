@@ -104,9 +104,11 @@ class PanelQueueRenderingTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'Retiradas de amanhã')
         self.assertContains(r, 'Devoluções de hoje')
-        self.assertContains(r, 'Mensagem de retirada')
-        self.assertContains(r, 'Mensagem de devolução')
+        self.assertContains(r, 'Editar templates')
+        self.assertContains(r, 'message-template-dialog')
         self.assertContains(r, '{cliente}')
+        self.assertContains(r, 'form="pickup-dispatch-form"')
+        self.assertContains(r, 'form="return-dispatch-form"')
         self.assertIn('{data_retirada}', r.context['pickup_message_template'])
         self.assertIn('{data_devolucao}', r.context['return_message_template'])
         pickup_pks = {item['rental'].pk for item in r.context['pickup_items']}
