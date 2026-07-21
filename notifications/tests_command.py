@@ -67,6 +67,120 @@ class SendDailyReportCommandTests(TestCase):
             {'5543999998888': 'MSGID1', '5543988887777': 'MSGID2'},
         )
 
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID2')
+    def test_new_target_added_after_daily_send_is_still_sent(self, send_text):
+        AuditLog.objects.create(
+            user=None, action='whatsapp_daily_report',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'target': '5543999998888',
+                'message_id': 'MSGID1',
+            },
+        )
+        self.company.whatsapp_report_number = '5543999998888\n5543988887777'
+        self.company.save()
+
+        self.run_cmd('--date', '2026-07-20')
+
+        send_text.assert_called_once()
+        self.assertEqual(send_text.call_args.args[0], '5543988887777')
+        self.assertEqual(
+            AuditLog.objects.filter(action='whatsapp_daily_report').count(),
+            2,
+        )
+
+    @mock.patch(f'{CMD}.evolution.send_text')
+    def test_idempotency_skips_only_when_all_targets_were_sent(self, send_text):
+        AuditLog.objects.create(
+            user=None, action='whatsapp_daily_report',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888', '5543988887777'],
+                'message_ids': {
+                    '5543999998888': 'MSGID1',
+                    '5543988887777': 'MSGID2',
+                },
+            },
+        )
+        self.company.whatsapp_report_number = '5543999998888\n5543988887777'
+        self.company.save()
+
+        out = self.run_cmd('--date', '2026-07-20')
+
+        send_text.assert_not_called()
+        self.assertIn('todos os destinos configurados', out)
+
+    @mock.patch(
+        f'{CMD}.evolution.send_text',
+        side_effect=['MSGID1', evolution.EvolutionError('boom')],
+    )
+    def test_partial_failure_records_success_and_failed_target(self, send_text):
+        self.company.whatsapp_report_number = '5543999998888\n5543988887777'
+        self.company.save()
+
+        with self.assertRaises(CommandError):
+            self.run_cmd('--date', '2026-07-20')
+
+        self.assertEqual(send_text.call_count, 2)
+        sent_log = AuditLog.objects.get(action='whatsapp_daily_report')
+        self.assertEqual(sent_log.metadata['targets'], ['5543999998888'])
+        failed_log = AuditLog.objects.get(action='whatsapp_send_failed')
+        self.assertEqual(failed_log.metadata['targets'], ['5543988887777'])
+        self.assertEqual(failed_log.metadata['sent_targets'], ['5543999998888'])
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID2')
+    def test_retry_after_partial_failure_sends_only_failed_target(self, send_text):
+        AuditLog.objects.create(
+            user=None, action='whatsapp_daily_report',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+                'message_ids': {'5543999998888': 'MSGID1'},
+            },
+        )
+        AuditLog.objects.create(
+            user=None, action='whatsapp_send_failed',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543988887777'],
+            },
+        )
+        self.company.whatsapp_report_number = '5543999998888\n5543988887777'
+        self.company.save()
+
+        self.run_cmd('--date', '2026-07-20')
+
+        send_text.assert_called_once()
+        self.assertEqual(send_text.call_args.args[0], '5543988887777')
+
+    @mock.patch(f'{CMD}.evolution.send_text', side_effect=['MSGID1', 'MSGID2'])
+    def test_configured_send_parses_space_separated_saved_numbers(self, send_text):
+        self.company.whatsapp_report_number = '5543999998888 5543988887777'
+        self.company.save()
+
+        self.run_cmd('--date', '2026-07-20')
+
+        self.assertEqual(
+            [call.args[0] for call in send_text.call_args_list],
+            ['5543999998888', '5543988887777'],
+        )
+
+    @mock.patch(f'{CMD}.evolution.send_text', side_effect=['MSGID1', 'MSGID2'])
+    def test_configured_send_parses_formatted_numbers_on_same_line(self, send_text):
+        self.company.whatsapp_report_number = '+55 (43) 99999-8888 +55 (43) 98888-7777'
+        self.company.save()
+
+        self.run_cmd('--date', '2026-07-20')
+
+        self.assertEqual(
+            [call.args[0] for call in send_text.call_args_list],
+            ['5543999998888', '5543988887777'],
+        )
+
     @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
     def test_idempotent_second_run_skips(self, send_text):
         self.run_cmd('--date', '2026-07-20')

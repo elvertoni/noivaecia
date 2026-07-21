@@ -28,10 +28,32 @@ def _digits(value):
 
 def _configured_targets(value):
     targets = []
-    normalized = re.sub(r'[,;\n]+', '\n', value or '')
-    for raw in normalized.splitlines():
+    normalized = (value or '').strip()
+    if not normalized:
+        return targets
+
+    if re.search(r'[,;\n]', normalized):
+        candidates = re.split(r'[,;\n]+', normalized)
+    else:
+        marked = re.sub(
+            r'(?<!^)\s+(?=(?:\+?55\d{10,11}\b|\+?55[\s(]))',
+            '\n',
+            normalized,
+        )
+        # Be defensive with values saved before the textarea normalisation or
+        # edited directly in the database: "5543... 5543..." should still be
+        # treated as two recipients, while "(43) 99999-8888" must remain one.
+        raw_tokens = marked.split()
+        if '\n' in marked:
+            candidates = marked.splitlines()
+        elif len(raw_tokens) > 1 and all(_digits(token).startswith('55') for token in raw_tokens):
+            candidates = raw_tokens
+        else:
+            candidates = [normalized]
+
+    for raw in candidates:
         target = _digits(raw)
-        if target and target not in targets:
+        if target and target.startswith('55') and 12 <= len(target) <= 13 and target not in targets:
             targets.append(target)
     return targets
 
@@ -90,13 +112,17 @@ class Command(BaseCommand):
         if not dry_run and not targets:
             raise CommandError('Nenhum número de destino configurado.')
 
-        # Idempotency: skip a configured send already done for this date.
-        if not options['force'] and not is_manual and self._already_sent(on_date):
-            if not if_due:
-                self.stdout.write(self.style.WARNING(
-                    f'Relatório de {on_date.isoformat()} já foi enviado.'
-                ))
-            return
+        send_targets = targets
+        if not options['force'] and not is_manual:
+            sent_targets = self._sent_targets(on_date)
+            send_targets = [target for target in targets if target not in sent_targets]
+            if not send_targets:
+                if not if_due:
+                    self.stdout.write(self.style.WARNING(
+                        f'Relatório de {on_date.isoformat()} já foi enviado '
+                        'para todos os destinos configurados.'
+                    ))
+                return
 
         text = build_daily_report(on_date)
 
@@ -104,40 +130,37 @@ class Command(BaseCommand):
             self.stdout.write(text)
             return
 
-        try:
-            message_ids = {}
-            for target in targets:
+        message_ids = {}
+        failures = {}
+        for target in send_targets:
+            try:
                 message_ids[target] = evolution.send_text(target, text)
-        except evolution.EvolutionError as exc:
+            except evolution.EvolutionError as exc:
+                failures[target] = str(exc)
+
+        if message_ids and not is_manual:
+            self._record_sent(company, on_date, message_ids)
+
+        if failures:
             AuditLog.record(
                 user=None,
                 action=FAILED_ACTION,
                 obj=company,
-                reason=str(exc),
+                reason='; '.join(f'{target}: {error}' for target, error in failures.items()),
                 metadata={
                     'reference_date': on_date.isoformat(),
-                    'targets': targets,
+                    'targets': list(failures.keys()),
+                    'errors': failures,
+                    'sent_targets': list(message_ids.keys()),
                 },
             )
-            raise CommandError(f'Falha no envio: {exc}')
-
-        if not is_manual:
-            metadata = {
-                'reference_date': on_date.isoformat(),
-                'targets': targets,
-                'message_ids': {target: str(message_id) for target, message_id in message_ids.items()},
-            }
-            if len(targets) == 1:
-                metadata['target'] = targets[0]
-                metadata['message_id'] = str(message_ids[targets[0]])
-            AuditLog.record(
-                user=None,
-                action=SENT_ACTION,
-                obj=company,
-                metadata=metadata,
+            raise CommandError(
+                f'Falha no envio para {len(failures)} destino(s): '
+                + ', '.join(failures.keys())
             )
+
         self.stdout.write(self.style.SUCCESS(
-            f'Relatório de {on_date.isoformat()} enviado para {len(targets)} destino(s).'
+            f'Relatório de {on_date.isoformat()} enviado para {len(message_ids)} destino(s).'
         ))
 
     def _parse_date(self, raw):
@@ -149,8 +172,37 @@ class Command(BaseCommand):
         except ValueError:
             raise CommandError('--date deve estar no formato YYYY-MM-DD.')
 
-    def _already_sent(self, on_date):
-        return AuditLog.objects.filter(
+    def _sent_targets(self, on_date):
+        logs = AuditLog.objects.filter(
             action=SENT_ACTION,
             metadata__reference_date=on_date.isoformat(),
-        ).exists()
+        ).only('metadata')
+        sent_targets = set()
+        for log in logs:
+            metadata = log.metadata or {}
+            targets = metadata.get('targets')
+            if isinstance(targets, list):
+                sent_targets.update(str(target) for target in targets if target)
+            elif metadata.get('target'):
+                sent_targets.add(str(metadata['target']))
+        return sent_targets
+
+    def _record_sent(self, company, on_date, message_ids):
+        targets = list(message_ids.keys())
+        metadata = {
+            'reference_date': on_date.isoformat(),
+            'targets': targets,
+            'message_ids': {
+                target: str(message_id)
+                for target, message_id in message_ids.items()
+            },
+        }
+        if len(targets) == 1:
+            metadata['target'] = targets[0]
+            metadata['message_id'] = str(message_ids[targets[0]])
+        AuditLog.record(
+            user=None,
+            action=SENT_ACTION,
+            obj=company,
+            metadata=metadata,
+        )
