@@ -169,7 +169,13 @@
           {% for msg in recent_messages %}
             <tr>
               <td>{{ msg.customer.name }}</td>
-              <td><a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link">#{{ msg.rental.number }}</a></td>
+              <td>
+                {% if msg.rental %}
+                  <a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link">#{{ msg.rental.number }}</a>
+                {% else %}
+                  <span class="text-slate-400">— (excluída)</span>
+                {% endif %}
+              </td>
               <td>{{ msg.get_kind_display }}</td>
               <td>
                 {% if msg.status == 'sent' %}
@@ -193,7 +199,11 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="truncate text-sm font-medium text-app-ink">{{ msg.customer.name }}</p>
-              <a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link text-sm">#{{ msg.rental.number }}</a>
+              {% if msg.rental %}
+                <a href="{% url 'rentals:detail' msg.rental.pk %}" class="text-link text-sm">#{{ msg.rental.number }}</a>
+              {% else %}
+                <span class="text-sm text-slate-400">— (excluída)</span>
+              {% endif %}
             </div>
             {% if msg.status == 'sent' %}
               <span class="badge badge-success">Enviado</span>

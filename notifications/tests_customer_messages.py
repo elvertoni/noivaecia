@@ -362,3 +362,27 @@ class DispatchCustomerMessageTests(TestCase):
         self.assertEqual(
             CustomerMessage.objects.filter(rental=self.rental).count(), 2
         )
+
+
+class RentalDeletionTests(TestCase):
+    """Regression test: deleting a rental that already has a CustomerMessage
+    must not raise ProtectedError (bug seen in prod on 2026-07-20 — deleting
+    a cancelled rental after a WhatsApp reminder had been sent to it returned
+    a 500). ``CustomerMessage.rental`` uses SET_NULL, the same pattern as
+    ``billing.Payment.rental``/``billing.FinancialMovement.rental``."""
+
+    @mock.patch('notifications.services.evolution.send_text', return_value='MSGID')
+    def test_deleting_rental_with_customer_message_sets_rental_null(self, send_text):
+        _make_company()
+        customer = _make_customer()
+        rental = _make_rental(
+            90001, customer, Rental.Status.CANCELLED, TODAY, TODAY + timedelta(days=2),
+        )
+        record = dispatch_customer_message(rental, CustomerMessage.Kind.RETURN_REMINDER)
+        self.assertEqual(record.status, CustomerMessage.Status.SENT)
+
+        rental.delete()
+
+        record.refresh_from_db()
+        self.assertIsNone(record.rental_id)
+        self.assertEqual(record.customer_id, customer.pk)
