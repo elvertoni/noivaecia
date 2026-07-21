@@ -22,6 +22,7 @@ exists, so this module never recomputes a business rule on its own:
 import re
 from datetime import date as date_cls, timedelta
 from decimal import Decimal
+from string import Formatter
 
 from django.db import transaction
 from django.utils import timezone
@@ -185,9 +186,9 @@ def build_daily_report(on_date=None):
 #
 # These functions are the backend primitives for the customer-notification
 # feature (see whats.md §9.1): a message on the eve of the pickup date and a
-# reminder on the return date itself. UI/views/scheduling are a later step —
-# this module only builds phone numbers/message text and dispatches sends,
-# recording every attempt in ``CustomerMessage``.
+# reminder on the return date itself. The panel may provide an editable
+# template; this module expands it, dispatches sends, and records every
+# attempt in ``CustomerMessage``.
 
 
 def format_whatsapp_number(digits):
@@ -214,33 +215,106 @@ def _first_name(customer):
     return name.split()[0].capitalize()
 
 
-def render_pickup_message(rental):
-    """Render the eve-of-pickup WhatsApp message for ``rental``."""
-    nome = _first_name(rental.customer)
-    data = rental.pickup_date.strftime('%d/%m')
+PICKUP_MESSAGE_TEMPLATE = (
+    'Oi, {cliente}! 💛 Aqui é a Ana, da Noivas & Cia. Passando pra avisar '
+    'com carinho que a partir de amanhã, {data_retirada}, você já pode retirar '
+    '{itens} aqui na loja. Está tudo pronto e esperando por você! Estamos '
+    'felizes demais em fazer parte desse seu momento. Qualquer dúvida, é só me '
+    'chamar por aqui. Um abraço carinhoso 🌸'
+)
+
+RETURN_MESSAGE_TEMPLATE = (
+    'Oi, {cliente}! 💛 Aqui é a Ana, da Noivas & Cia. Espero de coração que '
+    'seu evento tenha sido lindo! 🥂 Passei só pra lembrar, com todo carinho, '
+    'que a devolução de {itens} está marcada para {data_devolucao}. Quando '
+    'puder trazer, a gente agradece muito. Assim já fica tudo certinho pra '
+    'encantar outra pessoa. Estou por aqui pro que precisar. Um beijo! 🌷'
+)
+
+MESSAGE_TEMPLATE_PLACEHOLDERS = {
+    'cliente': 'primeiro nome da cliente',
+    'numero_locacao': 'número da locação',
+    'data_retirada': 'data de retirada (dd/mm)',
+    'data_devolucao': 'data de devolução (dd/mm)',
+    'itens': '“sua peça” ou “suas peças”',
+}
+
+_DEFAULT_MESSAGE_TEMPLATES = {
+    CustomerMessage.Kind.PICKUP_REMINDER: PICKUP_MESSAGE_TEMPLATE,
+    CustomerMessage.Kind.RETURN_REMINDER: RETURN_MESSAGE_TEMPLATE,
+}
+
+
+class MessageTemplateError(ValueError):
+    """Raised when a message template contains an unsupported placeholder."""
+
+
+def get_default_message_template(kind):
+    """Return the editable default template for a customer message kind."""
+    return _DEFAULT_MESSAGE_TEMPLATES[kind]
+
+
+def validate_message_template(template):
+    """Validate an editable WhatsApp template before any recipient is sent."""
+    template = (template or '').strip()
+    if not template:
+        raise MessageTemplateError('Informe a mensagem que será enviada.')
+    if len(template) > 2_000:
+        raise MessageTemplateError('A mensagem pode ter no máximo 2.000 caracteres.')
+
+    try:
+        parsed = list(Formatter().parse(template))
+    except ValueError as exc:
+        raise MessageTemplateError(
+            'Revise as chaves da mensagem. Use chaves completas, como {cliente}.'
+        ) from exc
+
+    for _, field_name, format_spec, conversion in parsed:
+        if field_name is None:
+            continue
+        if field_name not in MESSAGE_TEMPLATE_PLACEHOLDERS:
+            raise MessageTemplateError(
+                f'Placeholder inválido: {{{field_name}}}. '
+                'Use apenas os placeholders informados no painel.'
+            )
+        if format_spec or conversion:
+            raise MessageTemplateError(
+                f'O placeholder {{{field_name}}} não aceita formatação adicional.'
+            )
+
+    return template
+
+
+def _message_template_context(rental):
     item_count = rental.items.count()
-    sua_peca = 'sua peça' if item_count <= 1 else 'suas peças'
-    return (
-        f'Oi, {nome}! 💛 Aqui é a Ana, da Noivas & Cia. Passando pra avisar '
-        f'com carinho que a partir de amanhã, {data}, você já pode retirar '
-        f'{sua_peca} aqui na loja — está tudo pronto e esperando por você! '
-        'Estamos felizes demais em fazer parte desse seu momento. Qualquer '
-        'dúvida, é só me chamar por aqui. Um abraço carinhoso 🌸'
+    return {
+        'cliente': _first_name(rental.customer),
+        'numero_locacao': rental.number,
+        'data_retirada': rental.pickup_date.strftime('%d/%m'),
+        'data_devolucao': rental.return_date.strftime('%d/%m'),
+        'itens': 'sua peça' if item_count <= 1 else 'suas peças',
+    }
+
+
+def render_message_template(rental, template):
+    """Substitute the supported placeholders for a rental in ``template``."""
+    template = validate_message_template(template)
+    return template.format(**_message_template_context(rental))
+
+
+def render_pickup_message(rental, template=None):
+    """Render the eve-of-pickup WhatsApp message for ``rental``."""
+    return render_message_template(
+        rental,
+        PICKUP_MESSAGE_TEMPLATE if template is None else template,
     )
 
 
-def render_return_message(rental):
+def render_return_message(rental, template=None):
     """Render the return-day WhatsApp message for ``rental``."""
-    nome = _first_name(rental.customer)
-    item_count = rental.items.count()
-    da_peca = 'da sua peça' if item_count <= 1 else 'das suas peças'
-    return (
-        f'Oi, {nome}! 💛 Aqui é a Ana, da Noivas & Cia. Espero de coração que '
-        'seu evento tenha sido lindo! 🥂 Passei só pra lembrar, com todo '
-        f'carinho, que a devolução {da_peca} está marcada para hoje. Quando '
-        'puder trazer, a gente agradece muito — assim já fica tudo certinho '
-        'pra encantar outra pessoa. Estou por aqui pro que precisar. Um '
-        'beijo! 🌷'
+    return render_message_template(
+        rental,
+        RETURN_MESSAGE_TEMPLATE if template is None else template,
     )
 
 
@@ -307,7 +381,7 @@ _MESSAGE_RENDERERS = {
 }
 
 
-def dispatch_customer_message(rental, kind, user=None):
+def dispatch_customer_message(rental, kind, user=None, message_template=None):
     """Send (or record the failure to send) a customer WhatsApp message for
     ``rental``, and return the resulting ``CustomerMessage``.
 
@@ -338,7 +412,7 @@ def dispatch_customer_message(rental, kind, user=None):
                 sent_by=user,
             )
 
-        message = render(rental)
+        message = render(rental, message_template)
         try:
             message_id = evolution.send_text(phone, message)
         except evolution.EvolutionError as exc:

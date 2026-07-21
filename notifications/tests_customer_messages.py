@@ -14,12 +14,14 @@ from customers.models import Customer
 from notifications import evolution
 from notifications.models import CustomerMessage
 from notifications.services import (
+    MessageTemplateError,
     dispatch_customer_message,
     format_whatsapp_number,
     pickup_reminder_queue,
     render_pickup_message,
     render_return_message,
     return_reminder_queue,
+    validate_message_template,
 )
 from rentals.models import Rental, RentalItem
 
@@ -120,8 +122,8 @@ class RenderMessagesTests(TestCase):
                                item_count=1)
         text = render_return_message(rental)
         self.assertIn('Oi, Carla!', text)
-        self.assertIn('da sua peça', text)
-        self.assertNotIn('das suas peças', text)
+        self.assertIn('de sua peça', text)
+        self.assertNotIn('de suas peças', text)
         self.assertTrue(text.startswith(
             'Oi, Carla! 💛 Aqui é a Ana, da Noivas & Cia. Espero de coração '
             'que seu evento tenha sido lindo! 🥂'
@@ -134,7 +136,30 @@ class RenderMessagesTests(TestCase):
                                pickup_date=date(2026, 7, 10), return_date=TODAY,
                                item_count=2)
         text = render_return_message(rental)
-        self.assertIn('das suas peças', text)
+        self.assertIn('de suas peças', text)
+
+    def test_custom_template_substitutes_each_supported_placeholder(self):
+        customer = _make_customer(name='MARIA DA SILVA')
+        rental = _make_rental(
+            12,
+            customer,
+            Rental.Status.PENDING,
+            pickup_date=date(2026, 7, 21),
+            return_date=date(2026, 7, 28),
+            item_count=2,
+        )
+        text = render_pickup_message(
+            rental,
+            'Oi, {cliente}! Locação {numero_locacao}: {itens}. Retirada {data_retirada}; devolução {data_devolucao}.',
+        )
+        self.assertEqual(
+            text,
+            'Oi, Maria! Locação 12: suas peças. Retirada 21/07; devolução 28/07.',
+        )
+
+    def test_unknown_template_placeholder_is_rejected(self):
+        with self.assertRaisesMessage(MessageTemplateError, 'Placeholder inválido'):
+            validate_message_template('Oi, {nome}!')
 
 
 # ── pickup_reminder_queue ────────────────────────────────────────────────────

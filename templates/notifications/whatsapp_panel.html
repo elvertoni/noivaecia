@@ -34,7 +34,7 @@
                 <th>Locação</th>
                 <th>Retirada</th>
                 <th>Telefone</th>
-                <th>Mensagem</th>
+                <th>Prévia</th>
               </tr>
             </thead>
             <tbody>
@@ -71,7 +71,25 @@
           {% endfor %}
         </div>
 
-        <div class="mt-4 flex gap-2">
+        <div class="mt-5 border-t border-slate-200 pt-5">
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+            <div>
+              <label for="pickup-message-template" class="field-label">Mensagem de retirada</label>
+              <p id="pickup-message-template-help" class="mt-1 field-help">Edite a mensagem antes do envio. Cada placeholder é preenchido para a respectiva locação.</p>
+            </div>
+            <p class="text-xs font-medium text-slate-600">Válida apenas para este envio</p>
+          </div>
+          <textarea id="pickup-message-template" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-36 resize-y leading-6" aria-describedby="pickup-message-template-help pickup-message-placeholders">{{ pickup_message_template }}</textarea>
+          <p id="pickup-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
+            <span class="font-medium text-slate-700">Placeholders:</span>
+            <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
+            <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
+            <code class="font-mono font-semibold text-slate-700">{data_retirada}</code> e
+            <code class="font-mono font-semibold text-slate-700">{itens}</code>.
+          </p>
+        </div>
+
+        <div class="form-actions">
           <button type="submit" class="btn btn-primary">Enviar selecionados</button>
           <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
         </div>
@@ -103,7 +121,7 @@
                 <th>Locação</th>
                 <th>Devolução</th>
                 <th>Telefone</th>
-                <th>Mensagem</th>
+                <th>Prévia</th>
               </tr>
             </thead>
             <tbody>
@@ -140,7 +158,25 @@
           {% endfor %}
         </div>
 
-        <div class="mt-4 flex gap-2">
+        <div class="mt-5 border-t border-slate-200 pt-5">
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+            <div>
+              <label for="return-message-template" class="field-label">Mensagem de devolução</label>
+              <p id="return-message-template-help" class="mt-1 field-help">Edite a mensagem antes do envio. Cada placeholder é preenchido para a respectiva locação.</p>
+            </div>
+            <p class="text-xs font-medium text-slate-600">Válida apenas para este envio</p>
+          </div>
+          <textarea id="return-message-template" name="message_template" rows="6" maxlength="2000" class="field-input mt-3 min-h-36 resize-y leading-6" aria-describedby="return-message-template-help return-message-placeholders">{{ return_message_template }}</textarea>
+          <p id="return-message-placeholders" class="mt-2 text-xs leading-5 text-slate-600">
+            <span class="font-medium text-slate-700">Placeholders:</span>
+            <code class="font-mono font-semibold text-slate-700">{cliente}</code>,
+            <code class="font-mono font-semibold text-slate-700">{numero_locacao}</code>,
+            <code class="font-mono font-semibold text-slate-700">{data_devolucao}</code> e
+            <code class="font-mono font-semibold text-slate-700">{itens}</code>.
+          </p>
+        </div>
+
+        <div class="form-actions">
           <button type="submit" class="btn btn-primary">Enviar selecionados</button>
           <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
         </div>
