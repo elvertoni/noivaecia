@@ -80,6 +80,26 @@ def send_text(number, text):
     return payload
 
 
+def connect_instance_qrcode():
+    """Start WhatsApp pairing and return QR payload data from Evolution API."""
+    payload = _request('GET', '/instance/connect/{instance}')
+    if not isinstance(payload, dict):
+        raise EvolutionError('Evolution API não retornou dados do QR Code.')
+
+    base64_image = payload.get('base64') or payload.get('qrcode')
+    if isinstance(base64_image, dict):
+        base64_image = base64_image.get('base64')
+    if base64_image and not str(base64_image).startswith('data:image/'):
+        base64_image = f'data:image/png;base64,{base64_image}'
+
+    return {
+        'base64': base64_image or '',
+        'code': payload.get('code') or '',
+        'pairing_code': payload.get('pairingCode') or '',
+        'count': payload.get('count'),
+    }
+
+
 def get_connection_state():
     """Return the instance connection state (e.g. ``'open'``/``'close'``)."""
     payload = _request('GET', '/instance/connectionState/{instance}')

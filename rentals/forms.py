@@ -15,6 +15,7 @@ from core.ui import (
     DATE_INPUT_FORMATS,
     INPUT_CLASS,
     configure_br_decimal_field,
+    parse_br_date,
 )
 
 from customers.models import Customer
@@ -35,7 +36,10 @@ def _style(form):
                 currency=field_name in {'down_payment_amount', 'penalty_value', 'value'},
             )
         css = field.widget.attrs.get('class', '')
-        field.widget.attrs['class'] = (css + ' ' + INPUT_CLASS).strip()
+        classes = css.split()
+        if INPUT_CLASS not in classes:
+            classes.append(INPUT_CLASS)
+        field.widget.attrs['class'] = ' '.join(classes)
 
 
 def process_proof_photo(uploaded_file):
@@ -128,6 +132,7 @@ class RentalForm(forms.ModelForm):
         model = Rental
         fields = ('customer', 'use_for', 'pickup_date', 'return_date', 'penalty_value', 'notes')
         widgets = {
+            'use_for': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
             'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
             'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         }
@@ -137,7 +142,8 @@ class RentalForm(forms.ModelForm):
         _style(self)
         self.fields['penalty_value'].min_value = Decimal('0')
         self.fields['penalty_value'].validators.append(MinValueValidator(Decimal('0')))
-        for field_name in ('pickup_date', 'return_date'):
+        self.fields['use_for'].help_text = 'Data em que a peça será usada.'
+        for field_name in ('use_for', 'pickup_date', 'return_date'):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
         self.fields['customer'].widget.attrs['class'] = 'hidden'
@@ -156,6 +162,22 @@ class RentalForm(forms.ModelForm):
             )
         else:
             self.fields['customer'].queryset = Customer.objects.none()
+
+    def clean_use_for(self):
+        value = (self.cleaned_data.get('use_for') or '').strip()
+        previous_value = getattr(self.instance, 'use_for', '') if self.instance else ''
+        if self.fields['use_for'].disabled:
+            return previous_value
+        if not value:
+            # Preserve legacy free-text values on edit when the new date input
+            # renders blank because the old value was not a valid date.
+            if previous_value and parse_br_date(previous_value) is None:
+                return previous_value
+            return ''
+        parsed = parse_br_date(value)
+        if parsed is None:
+            raise ValidationError('Informe uma data válida para "usar em".')
+        return parsed.isoformat()
 
     def clean(self):
         cleaned = super().clean()

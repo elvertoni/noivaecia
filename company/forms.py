@@ -8,6 +8,7 @@ from core.ui import INPUT_CLASS, configure_br_decimal_field
 from .models import Company
 
 WHATSAPP_NUMBER_RE = re.compile(r'^55\d{10,11}$')
+WHATSAPP_NUMBER_SPLIT_RE = re.compile(r'[,;\n]+')
 
 
 def _validate_cnpj(cnpj):
@@ -44,6 +45,7 @@ class CompanyForm(forms.ModelForm):
             'whatsapp_report_time',
         )
         widgets = {
+            'whatsapp_report_number': forms.Textarea(attrs={'rows': 3}),
             'whatsapp_report_time': forms.TimeInput(
                 attrs={'type': 'time'}, format='%H:%M'
             ),
@@ -70,8 +72,7 @@ class CompanyForm(forms.ModelForm):
             'autocomplete': 'tel',
         })
         self.fields['whatsapp_report_number'].widget.attrs.update({
-            'placeholder': 'Ex.: 5543999998888',
-            'type': 'tel',
+            'placeholder': 'Ex.: 5543999998888\n5543988887777',
             'inputmode': 'tel',
             'autocomplete': 'tel',
         })
@@ -91,18 +92,38 @@ class CompanyForm(forms.ModelForm):
         raw = self.cleaned_data.get('whatsapp_report_number', '').strip()
         if not raw:
             return ''
-        digits = re.sub(r'[\s\-().+]', '', raw)
-        if not digits.isdigit() or not WHATSAPP_NUMBER_RE.match(digits):
-            raise ValidationError('Informe o número com DDI, ex: 5543999998888.')
-        return digits
+        if (
+            not WHATSAPP_NUMBER_SPLIT_RE.search(raw)
+            and re.fullmatch(r'(?:\+?55\d{10,11}\s+)+\+?55\d{10,11}', raw)
+        ):
+            normalized = '\n'.join(raw.split())
+        else:
+            normalized = WHATSAPP_NUMBER_SPLIT_RE.sub('\n', raw)
+        numbers = []
+        invalid_numbers = []
+        for entry in normalized.splitlines():
+            candidate = entry.strip()
+            if not candidate:
+                continue
+            digits = re.sub(r'[\s\-().+]', '', candidate)
+            if not digits.isdigit() or not WHATSAPP_NUMBER_RE.match(digits):
+                invalid_numbers.append(candidate)
+                continue
+            if digits not in numbers:
+                numbers.append(digits)
+        if invalid_numbers:
+            raise ValidationError(
+                'Informe cada número com DDI 55, ex: 5543999998888.'
+            )
+        return '\n'.join(numbers)
 
     def clean(self):
         cleaned_data = super().clean()
         reports_enabled = cleaned_data.get('whatsapp_reports_enabled')
-        raw_number = (self.data.get('whatsapp_report_number') or '').strip()
-        if reports_enabled and not raw_number:
+        numbers = (cleaned_data.get('whatsapp_report_number') or '').strip()
+        if reports_enabled and not numbers:
             self.add_error(
                 'whatsapp_report_number',
-                'Informe o número que receberá o relatório diário.',
+                'Informe ao menos um número que receberá o relatório diário.',
             )
         return cleaned_data

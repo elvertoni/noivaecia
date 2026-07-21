@@ -3,6 +3,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django import template
 from django.utils.safestring import mark_safe
 
+from core.ui import parse_br_date
+
 register = template.Library()
 
 
@@ -40,6 +42,15 @@ def brl(value):
         return value
     grouped = f'{amount:,.2f}'
     return grouped.replace(',', '\x00').replace('.', ',').replace('\x00', '.')
+
+
+@register.filter
+def br_date_text(value):
+    """Display ISO/BR date strings as dd/mm/YYYY, leaving legacy text intact."""
+    parsed = parse_br_date(value)
+    if parsed:
+        return parsed.strftime('%d/%m/%Y')
+    return value
 
 
 @register.filter

@@ -267,8 +267,8 @@
       <div class="section-title">Dados da locação</div>
       <div class="row">
         <div class="field" style="flex:2">
-          <span class="field-caption">Quem vai usar</span>
-          <span>{{ rental.use_for|default:'—' }}</span>
+          <span class="field-caption">Usar em</span>
+          <span>{{ rental.use_for|br_date_text|default:'—' }}</span>
         </div>
       </div>
       <div class="row">

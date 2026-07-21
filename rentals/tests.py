@@ -116,6 +116,19 @@ class RentalFormValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('installment_count', form.errors)
 
+    def test_use_for_accepts_date_and_stores_iso_string(self):
+        form = RentalForm(data=self._header_data(use_for='20/06/2026'))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['use_for'], '2026-06-20')
+        self.assertEqual(form.fields['use_for'].widget.input_type, 'date')
+
+    def test_use_for_rejects_free_text_on_form(self):
+        form = RentalForm(data=self._header_data(use_for='Formatura UFMG'))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('use_for', form.errors)
+
     def test_new_item_value_starts_blank_instead_of_zero(self):
         form = RentalItemForm()
 
@@ -319,14 +332,14 @@ class RentalCancelledStatusTests(TestCase):
         )
         self.assertEqual(rental.status, 'cancelled')
 
-    def test_use_for_field_stores_event(self):
+    def test_use_for_field_stores_date_string(self):
         rental = Rental.objects.create(
             number=11, customer=self.customer,
             pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
-            use_for='Formatura UFMG',
+            use_for='2026-06-20',
         )
         rental.refresh_from_db()
-        self.assertEqual(rental.use_for, 'Formatura UFMG')
+        self.assertEqual(rental.use_for, '2026-06-20')
 
     def test_cancellation_fields_nullable_by_default(self):
         rental = Rental.objects.create(

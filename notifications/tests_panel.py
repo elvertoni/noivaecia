@@ -147,6 +147,26 @@ class PanelQueueRenderingTests(TestCase):
         self.assertContains(r, 'Enviados recentemente')
         self.assertContains(r, rental.customer.name)
 
+    @override_settings(
+        EVOLUTION_API_URL='http://work_evolution-api:8080',
+        EVOLUTION_API_KEY='secret',
+        EVOLUTION_INSTANCE='noivascia',
+    )
+    @mock.patch('notifications.views.evolution.connect_instance_qrcode')
+    @mock.patch('notifications.views.evolution.get_connection_state', return_value='close')
+    def test_panel_can_render_evolution_qrcode(self, state, qrcode):
+        qrcode.return_value = {
+            'base64': 'data:image/png;base64,abc',
+            'code': '2@example',
+            'pairing_code': '',
+            'count': 1,
+        }
+        r = self.client.get(f'{self.url}?connect=1')
+        self.assertContains(r, 'Conexão da Evolution API')
+        self.assertContains(r, 'data:image/png;base64,abc')
+        state.assert_called_once()
+        qrcode.assert_called_once()
+
 
 @override_settings()
 class DispatchViewTests(TestCase):
@@ -161,8 +181,9 @@ class DispatchViewTests(TestCase):
         self._spacing_patch.start()
         self.addCleanup(self._spacing_patch.stop)
 
+    @mock.patch('notifications.services.timezone.localdate', return_value=TODAY)
     @mock.patch('notifications.services.evolution.send_text', return_value='MSGID1')
-    def test_dispatch_selected_rentals_sends_and_records(self, send_text):
+    def test_dispatch_selected_rentals_sends_and_records(self, send_text, mock_localdate):
         rental = _make_pickup_rental()
         r = self.client.post(self.url, {
             'kind': CustomerMessage.Kind.PICKUP_REMINDER,
@@ -175,8 +196,9 @@ class DispatchViewTests(TestCase):
         messages_shown = [str(m) for m in r.context['messages']]
         self.assertTrue(any('1 aviso(s) enviado(s), 0 falha(s).' in m for m in messages_shown))
 
+    @mock.patch('notifications.services.timezone.localdate', return_value=TODAY)
     @mock.patch('notifications.services.evolution.send_text', return_value='MSGID-CUSTOM')
-    def test_dispatch_uses_the_edited_message_template(self, send_text):
+    def test_dispatch_uses_the_edited_message_template(self, send_text, mock_localdate):
         rental = _make_pickup_rental()
         self.client.post(self.url, {
             'kind': CustomerMessage.Kind.PICKUP_REMINDER,

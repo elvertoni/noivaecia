@@ -16,6 +16,59 @@
     </div>
   </div>
 
+  <section class="panel-spacious space-y-4">
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-app-ink">Conexão da Evolution API</h2>
+        <p class="text-sm text-slate-600">Use este QR Code para conectar o WhatsApp sem abrir o painel externo da Evolution.</p>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        {% if evolution_connection_state %}
+          {% if evolution_connection_state == 'open' %}
+            <span class="badge badge-success">Conectado</span>
+          {% else %}
+            <span class="badge badge-warning">{{ evolution_connection_state }}</span>
+          {% endif %}
+        {% endif %}
+        {% if evolution_configured and evolution_connection_state != 'open' %}
+          <form method="get">
+            <input type="hidden" name="connect" value="1">
+            <button type="submit" class="btn btn-secondary">Gerar QR Code</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if not evolution_configured %}
+      <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Evolution API não configurada. Defina EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE no ambiente.
+      </div>
+    {% elif evolution_error %}
+      <div class="alert alert-error" role="alert">{{ evolution_error }}</div>
+    {% elif evolution_qrcode %}
+      {% if evolution_qrcode.base64 %}
+        <div class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
+          <img src="{{ evolution_qrcode.base64 }}" alt="QR Code para conectar o WhatsApp" class="h-56 w-56 rounded-lg border border-slate-200 bg-white p-2">
+          <div class="text-sm text-slate-600">
+            <p class="font-medium text-app-ink">Como conectar</p>
+            <ol class="mt-2 list-decimal space-y-1 pl-5">
+              <li>Abra o WhatsApp no celular da loja.</li>
+              <li>Acesse “Aparelhos conectados”.</li>
+              <li>Leia este QR Code.</li>
+            </ol>
+            <p class="mt-3 text-xs text-slate-500">Se expirar, gere um novo QR Code.</p>
+          </div>
+        </div>
+      {% else %}
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          A Evolution API iniciou a conexão, mas não retornou imagem do QR Code.
+        </div>
+      {% endif %}
+    {% elif evolution_connection_state == 'open' %}
+      <p class="text-sm text-slate-600">A instância já está conectada.</p>
+    {% endif %}
+  </section>
+
   {# ── Retiradas de amanhã ─────────────────────────────────────────── #}
   <section class="panel-spacious space-y-4">
     <div>

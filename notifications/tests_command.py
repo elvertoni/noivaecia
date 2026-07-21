@@ -51,6 +51,22 @@ class SendDailyReportCommandTests(TestCase):
         self.assertEqual(log.metadata['reference_date'], '2026-07-20')
         self.assertEqual(log.metadata['message_id'], 'MSGID1')
 
+    @mock.patch(f'{CMD}.evolution.send_text', side_effect=['MSGID1', 'MSGID2'])
+    def test_configured_send_supports_multiple_targets(self, send_text):
+        self.company.whatsapp_report_number = '5543999998888\n5543988887777'
+        self.company.save()
+        self.run_cmd('--date', '2026-07-20')
+        self.assertEqual(
+            [call.args[0] for call in send_text.call_args_list],
+            ['5543999998888', '5543988887777'],
+        )
+        log = AuditLog.objects.get(action='whatsapp_daily_report')
+        self.assertEqual(log.metadata['targets'], ['5543999998888', '5543988887777'])
+        self.assertEqual(
+            log.metadata['message_ids'],
+            {'5543999998888': 'MSGID1', '5543988887777': 'MSGID2'},
+        )
+
     @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
     def test_idempotent_second_run_skips(self, send_text):
         self.run_cmd('--date', '2026-07-20')

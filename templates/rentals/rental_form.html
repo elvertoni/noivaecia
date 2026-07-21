@@ -50,6 +50,7 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.use_for.id_for_label }}">{{ form.use_for.label }}</label>
           {{ form.use_for|render_field }}
+          {% if form.use_for.help_text %}<p id="{{ form.use_for.auto_id }}-help" class="field-help">{{ form.use_for.help_text }}</p>{% endif %}
           {% if form.use_for.errors %}<p class="field-error" role="alert">{{ form.use_for.errors|striptags }}</p>{% endif %}
         </div>
 

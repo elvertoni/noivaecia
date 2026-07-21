@@ -48,7 +48,7 @@
         <tr>
           <th>Locação</th>
           <th>Cliente</th>
-          <th>Uso/Evento</th>
+          <th>Usar em</th>
           <th>Retirada</th>
           <th>Retorno previsto</th>
           <th>Status</th>
@@ -60,7 +60,7 @@
           <tr>
             <td class="font-medium"><a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a></td>
             <td>{{ rental.customer.name }}</td>
-            <td class="text-app-muted text-sm">{{ rental.use_for|default:'—' }}</td>
+            <td class="text-app-muted text-sm">{{ rental.use_for|br_date_text|default:'—' }}</td>
             <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
             <td>{{ rental.return_date|date:'d/m/Y' }}</td>
             <td>{{ rental.get_status_display }}</td>

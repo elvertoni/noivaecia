@@ -39,6 +39,11 @@ def _fmt_date(value):
     return value.strftime('%d/%m/%Y') if value else '—'
 
 
+def _fmt_use_for(value):
+    parsed = parse_br_date(value)
+    return parsed.strftime('%d/%m/%Y') if parsed else (value or '')
+
+
 class _BaseReportView(ReportsAccessMixin, TemplateView):
     """Base with common filter param helpers and CSV export (R11.09/R11.10)."""
     csv_filename = 'relatorio.csv'
@@ -96,14 +101,14 @@ class ARetirarReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Total']
+        headers = ['Locação', 'Cliente', 'Usar em', 'Retirada', 'Retorno previsto', 'Total']
 
         def rows():
             for rental in self._get_data(max_results=self._limit_for_export()):
                 yield [
                     f'#{rental.number}',
                     rental.customer.name,
-                    rental.use_for or '',
+                    _fmt_use_for(rental.use_for),
                     _fmt_date(rental.pickup_date),
                     _fmt_date(rental.return_date),
                     str(rental.total_value),
@@ -289,14 +294,14 @@ class LocacoesReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Uso/Evento', 'Retirada', 'Retorno previsto', 'Status', 'Total']
+        headers = ['Locação', 'Cliente', 'Usar em', 'Retirada', 'Retorno previsto', 'Status', 'Total']
 
         def rows():
             for rental in self._get_data(max_results=self._limit_for_export()):
                 yield [
                     f'#{rental.number}',
                     rental.customer.name,
-                    rental.use_for or '',
+                    _fmt_use_for(rental.use_for),
                     _fmt_date(rental.pickup_date),
                     _fmt_date(rental.return_date),
                     rental.get_status_display(),

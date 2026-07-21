@@ -8,6 +8,7 @@ this module only wires it to a view and a template.
 import time
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -18,6 +19,7 @@ from core.mixins import ModuleAccessMixin
 from rentals.models import Rental
 
 from .models import CustomerMessage
+from . import evolution
 from .services import (
     MessageTemplateError,
     dispatch_customer_message,
@@ -53,11 +55,29 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         today = timezone.localdate()
         template_drafts = self.request.session.pop(_TEMPLATE_DRAFT_SESSION_KEY, {})
+        evolution_state = ''
+        evolution_qrcode = None
+        evolution_error = ''
+        evolution_configured = all(
+            getattr(settings, name, '')
+            for name in ('EVOLUTION_API_URL', 'EVOLUTION_API_KEY', 'EVOLUTION_INSTANCE')
+        )
+        if evolution_configured:
+            try:
+                evolution_state = evolution.get_connection_state()
+                if self.request.GET.get('connect') == '1' and evolution_state != 'open':
+                    evolution_qrcode = evolution.connect_instance_qrcode()
+            except evolution.EvolutionError as exc:
+                evolution_error = str(exc)
         ctx.update({
             'pickup_items': pickup_reminder_queue(today=today),
             'return_items': return_reminder_queue(today=today),
             'tomorrow': today + timedelta(days=1),
             'today': today,
+            'evolution_configured': evolution_configured,
+            'evolution_connection_state': evolution_state,
+            'evolution_qrcode': evolution_qrcode,
+            'evolution_error': evolution_error,
             'pickup_message_template': template_drafts.get(
                 CustomerMessage.Kind.PICKUP_REMINDER,
                 get_default_message_template(CustomerMessage.Kind.PICKUP_REMINDER),

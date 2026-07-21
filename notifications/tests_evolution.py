@@ -8,7 +8,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase, override_settings
 
-from notifications.evolution import EvolutionError, get_connection_state, send_text
+from notifications.evolution import EvolutionError, connect_instance_qrcode, get_connection_state, send_text
 
 FAKE_SETTINGS = dict(
     EVOLUTION_API_URL='http://work_evolution-api:8080',
@@ -144,3 +144,29 @@ class ConnectionStateTests(SimpleTestCase):
         with mock.patch('urllib.request.urlopen', side_effect=error):
             with self.assertRaises(EvolutionError):
                 get_connection_state()
+
+
+@override_settings(**FAKE_SETTINGS)
+class ConnectInstanceQrCodeTests(SimpleTestCase):
+    def test_connect_instance_qrcode_returns_base64_payload(self):
+        payload = {
+            'pairingCode': None,
+            'code': '2@example',
+            'base64': 'data:image/png;base64,abc',
+            'count': 1,
+        }
+        with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)) as mocked:
+            result = connect_instance_qrcode()
+        self.assertEqual(result['base64'], 'data:image/png;base64,abc')
+        self.assertEqual(result['code'], '2@example')
+        request = mocked.call_args[0][0]
+        self.assertEqual(
+            request.full_url,
+            'http://work_evolution-api:8080/instance/connect/noivascia',
+        )
+
+    def test_connect_instance_qrcode_prefixes_raw_base64(self):
+        payload = {'base64': 'abc'}
+        with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)):
+            result = connect_instance_qrcode()
+        self.assertEqual(result['base64'], 'data:image/png;base64,abc')

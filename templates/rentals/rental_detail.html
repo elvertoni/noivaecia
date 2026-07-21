@@ -69,8 +69,8 @@
 
   {% if rental.use_for %}
   <div class="panel">
-    <p class="field-label">Uso / Evento</p>
-    <p class="mt-1 text-sm text-app-ink">{{ rental.use_for }}</p>
+    <p class="field-label">Usar em</p>
+    <p class="mt-1 text-sm text-app-ink">{{ rental.use_for|br_date_text }}</p>
   </div>
   {% endif %}
 

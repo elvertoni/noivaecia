@@ -41,6 +41,23 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['whatsapp_report_number'], '5543999998888')
 
+    def test_accepts_multiple_valid_numbers(self):
+        form = CompanyForm(data=self._base_data(
+            whatsapp_report_number='5543999998888, +55 (43) 98888-7777',
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data['whatsapp_report_number'],
+            '5543999998888\n5543988887777',
+        )
+
+    def test_deduplicates_multiple_numbers(self):
+        form = CompanyForm(data=self._base_data(
+            whatsapp_report_number='5543999998888\n5543999998888',
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['whatsapp_report_number'], '5543999998888')
+
     def test_accepts_valid_number_with_symbols(self):
         form = CompanyForm(data=self._base_data(whatsapp_report_number='+55 (43) 99999-8888'))
         self.assertTrue(form.is_valid(), form.errors)
@@ -51,8 +68,8 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('whatsapp_report_number', form.errors)
 
-    def test_rejects_non_digit_number(self):
-        form = CompanyForm(data=self._base_data(whatsapp_report_number='abc'))
+    def test_rejects_invalid_number_entry(self):
+        form = CompanyForm(data=self._base_data(whatsapp_report_number='5543999998888\nabc'))
         self.assertFalse(form.is_valid())
         self.assertIn('whatsapp_report_number', form.errors)
 

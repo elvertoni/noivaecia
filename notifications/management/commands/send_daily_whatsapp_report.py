@@ -26,6 +26,16 @@ def _digits(value):
     return re.sub(r'\D', '', value or '')
 
 
+def _configured_targets(value):
+    targets = []
+    normalized = re.sub(r'[,;\n]+', '\n', value or '')
+    for raw in normalized.splitlines():
+        target = _digits(raw)
+        if target and target not in targets:
+            targets.append(target)
+    return targets
+
+
 class Command(BaseCommand):
     help = 'Envia o relatório diário da Ana pelo WhatsApp (Evolution API).'
 
@@ -56,7 +66,7 @@ class Command(BaseCommand):
 
         on_date = self._parse_date(options['date'])
         manual_target = _digits(options['to'])
-        target = manual_target or _digits(company.whatsapp_report_number)
+        targets = [manual_target] if manual_target else _configured_targets(company.whatsapp_report_number)
         is_manual = bool(manual_target)
         dry_run = options['dry_run']
         if_due = options['if_due']
@@ -77,7 +87,7 @@ class Command(BaseCommand):
             ))
             return
 
-        if not dry_run and not target:
+        if not dry_run and not targets:
             raise CommandError('Nenhum número de destino configurado.')
 
         # Idempotency: skip a configured send already done for this date.
@@ -95,7 +105,9 @@ class Command(BaseCommand):
             return
 
         try:
-            message_id = evolution.send_text(target, text)
+            message_ids = {}
+            for target in targets:
+                message_ids[target] = evolution.send_text(target, text)
         except evolution.EvolutionError as exc:
             AuditLog.record(
                 user=None,
@@ -104,24 +116,28 @@ class Command(BaseCommand):
                 reason=str(exc),
                 metadata={
                     'reference_date': on_date.isoformat(),
-                    'target': target,
+                    'targets': targets,
                 },
             )
             raise CommandError(f'Falha no envio: {exc}')
 
         if not is_manual:
+            metadata = {
+                'reference_date': on_date.isoformat(),
+                'targets': targets,
+                'message_ids': {target: str(message_id) for target, message_id in message_ids.items()},
+            }
+            if len(targets) == 1:
+                metadata['target'] = targets[0]
+                metadata['message_id'] = str(message_ids[targets[0]])
             AuditLog.record(
                 user=None,
                 action=SENT_ACTION,
                 obj=company,
-                metadata={
-                    'reference_date': on_date.isoformat(),
-                    'target': target,
-                    'message_id': str(message_id),
-                },
+                metadata=metadata,
             )
         self.stdout.write(self.style.SUCCESS(
-            f'Relatório de {on_date.isoformat()} enviado para {target}.'
+            f'Relatório de {on_date.isoformat()} enviado para {len(targets)} destino(s).'
         ))
 
     def _parse_date(self, raw):
