@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from io import StringIO
 from unittest import mock
 
@@ -227,8 +227,8 @@ class SendDailyReportCommandTests(TestCase):
 
     @mock.patch(f'{CMD}.evolution.send_text', return_value='X')
     @mock.patch(f'{CMD}.timezone.localtime')
-    def test_if_due_skips_when_not_the_minute(self, localtime, send_text):
-        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 9, 0))
+    def test_if_due_skips_before_configured_time(self, localtime, send_text):
+        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 7, 0))
         self.run_cmd('--if-due', '--date', '2026-07-20')
         send_text.assert_not_called()
 
@@ -237,4 +237,82 @@ class SendDailyReportCommandTests(TestCase):
     def test_if_due_sends_at_the_minute(self, localtime, send_text):
         localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 7, 30))
         self.run_cmd('--if-due', '--date', '2026-07-20')
+        send_text.assert_called_once()
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='X')
+    @mock.patch(f'{CMD}.timezone.localtime')
+    def test_if_due_catches_up_after_configured_time(self, localtime, send_text):
+        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 9, 0))
+        self.run_cmd('--if-due', '--date', '2026-07-20')
+        send_text.assert_called_once()
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID2')
+    @mock.patch(f'{CMD}.timezone.localtime')
+    def test_if_due_sends_recipient_added_after_daily_send(
+        self, localtime, send_text,
+    ):
+        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 9, 0))
+        AuditLog.objects.create(
+            user=None,
+            action='whatsapp_daily_report',
+            model_name='Company',
+            object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+                'message_ids': {'5543999998888': 'MSGID1'},
+            },
+        )
+        self.company.whatsapp_report_number = (
+            '5543999998888\n5543988887777'
+        )
+        self.company.save()
+
+        self.run_cmd('--if-due', '--date', '2026-07-20')
+
+        send_text.assert_called_once_with('5543988887777', mock.ANY)
+
+    @mock.patch(f'{CMD}.evolution.send_text')
+    @mock.patch(f'{CMD}.timezone.localtime')
+    def test_if_due_throttles_recent_failed_recipient(
+        self, localtime, send_text,
+    ):
+        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 9, 0))
+        AuditLog.objects.create(
+            user=None,
+            action='whatsapp_send_failed',
+            model_name='Company',
+            object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+            },
+        )
+
+        self.run_cmd('--if-due', '--date', '2026-07-20')
+
+        send_text.assert_not_called()
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
+    @mock.patch(f'{CMD}.timezone.localtime')
+    def test_if_due_retries_recipient_after_failure_delay(
+        self, localtime, send_text,
+    ):
+        localtime.return_value = timezone.make_aware(datetime(2026, 7, 20, 9, 0))
+        failure = AuditLog.objects.create(
+            user=None,
+            action='whatsapp_send_failed',
+            model_name='Company',
+            object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+            },
+        )
+        AuditLog.objects.filter(pk=failure.pk).update(
+            created_at=timezone.now() - timedelta(minutes=6)
+        )
+
+        self.run_cmd('--if-due', '--date', '2026-07-20')
+
         send_text.assert_called_once()

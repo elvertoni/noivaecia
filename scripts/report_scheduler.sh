@@ -2,10 +2,9 @@
 # Background scheduler for the daily WhatsApp report.
 #
 # Runs the management command every 30s. The command itself decides, via
-# --if-due, whether it is the configured minute and whether today's report
-# already went out (AuditLog), so almost every tick is a sub-second no-op.
-# A 30s cadence guarantees the configured minute is always sampled at least
-# once; the AuditLog idempotency guard makes a double sample harmless.
+# --if-due, whether the configured time has passed and which recipients are
+# still pending. The AuditLog idempotency guard makes repeated checks harmless
+# and lets a deployment or a newly added recipient catch up later in the day.
 set -u
 
 echo "[scheduler] WhatsApp daily report scheduler started"

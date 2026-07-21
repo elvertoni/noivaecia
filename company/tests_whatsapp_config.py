@@ -51,6 +51,18 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             '5543999998888\n5543988887777',
         )
 
+    def test_accepts_formatted_numbers_separated_by_space(self):
+        form = CompanyForm(data=self._base_data(
+            whatsapp_report_number=(
+                '+55 (43) 99999-8888 +55 (43) 98888-7777'
+            ),
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data['whatsapp_report_number'],
+            '5543999998888\n5543988887777',
+        )
+
     def test_deduplicates_multiple_numbers(self):
         form = CompanyForm(data=self._base_data(
             whatsapp_report_number='5543999998888\n5543999998888',

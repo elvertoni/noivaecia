@@ -42,11 +42,18 @@ class SendTextTests(SimpleTestCase):
         self.assertEqual(result, 'ABC123')
         mocked.assert_called_once()
 
-    def test_send_text_returns_full_payload_when_no_message_id(self):
+    def test_send_text_rejects_response_without_message_id(self):
         payload = {'status': 'PENDING'}
         with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)):
+            with self.assertRaises(EvolutionError) as ctx:
+                send_text('5543999999999', 'olá')
+        self.assertIn('ID de mensagem', str(ctx.exception))
+
+    def test_send_text_accepts_top_level_message_id(self):
+        payload = {'messageId': 'ABC123', 'status': 'PENDING'}
+        with mock.patch('urllib.request.urlopen', return_value=_urlopen_response(payload)):
             result = send_text('5543999999999', 'olá')
-        self.assertEqual(result, payload)
+        self.assertEqual(result, 'ABC123')
 
     def test_send_text_request_shape(self):
         payload = {'key': {'id': 'XYZ'}}
@@ -128,6 +135,17 @@ class NotConfiguredTests(SimpleTestCase):
         with mock.patch('urllib.request.urlopen') as mocked:
             with self.assertRaises(EvolutionError):
                 get_connection_state()
+        mocked.assert_not_called()
+
+    @override_settings(
+        EVOLUTION_API_URL='http://evolution:8080',
+        EVOLUTION_API_KEY='',
+        EVOLUTION_INSTANCE='noivascia',
+    )
+    def test_send_text_requires_api_key(self):
+        with mock.patch('urllib.request.urlopen') as mocked:
+            with self.assertRaises(EvolutionError):
+                send_text('5543999999999', 'olá')
         mocked.assert_not_called()
 
 

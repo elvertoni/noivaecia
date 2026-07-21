@@ -22,8 +22,9 @@ class EvolutionError(Exception):
 
 def _require_config():
     api_url = getattr(settings, 'EVOLUTION_API_URL', '')
+    api_key = getattr(settings, 'EVOLUTION_API_KEY', '')
     instance = getattr(settings, 'EVOLUTION_INSTANCE', '')
-    if not api_url or not instance:
+    if not api_url or not api_key or not instance:
         raise EvolutionError('Evolution API não configurada.')
     return api_url, instance
 
@@ -65,19 +66,26 @@ def _request(method, path, body=None):
 def send_text(number, text):
     """Send a plain-text WhatsApp message via Evolution API.
 
-    Returns the message id from the response (typically ``key.id``); if the
-    response has no ``key.id``, returns the full response dict instead.
+    Returns the message id from the response. A 2xx response without an ID is
+    not considered successful because it cannot prove that Evolution accepted
+    the message for delivery.
     """
     payload = _request(
         'POST',
         '/message/sendText/{instance}',
         body={'number': number, 'text': text},
     )
-    if isinstance(payload, dict):
-        message_id = payload.get('key', {}).get('id') if isinstance(payload.get('key'), dict) else None
-        if message_id:
-            return message_id
-    return payload
+    if not isinstance(payload, dict):
+        raise EvolutionError('Evolution API retornou resposta de envio inválida.')
+
+    key = payload.get('key')
+    message_id = key.get('id') if isinstance(key, dict) else None
+    message_id = message_id or payload.get('messageId') or payload.get('id')
+    if not message_id:
+        raise EvolutionError(
+            'Evolution API não confirmou o envio com um ID de mensagem.'
+        )
+    return str(message_id)
 
 
 def connect_instance_qrcode():

@@ -159,20 +159,22 @@ infraestrutura.
      `--to 55...` (override do destino p/ teste), `--check` (só estado da
      conexão), `--date YYYY-MM-DD` (referência p/ teste).
 
-6.2. Fluxo: feature ligada? → já enviado hoje (AuditLog)? → monta texto →
-     envia → grava AuditLog com message id.
+6.2. Fluxo: feature ligada? → horário já chegou? → remove destinatários já
+     enviados hoje (AuditLog) → monta texto → envia os pendentes → grava
+     AuditLog por destinatário com message id. Falhas são tentadas novamente
+     após 5 minutos, sem repetir os destinos que já tiveram sucesso.
 
 6.3. Testes: trava de reenvio, dry-run sem HTTP, force, feature desligada
      sai silencioso com aviso.
 
 ## 7. Fase 5 — Agendador no container
 
-7.1. `scripts/report_scheduler.sh`: loop `while true; sleep 60`; compara
-     `date +%H:%M` (TZ do container) com `whatsapp_report_time` (lida via
-     `manage.py shell` 1x/min é caro — o próprio comando decide: roda
-     `send_daily_whatsapp_report --if-due` a cada minuto e o comando sai em
-     <100ms se não for a hora ou já enviou). Flag `--if-due` adicionada ao
-     comando.
+7.1. `scripts/report_scheduler.sh`: loop `while true; sleep 30`; o próprio
+     comando compara a hora local com `whatsapp_report_time` e roda
+     `send_daily_whatsapp_report --if-due`. Antes do horário ele sai rápido;
+     depois do horário envia somente destinatários ainda pendentes. Assim,
+     deploys, reinícios e números adicionados após o horário recuperam o envio
+     no mesmo dia.
 
 7.2. `docker-entrypoint.sh`: iniciar o scheduler em background antes do
      `exec gunicorn` (`sh scripts/report_scheduler.sh &`). Logs no stdout do
@@ -181,8 +183,9 @@ infraestrutura.
 7.3. `Dockerfile`: garantir `scripts/` copiado e executável (já cobre via
      `COPY . .` + chmod no entrypoint).
 
-7.4. Risco aceito: janela de 1 min; restart no horário exato pode atrasar o
-     envio 1 min — trava de idempotência (1.7) impede duplicar.
+7.4. Não há janela única de 1 minuto: o scheduler faz catch-up durante o dia.
+     A trava de idempotência por data e destinatário impede duplicidade; uma
+     falha recente aguarda 5 minutos antes de nova tentativa.
 
 ## 8. Fase 6 — Deploy e validação em produção
 

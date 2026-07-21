@@ -1,14 +1,14 @@
 """Send Ana's daily operational summary over WhatsApp (Evolution API).
 
-Dry-run friendly and idempotent: a configured send records an AuditLog for
-its reference date, so a container restart never sends the same day twice.
-The ``--if-due`` flag lets the in-container scheduler call this every minute
-cheaply — it returns in well under a second unless it is exactly the
-configured minute and the report has not gone out yet.
+Dry-run friendly and idempotent per recipient: a configured send records an
+AuditLog for its reference date and destination. The ``--if-due`` flag lets
+the in-container scheduler call this command frequently; once the configured
+time has passed, any recipient still pending is sent without duplicating the
+ones that already succeeded.
 """
 
 import re
-from datetime import date as date_cls
+from datetime import date as date_cls, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -20,6 +20,7 @@ from notifications.services import build_daily_report
 
 SENT_ACTION = 'whatsapp_daily_report'
 FAILED_ACTION = 'whatsapp_send_failed'
+FAILED_RETRY_DELAY = timedelta(minutes=5)
 
 
 def _digits(value):
@@ -73,7 +74,7 @@ class Command(BaseCommand):
         parser.add_argument('--date', default='',
                             help='Data de referência YYYY-MM-DD (padrão: hoje).')
         parser.add_argument('--if-due', action='store_true',
-                            help='Só envia se for o minuto configurado (uso do agendador).')
+                            help='Envia após o horário configurado (uso do agendador).')
 
     def handle(self, *args, **options):
         company = Company.load()
@@ -93,13 +94,15 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
         if_due = options['if_due']
 
-        # Scheduler path: bail out silently unless enabled and at the minute.
+        # Before the configured time, bail out silently. Once due, keep
+        # checking pending recipients so deploys and recipients added later
+        # in the day cannot make the report miss its only one-minute window.
         if if_due:
             if not company.whatsapp_reports_enabled:
                 return
             now = timezone.localtime()
             due = company.whatsapp_report_time
-            if (now.hour, now.minute) != (due.hour, due.minute):
+            if (now.hour, now.minute) < (due.hour, due.minute):
                 return
 
         # Real configured send requires the feature on; --to and --dry-run bypass.
@@ -122,6 +125,15 @@ class Command(BaseCommand):
                         f'Relatório de {on_date.isoformat()} já foi enviado '
                         'para todos os destinos configurados.'
                     ))
+                return
+
+        if if_due and not options['force']:
+            recently_failed = self._recently_failed_targets(on_date)
+            send_targets = [
+                target for target in send_targets
+                if target not in recently_failed
+            ]
+            if not send_targets:
                 return
 
         text = build_daily_report(on_date)
@@ -206,3 +218,19 @@ class Command(BaseCommand):
             obj=company,
             metadata=metadata,
         )
+
+    def _recently_failed_targets(self, on_date):
+        retry_after = timezone.now() - FAILED_RETRY_DELAY
+        logs = AuditLog.objects.filter(
+            action=FAILED_ACTION,
+            metadata__reference_date=on_date.isoformat(),
+            created_at__gte=retry_after,
+        ).only('metadata')
+        failed_targets = set()
+        for log in logs:
+            targets = (log.metadata or {}).get('targets', [])
+            if isinstance(targets, list):
+                failed_targets.update(
+                    str(target) for target in targets if target
+                )
+        return failed_targets

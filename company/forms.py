@@ -9,6 +9,9 @@ from .models import Company
 
 WHATSAPP_NUMBER_RE = re.compile(r'^55\d{10,11}$')
 WHATSAPP_NUMBER_SPLIT_RE = re.compile(r'[,;\n]+')
+WHATSAPP_NUMBER_START_RE = re.compile(
+    r'(?<!^)\s+(?=(?:\+?55\d{10,11}\b|\+?55[\s(]))'
+)
 
 
 def _validate_cnpj(cnpj):
@@ -92,13 +95,8 @@ class CompanyForm(forms.ModelForm):
         raw = self.cleaned_data.get('whatsapp_report_number', '').strip()
         if not raw:
             return ''
-        if (
-            not WHATSAPP_NUMBER_SPLIT_RE.search(raw)
-            and re.fullmatch(r'(?:\+?55\d{10,11}\s+)+\+?55\d{10,11}', raw)
-        ):
-            normalized = '\n'.join(raw.split())
-        else:
-            normalized = WHATSAPP_NUMBER_SPLIT_RE.sub('\n', raw)
+        normalized = WHATSAPP_NUMBER_SPLIT_RE.sub('\n', raw)
+        normalized = WHATSAPP_NUMBER_START_RE.sub('\n', normalized)
         numbers = []
         invalid_numbers = []
         for entry in normalized.splitlines():
