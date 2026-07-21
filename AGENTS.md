@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a Django 5 monolith for Noivas & Cia. Project settings live in `noivas_cia/`; root-level Django apps map to business domains: `accounts`, `billing`, `catalog`, `company`, `core`, `customers`, `maintenance`, `movements`, `rentals`, `reports`, and `website`. Shared templates are in `templates/`, with reusable fragments in `templates/includes/`. Static assets are under `static/`; edit Tailwind input in `static/src/input.css` and generate `static/css/output.css`. Product and architecture references live in `PRD.md`, `README.md`, and `docs/`.
+This is a Django 5 monolith for Noivas & Cia. Project settings live in `noivas_cia/`; root-level Django apps map to business domains: `accounts`, `billing`, `catalog`, `company`, `core`, `customers`, `maintenance`, `movements`, `notifications` (WhatsApp messaging via Evolution API), `rentals`, `reports`, and `website`. Shared templates are in `templates/`, with reusable fragments in `templates/includes/`. Static assets are under `static/`; edit Tailwind input in `static/src/input.css` and generate `static/css/output.css`. Product and architecture references live in `PRD.md`, `README.md`, and `docs/`.
 
 ## Build, Test, and Development Commands
 
@@ -34,3 +34,11 @@ Use Conventional Commit-style subjects. Existing history includes `feat: ensure_
 ## Security & Configuration Tips
 
 Do not commit local artifacts such as `venv/`, `node_modules/`, `db.sqlite3`, `.env`, `staticfiles/`, `var/`, or generated `static/css/output.css`; these are already ignored. Use `.env.example` as the template for local or Docker configuration, and keep secrets and production settings out of `settings.py` before deployment.
+
+## Easypanel Deployment
+
+- Production target: project `work`, service `noivaecia`, repository `elvertoni/noivaecia`, branch `main`.
+- Before deploying, inspect the service, confirm the intended commit is pushed to `origin/main`, and preserve the existing source, environment, mounts, domains, ports, and resource settings.
+- Deploy with the Easypanel MCP, monitor the deployment action until it reaches a terminal state, then check service/build logs and the application health endpoint.
+- The container entrypoint applies Django migrations and collects static files before starting Gunicorn.
+- Never print production secret values. Use masked environment inspection and report only variable names or whether required values are configured.

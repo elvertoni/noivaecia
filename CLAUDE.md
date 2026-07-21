@@ -5,10 +5,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project overview
 
 Noivas & Cia is a Django 5 monolith for managing bridal/event clothing rentals.
-Server-rendered Django templates + TailwindCSS 3, SQLite locally, deployed to a
-VPS via Docker/EasyPanel (GitHub `main` → EasyPanel build/deploy). If Docker is
-not running locally, validate container builds through EasyPanel build logs
-after push — a local daemon failure is not proof of a project build error.
+Server-rendered Django templates + TailwindCSS 3, deployed to a VPS via
+Docker/EasyPanel (GitHub `main` → EasyPanel build/deploy, project `work`,
+service `noivaecia`). If Docker is not running locally, validate container
+builds through EasyPanel build logs after push — a local daemon failure is
+not proof of a project build error.
+
+### Database
+
+`noivas_cia/settings.py` picks the engine from environment: if `DATABASE_URL`
+is set, it's parsed via `dj_database_url` (production runs **Postgres 16**);
+otherwise, when `DEBUG` is on, it falls back to local SQLite
+(`db.sqlite3`); with `DEBUG` off and no `DATABASE_URL`, startup raises
+`ImproperlyConfigured`. Local dev defaults to SQLite unless you export
+`DATABASE_URL` yourself. Transfer/verification tooling for the SQLite→Postgres
+migration lives in `tools/db_transfer/`.
 
 ## Commands
 
@@ -70,12 +81,26 @@ domain:
 | `billing` | `Receivable` installments, payments, interest/penalties |
 | `reports` | Read-only tracking reports (no models) |
 | `maintenance` | Admin routines |
+| `notifications` | Customer WhatsApp messaging (`CustomerMessage`) via Evolution API; pickup/return reminders + daily report |
 | `website` | Public institutional site |
 
 Domain flow: a `Rental` (numbered sequentially) belongs to a `Customer` and
 holds `RentalItem`s referencing `Product`s; it generates `Receivable`
 installments in billing and gets a `Pickup`/`Return` in movements, which syncs
 `Rental.status` via signals.
+
+### WhatsApp notifications (`notifications`)
+
+- `notifications/evolution.py` wraps the Evolution API (self-hosted WhatsApp
+  gateway); `notifications/services.py` builds the pickup-reminder /
+  return-reminder queues and records one `CustomerMessage` per send attempt
+  (including failures, so retries don't re-notify).
+- `send_daily_whatsapp_report` management command sends the daily report per
+  recipient and is idempotency-guarded via `AuditLog` (`--if-due` checks the
+  configured time and pending recipients). `scripts/report_scheduler.sh` polls
+  it every 30s in the deployed container.
+- Message templates are centralized (see `refactor(notifications): centralize
+  templates` in history) — don't inline WhatsApp copy in views/services.
 
 `docs/arquitetura.md` has the full ER diagram; `PRD.md` and `docs/` hold
 product references. `brcom/` is the legacy VB6/Access system kept for reference
@@ -110,7 +135,14 @@ it.
 
 `accounts/ensure_admins`, `core/import_legacy_access`, `core/golive_backup`
 (SQLite backup with manifest), `core/homologation_report`,
-`core/normalize_cities`.
+`core/normalize_cities`, `core/rebuild_search_fields`,
+`core/cpf_duplicate_report` / `core/merge_duplicate_customers` (duplicate-CPF
+customer cleanup), `core/reconcile_negative_balances`, `core/legacy_reset`,
+`notifications/send_daily_whatsapp_report`.
+
+`tools/db_transfer/` (`sqlite_to_pg.py`, `verify_pg_migration.py`) handled the
+one-time SQLite→Postgres migration to prod; `tools/legacy_migration/` holds
+Access-export helpers feeding `core/import_legacy_access`.
 
 ## Conventions
 
