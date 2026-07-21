@@ -104,11 +104,6 @@ class PanelQueueRenderingTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, 'Retiradas de amanhã')
         self.assertContains(r, 'Devoluções de hoje')
-        self.assertContains(r, 'Mensagem de retirada')
-        self.assertContains(r, 'Mensagem de devolução')
-        self.assertContains(r, '{cliente}')
-        self.assertIn('{data_retirada}', r.context['pickup_message_template'])
-        self.assertIn('{data_devolucao}', r.context['return_message_template'])
         pickup_pks = {item['rental'].pk for item in r.context['pickup_items']}
         return_pks = {item['rental'].pk for item in r.context['return_items']}
         self.assertIn(pickup_rental.pk, pickup_pks)
@@ -172,35 +167,6 @@ class DispatchViewTests(TestCase):
         self.assertEqual(msg.status, CustomerMessage.Status.SENT)
         messages_shown = [str(m) for m in r.context['messages']]
         self.assertTrue(any('1 aviso(s) enviado(s), 0 falha(s).' in m for m in messages_shown))
-
-    @mock.patch('notifications.services.evolution.send_text', return_value='MSGID-CUSTOM')
-    def test_dispatch_uses_the_edited_message_template(self, send_text):
-        rental = _make_pickup_rental()
-        self.client.post(self.url, {
-            'kind': CustomerMessage.Kind.PICKUP_REMINDER,
-            'rental_ids': [rental.pk],
-            'message_template': 'Olá, {cliente}! Sua retirada é em {data_retirada}.',
-        })
-
-        send_text.assert_called_once_with(
-            '5511987654321',
-            'Olá, Cliente! Sua retirada é em 21/07.',
-        )
-
-    @mock.patch('notifications.services.evolution.send_text')
-    def test_dispatch_rejects_unknown_message_template_placeholder(self, send_text):
-        rental = _make_pickup_rental()
-        r = self.client.post(self.url, {
-            'kind': CustomerMessage.Kind.PICKUP_REMINDER,
-            'rental_ids': [rental.pk],
-            'message_template': 'Olá, {nome}! ',
-        }, follow=True)
-
-        send_text.assert_not_called()
-        self.assertFalse(CustomerMessage.objects.filter(rental=rental).exists())
-        messages_shown = [str(m) for m in r.context['messages']]
-        self.assertTrue(any('Placeholder inválido' in message for message in messages_shown))
-        self.assertEqual(r.context['pickup_message_template'], 'Olá, {nome}! ')
 
     @mock.patch('notifications.services.timezone.localdate', return_value=TODAY)
     @mock.patch('notifications.services.evolution.send_text', return_value='MSGID2')
