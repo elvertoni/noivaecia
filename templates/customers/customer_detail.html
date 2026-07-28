@@ -146,7 +146,7 @@
                 </td>
                 <td>
                   {% for item in rental.items.all %}
-                    <span class="text-xs text-app-muted">{{ item.product.category.prefix }}{{ item.product.code }}</span>{% if not forloop.last %}, {% endif %}
+                    <span class="text-xs text-app-muted">{{ item.product_reference }}</span>{% if not forloop.last %}, {% endif %}
                   {% empty %}—{% endfor %}
                 </td>
                 <td class="text-right font-medium">R$ {{ rental.total_value|brl }}</td>

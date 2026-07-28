@@ -1,7 +1,9 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
+from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -120,7 +122,7 @@ class ProductDeleteViewTests(TestCase):
             AuditLog.objects.filter(action='product_delete', object_id=str(product.pk)).exists()
         )
 
-    def test_blocks_deleting_product_with_related_rental_items(self):
+    def test_archives_product_with_related_rental_items(self):
         product = Product.objects.create(
             category=self.category,
             code=1,
@@ -137,20 +139,215 @@ class ProductDeleteViewTests(TestCase):
         url = reverse('catalog:product_delete', args=[product.pk])
 
         confirmation = self.client.get(url)
-        self.assertContains(confirmation, 'Este produto possui locações vinculadas e não pode ser excluído.')
-        self.assertNotContains(confirmation, '<form method="post" class="mt-6 form-actions">')
+        self.assertContains(confirmation, 'Retirar produto do acervo')
+        self.assertContains(confirmation, 'sem apagar locações ou contratos existentes')
+        self.assertContains(confirmation, '<form method="post" class="mt-6 form-actions">')
 
         response = self.client.post(url)
 
         self.assertRedirects(response, reverse('catalog:product_list'))
-        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
-        self.assertFalse(
-            AuditLog.objects.filter(action='product_delete', object_id=str(product.pk)).exists()
+        product.refresh_from_db()
+        self.assertFalse(product.is_active)
+        self.assertTrue(RentalItem.objects.filter(rental=rental, product=product).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action='product_archive', object_id=str(product.pk)).exists()
         )
         self.assertIn(
-            'Este produto não pode ser excluído porque possui locações vinculadas.',
+            'Produto retirado do acervo com sucesso. O histórico de locações foi preservado.',
             [str(message) for message in get_messages(response.wsgi_request)],
         )
+
+    def test_archives_when_protected_relation_appears_during_delete(self):
+        product = Product.objects.create(
+            category=self.category,
+            code=2,
+            description='Vestido concorrente',
+            value=300,
+        )
+        rental = Rental.objects.create(
+            number=2,
+            customer=Customer.objects.create(name='Ana'),
+            pickup_date=date(2026, 7, 10),
+            return_date=date(2026, 7, 20),
+        )
+        item = RentalItem.objects.create(rental=rental, product=product, value=300)
+        protected = ProtectedError('Locação criada durante a exclusão.', {item})
+
+        with patch.object(type(product.rental_items), 'exists', return_value=False):
+            with patch.object(Product, 'delete', side_effect=protected):
+                response = self.client.post(
+                    reverse('catalog:product_delete', args=[product.pk])
+                )
+
+        self.assertRedirects(response, reverse('catalog:product_list'))
+        product.refresh_from_db()
+        self.assertFalse(product.is_active)
+        self.assertTrue(RentalItem.objects.filter(pk=item.pk, product=product).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action='product_archive', object_id=str(product.pk)).exists()
+        )
+
+    def test_repeated_forged_post_does_not_duplicate_archive_audit(self):
+        product = Product.objects.create(
+            category=self.category,
+            code=3,
+            description='Vestido',
+            value=300,
+        )
+        rental = Rental.objects.create(
+            number=3,
+            customer=Customer.objects.create(name='Beatriz'),
+            pickup_date=date(2026, 8, 10),
+            return_date=date(2026, 8, 20),
+        )
+        RentalItem.objects.create(rental=rental, product=product, value=300)
+        url = reverse('catalog:product_delete', args=[product.pk])
+
+        self.client.post(url)
+        response = self.client.post(url)
+
+        product.refresh_from_db()
+        self.assertFalse(product.is_active)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                action='product_archive',
+                object_id=str(product.pk),
+            ).count(),
+            1,
+        )
+        self.assertIn(
+            'Este produto já estava fora do acervo.',
+            [str(message) for message in get_messages(response.wsgi_request)],
+        )
+
+
+class ProductArchiveVisibilityTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='archive@test.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='catalog', allowed=True)
+        ActionPermission.objects.create(user=self.user, action_key='catalog.delete', allowed=True)
+        self.client.force_login(self.user)
+        self.category = Category.objects.create(prefix='ARQ', name='Arquivados')
+        self.product = Product.objects.create(
+            category=self.category,
+            code=42,
+            description='Vestido fora do acervo',
+            color='Azul',
+            size='M',
+            value=300,
+            is_active=False,
+        )
+        self.customer = Customer.objects.create(name='Maria')
+        self.rental = Rental.objects.create(
+            number=42,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 20),
+        )
+        self.item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=300,
+        )
+
+    def test_archived_product_hidden_from_active_list_and_available_in_archive_filter(self):
+        active_response = self.client.get(reverse('catalog:product_list'))
+        self.assertNotContains(active_response, 'Vestido fora do acervo')
+
+        archived_response = self.client.get(
+            reverse('catalog:product_list'),
+            {'status': 'inactive'},
+        )
+        self.assertContains(archived_response, 'Vestido fora do acervo')
+        self.assertContains(archived_response, 'arquivado')
+        self.assertContains(archived_response, 'Reativar no acervo')
+
+    def test_archived_product_hidden_from_search_browse_and_availability(self):
+        search = self.client.get(reverse('catalog:product_search'), {'q': 'ARQ42'})
+        self.assertEqual(search.json()['results'], [])
+
+        browse = self.client.get(reverse('catalog:product_browse'), {'prefix': 'ARQ'})
+        self.assertEqual(browse.json()['results'], [])
+        self.assertNotIn(
+            'ARQ',
+            {row['category__prefix'] for row in browse.json()['categories']},
+        )
+
+        availability = self.client.get(
+            reverse('catalog:availability'),
+            {'prefix': 'ARQ', 'code': '42'},
+        )
+        self.assertContains(availability, 'Produto ARQ42 não encontrado')
+
+        availability_json = self.client.get(
+            reverse('catalog:availability_json'),
+            {
+                'product_id': self.product.pk,
+                'pickup_date': '01/08/2026',
+                'return_date': '02/08/2026',
+            },
+        )
+        self.assertJSONEqual(
+            availability_json.content,
+            {'available': False, 'error': 'not_found'},
+        )
+        availability_without_dates = self.client.get(
+            reverse('catalog:availability_json'),
+            {'product_id': self.product.pk},
+        )
+        self.assertJSONEqual(
+            availability_without_dates.content,
+            {'available': False, 'error': 'not_found'},
+        )
+
+    def test_archived_product_and_rental_remain_visible_in_history(self):
+        response = self.client.get(
+            reverse('catalog:product_history', args=[self.product.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'fora do acervo')
+        self.assertContains(response, '#42')
+        self.assertTrue(
+            RentalItem.objects.filter(pk=self.item.pk, product=self.product).exists()
+        )
+
+    def test_reactivate_restores_product_and_creates_audit_log(self):
+        response = self.client.post(
+            reverse('catalog:product_reactivate', args=[self.product.pk])
+        )
+
+        self.assertRedirects(response, reverse('catalog:product_list'))
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.is_active)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action='product_reactivate',
+                object_id=str(self.product.pk),
+            ).exists()
+        )
+        active_response = self.client.get(reverse('catalog:product_list'))
+        self.assertContains(active_response, 'Vestido fora do acervo')
+
+    def test_reactivate_post_requires_existing_delete_permission(self):
+        unauthorized = User.objects.create_user(
+            email='no-action@test.com',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=unauthorized,
+            module_key='catalog',
+            allowed=True,
+        )
+        self.client.force_login(unauthorized)
+
+        response = self.client.post(
+            reverse('catalog:product_reactivate', args=[self.product.pk])
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.product.refresh_from_db()
+        self.assertFalse(self.product.is_active)
 
 
 class ProductBrowseViewTests(TestCase):

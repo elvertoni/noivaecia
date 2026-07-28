@@ -24,6 +24,9 @@
     {% if product.is_placeholder %}
       <span class="badge badge-warning">placeholder</span>
     {% endif %}
+    {% if not product.is_active %}
+      <span class="badge badge-info">fora do acervo</span>
+    {% endif %}
     {% if siblings %}
       <span class="badge badge-danger">{{ siblings|length }} produto(s) duplicado(s) com mesmo código</span>
     {% endif %}

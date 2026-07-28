@@ -14,6 +14,7 @@ from .views import (
     ProductBrowseView,
     ProductHistoryView,
     ProductListView,
+    ProductReactivateView,
     ProductSearchView,
     ProductUpdateView,
 )
@@ -33,6 +34,7 @@ urlpatterns = [
     path('produtos/placeholders/', PlaceholderReviewView.as_view(), name='placeholder_review'),
     path('produtos/<int:pk>/editar/', ProductUpdateView.as_view(), name='product_update'),
     path('produtos/<int:pk>/excluir/', ProductDeleteView.as_view(), name='product_delete'),
+    path('produtos/<int:pk>/reativar/', ProductReactivateView.as_view(), name='product_reactivate'),
     path('produtos/<int:pk>/historico/', ProductHistoryView.as_view(), name='product_history'),
     # Availability (RF-22)
     path('disponibilidade/', AvailabilityView.as_view(), name='availability'),

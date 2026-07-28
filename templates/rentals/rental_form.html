@@ -74,7 +74,9 @@
             <div class="flex items-center justify-between gap-3 py-2">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-700">{{ forloop.counter }}</span>
-                <span class="truncate text-sm font-medium text-app-ink">{{ item.product.category.prefix }}{{ item.product.code }} · {{ item.product.description|default:'Sem descrição' }}</span>
+                <span class="truncate text-sm font-medium text-app-ink">
+                  {{ item.product_reference }} · {{ item.display_description|default:'Sem descrição' }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}
+                </span>
                 {% if item.description %}<span class="hidden sm:inline truncate text-xs text-app-muted ml-1">— {{ item.description }}</span>{% endif %}
               </div>
               <span class="shrink-0 text-sm font-semibold text-app-ink">R$ {{ item.value }}</span>
@@ -91,12 +93,14 @@
 
       <!-- Items -->
       <div id="itens">
-        <div class="flex items-center justify-between gap-3">
-          <div>
+        <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
             <h2 class="section-title">Itens da locação</h2>
             <p class="field-help mt-0.5">Busque cada peça pelo código ou descrição. A disponibilidade na data de retirada é verificada automaticamente.</p>
           </div>
-          <button type="button" id="add-item" class="btn btn-primary min-h-9 shrink-0 px-3 py-1.5">+ Adicionar item</button>
+          <button type="button" id="add-item" class="btn btn-primary min-h-9 w-full shrink-0 px-3 py-1.5 sm:w-auto" aria-controls="item-forms">
+            <span aria-hidden="true">+</span> Adicionar item
+          </button>
         </div>
 
         {{ items.management_form }}
@@ -150,7 +154,7 @@
                   <div class="min-w-0">
                     <p class="font-medium text-app-ink text-sm truncate summary-product-title">
                       {% if item_form.instance.product %}
-                        {{ item_form.instance.product.category.prefix }}{{ item_form.instance.product.code }} · {{ item_form.instance.product.description|default:'Sem descrição' }}{% if item_form.instance.product.color %} — {{ item_form.instance.product.color }}{% endif %}{% if item_form.instance.product.size %} — {{ item_form.instance.product.size }}{% endif %}
+                        {{ item_form.instance.product_reference }} · {{ item_form.instance.display_description|default:'Sem descrição' }}{% if item_form.instance.display_color %} — {{ item_form.instance.display_color }}{% endif %}{% if item_form.instance.display_size %} — {{ item_form.instance.display_size }}{% endif %}
                       {% else %}
                         Item sem produto selecionado
                       {% endif %}
@@ -229,7 +233,9 @@
 
         {# Mirror of the header button — follows the flow so the user never scrolls up. #}
         <div class="mt-4">
-          <button type="button" id="add-item-bottom" class="btn btn-secondary w-full justify-center">+ Adicionar item</button>
+          <button type="button" id="add-item-bottom" class="btn btn-secondary w-full justify-center" aria-controls="item-forms">
+            <span aria-hidden="true">+</span> Adicionar item
+          </button>
         </div>
       </div>
 
@@ -290,7 +296,7 @@
       </div>
 
       <!-- Espaço reservado para o footer fixo não sobrepor o conteúdo -->
-      <div aria-hidden="true" class="h-20"></div>
+      <div id="rental-action-bar-spacer" aria-hidden="true" class="h-28 sm:h-20"></div>
     </form>
   </div>
 </div>
@@ -299,19 +305,19 @@
 <div id="rental-action-bar"
      role="region"
      aria-label="Ações do formulário"
-     class="fixed bottom-0 left-0 lg:left-64 right-0 z-40 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+     class="fixed bottom-0 left-0 right-0 z-20 flex min-w-0 items-center justify-end gap-3 border-t border-slate-200 bg-white pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] lg:left-64">
   {% if not has_payments %}
     <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
   {% endif %}
-  <div class="flex items-center gap-3">
+  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
     {% if form.instance.pk %}
-      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary">Cancelar</a>
+      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">Cancelar</a>
     {% else %}
-      <a href="{% url 'rentals:list' %}" class="btn btn-secondary">Cancelar</a>
+      <a href="{% url 'rentals:list' %}" class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">Cancelar</a>
     {% endif %}
     <button type="submit"
             form="rental-form"
-            class="btn btn-primary">
+            class="btn btn-primary min-w-0 w-full px-2 sm:w-auto sm:px-4">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"/>
       </svg>

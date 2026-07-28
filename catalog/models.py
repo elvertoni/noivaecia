@@ -48,6 +48,7 @@ class Product(TimeStampedModel):
     legacy_source = models.CharField('origem legada', max_length=50, blank=True)
     legacy_notes = models.TextField('notas de importação', blank=True)
     is_placeholder = models.BooleanField('é placeholder', default=False, db_index=True)
+    is_active = models.BooleanField('ativo', default=True, db_index=True)
 
     class Meta:
         verbose_name = 'produto'

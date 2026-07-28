@@ -404,14 +404,19 @@ class NormalizedImportTests(TestCase):
         self.assertFalse(p.is_placeholder)
 
     # R4.09 rentals
-    def test_rental_imported_with_use_for(self):
+    def test_rental_legacy_use_is_preserved_in_import_notes(self):
         r = Rental.objects.get(number=1)
-        self.assertEqual(r.use_for, 'Festa de formatura')
+        self.assertIn('locado.usar: Festa de formatura', r.legacy_notes)
         self.assertEqual(r.status, Rental.Status.RETURNED)
 
     def test_rental_item_imported(self):
         item = RentalItem.objects.get(rental__number=1)
         self.assertEqual(item.product.code, 1)
+        self.assertTrue(item.product_snapshot_captured)
+        self.assertEqual(item.product_prefix_snapshot, 'VT')
+        self.assertEqual(item.product_code_snapshot, 1)
+        self.assertEqual(item.product_description_snapshot, item.product.description)
+        self.assertEqual(item.product_color_snapshot, 'Branco')
 
     def test_rental_legacy_notes_contains_obs(self):
         r = Rental.objects.get(number=1)

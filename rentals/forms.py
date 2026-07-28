@@ -228,9 +228,15 @@ class RentalItemForm(forms.ModelForm):
         if product_id is None and self.instance and self.instance.pk:
             product_id = getattr(self.instance, 'product_id', None)
         if product_id:
-            self.fields['product'].queryset = (
-                Product.objects.filter(pk=product_id).select_related('category')
+            selected_product_is_current = (
+                self.instance
+                and self.instance.pk
+                and self.instance.product_id == product_id
             )
+            products = Product.objects.filter(pk=product_id)
+            if not selected_product_is_current:
+                products = products.filter(is_active=True)
+            self.fields['product'].queryset = products.select_related('category')
         else:
             self.fields['product'].queryset = Product.objects.none()
 

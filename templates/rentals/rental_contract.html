@@ -297,8 +297,8 @@
       <tbody>
         {% for item in items %}
         <tr>
-          <td>{{ item.product.category.prefix }}{{ item.product.code }}</td>
-          <td>{{ item.product.description }}{% if item.product.color %} — {{ item.product.color }}{% endif %}{% if item.product.size %} — {{ item.product.size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
+          <td>{{ item.product_reference }}</td>
+          <td>{{ item.display_description }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
           <td class="text-right">R$ {{ item.value|brl }}</td>
         </tr>
         {% empty %}

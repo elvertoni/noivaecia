@@ -40,7 +40,12 @@ class CategoryListView(CatalogAccessMixin, ListView):
     paginate_by = 30
 
     def get_queryset(self):
-        qs = super().get_queryset().annotate(product_count=Count('products'))
+        qs = super().get_queryset().annotate(
+            product_count=Count(
+                'products',
+                filter=Q(products__is_active=True),
+            )
+        )
         q = self.request.GET.get('q', '').strip()
         only_placeholders = self.request.GET.get('placeholder', '')
         if q:
@@ -113,15 +118,28 @@ class ProductListView(CatalogAccessMixin, ListView):
     paginate_by = 30
 
     def get_queryset(self):
+        status = self.request.GET.get('status', 'active').strip()
+        if status not in {'active', 'inactive', 'all'}:
+            status = 'active'
+
         duplicate = Product.objects.filter(
             category_id=OuterRef('category_id'),
             code=OuterRef('code'),
         ).exclude(pk=OuterRef('pk'))
+        if status == 'active':
+            duplicate = duplicate.filter(is_active=True)
+        elif status == 'inactive':
+            duplicate = duplicate.filter(is_active=False)
+
         qs = (
             super().get_queryset()
             .select_related('category')
             .annotate(is_duplicate=Exists(duplicate))
         )
+        if status == 'active':
+            qs = qs.filter(is_active=True)
+        elif status == 'inactive':
+            qs = qs.filter(is_active=False)
 
         prefix = self.request.GET.get('prefix', '').strip()
         code = self.request.GET.get('code', '').strip()
@@ -136,7 +154,7 @@ class ProductListView(CatalogAccessMixin, ListView):
         if code:
             try:
                 val = int(code)
-                if val > 2147483647:
+                if not 0 <= val <= 2147483647:
                     qs = qs.none()
                 else:
                     qs = qs.filter(code=val)
@@ -158,6 +176,14 @@ class ProductListView(CatalogAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         visible_products = ctx['object_list']
+        status = self.request.GET.get('status', 'active').strip()
+        if status not in {'active', 'inactive', 'all'}:
+            status = 'active'
+        status_scope = Product.objects.all()
+        if status == 'active':
+            status_scope = status_scope.filter(is_active=True)
+        elif status == 'inactive':
+            status_scope = status_scope.filter(is_active=False)
         ctx.update({
             'prefix': self.request.GET.get('prefix', ''),
             'code': self.request.GET.get('code', ''),
@@ -166,8 +192,10 @@ class ProductListView(CatalogAccessMixin, ListView):
             'size': self.request.GET.get('size', ''),
             'only_placeholder': self.request.GET.get('placeholder', ''),
             'only_duplicate': self.request.GET.get('duplicate', ''),
+            'status': status,
             'categories': Category.objects.all(),
-            'placeholder_count': Product.objects.filter(is_placeholder=True).count(),
+            'placeholder_count': status_scope.filter(is_placeholder=True).count(),
+            'inactive_count': Product.objects.filter(is_active=False).count(),
             'duplicate_ids': {
                 product.pk for product in visible_products if product.is_duplicate
             },
@@ -203,25 +231,92 @@ class ProductDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
         return context
 
     def form_valid(self, form):
-        product = self.get_object()
-        try:
-            response = super().form_valid(form)
-        except ProtectedError:
-            messages.error(
-                self.request,
-                'Este produto não pode ser excluído porque possui locações vinculadas.',
+        with transaction.atomic():
+            product = get_object_or_404(
+                Product.objects.select_for_update().select_related('category'),
+                pk=self.object.pk,
             )
-            return redirect('catalog:product_list')
+            product_id = product.pk
+            product_repr = str(product)[:200]
+
+            if product.rental_items.exists():
+                archived = self._archive_product(product, product_repr)
+            else:
+                try:
+                    # The savepoint keeps the outer transaction usable when a
+                    # rental item is attached between the existence check and
+                    # the delete attempt.
+                    with transaction.atomic():
+                        product.delete()
+                except ProtectedError:
+                    product = Product.objects.select_for_update().get(pk=product_id)
+                    archived = self._archive_product(product, product_repr)
+                else:
+                    AuditLog.objects.create(
+                        user=self.request.user,
+                        action='product_delete',
+                        model_name='Product',
+                        object_id=str(product_id),
+                        object_repr=product_repr,
+                        reason='Exclusão física de produto sem histórico de locações.',
+                    )
+                    messages.success(self.request, 'Produto excluído com sucesso.')
+                    return redirect(self.success_url)
+
+        if archived:
+            messages.success(
+                self.request,
+                'Produto retirado do acervo com sucesso. O histórico de locações foi preservado.',
+            )
+        else:
+            messages.info(self.request, 'Este produto já estava fora do acervo.')
+        return redirect(self.success_url)
+
+    def _archive_product(self, product, product_repr):
+        if not product.is_active:
+            return False
+        product.is_active = False
+        product.save(update_fields=['is_active', 'updated_at'])
         AuditLog.objects.create(
             user=self.request.user,
-            action='product_delete',
+            action='product_archive',
             model_name='Product',
             object_id=str(product.pk),
-            object_repr=str(product),
-            reason='Exclusão de produto.',
+            object_repr=product_repr,
+            reason='Retirada do acervo; histórico de locações preservado.',
+            metadata={'is_active': {'from': True, 'to': False}},
         )
-        messages.success(self.request, 'Produto excluído com sucesso.')
-        return response
+        return True
+
+
+class ProductReactivateView(CatalogAccessMixin, ActionRequiredMixin, View):
+    action_key = 'catalog.delete'
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            product = get_object_or_404(
+                Product.objects.select_for_update().select_related('category'),
+                pk=pk,
+            )
+            if product.is_active:
+                messages.info(request, 'Este produto já está ativo no acervo.')
+                return redirect('catalog:product_list')
+
+            product_repr = str(product)[:200]
+            product.is_active = True
+            product.save(update_fields=['is_active', 'updated_at'])
+            AuditLog.objects.create(
+                user=request.user,
+                action='product_reactivate',
+                model_name='Product',
+                object_id=str(product.pk),
+                object_repr=product_repr,
+                reason='Produto reativado no acervo.',
+                metadata={'is_active': {'from': False, 'to': True}},
+            )
+
+        messages.success(request, 'Produto reativado no acervo com sucesso.')
+        return redirect('catalog:product_list')
 
 
 class ProductHistoryView(CatalogAccessMixin, DetailView):
@@ -287,7 +382,11 @@ class AvailabilityView(CatalogAccessMixin, TemplateView):
         context['uses_custom_date'] = requested_date is not None
 
         products = list(
-            Product.objects.filter(category__prefix__iexact=prefix, code=code)
+            Product.objects.filter(
+                category__prefix__iexact=prefix,
+                code=code,
+                is_active=True,
+            )
             .select_related('category')
         )
         if not products:
@@ -344,11 +443,16 @@ class PlaceholderReviewView(CatalogAccessMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx['placeholder_categories'] = (
             Category.objects.filter(is_placeholder=True)
-            .annotate(product_count=Count('products'))
+            .annotate(
+                product_count=Count(
+                    'products',
+                    filter=Q(products__is_active=True),
+                )
+            )
             .order_by('prefix')
         )
         ctx['placeholder_products'] = (
-            Product.objects.filter(is_placeholder=True)
+            Product.objects.filter(is_placeholder=True, is_active=True)
             .select_related('category')
             .order_by('category__prefix', 'code')
         )
@@ -486,6 +590,7 @@ class ProductSearchView(View):
             return JsonResponse({'results': []})
         qs = (
             Product.objects.select_related('category')
+            .filter(is_active=True)
             .filter(product_text_filter(q))
             .order_by('category__prefix', 'code')[:20]
         )
@@ -543,7 +648,7 @@ class ProductBrowseView(View):
             return_date = parse_br_date(return_date_str)
 
         # ``scoped``: q + visibility only (drives the category facet).
-        scoped = Product.objects.select_related('category')
+        scoped = Product.objects.select_related('category').filter(is_active=True)
         if not include_empty:
             scoped = scoped.exclude(description='')
         if q:
@@ -659,19 +764,21 @@ class ProductAvailabilityJsonView(View):
         date_str = request.GET.get('date', '').strip()
         pickup_date_str = request.GET.get('pickup_date', '').strip() or date_str
         return_date_str = request.GET.get('return_date', '').strip() or pickup_date_str
-        if not product_id or not pickup_date_str or not return_date_str:
+        if not product_id:
+            return JsonResponse({'available': True})
+        try:
+            val = int(product_id)
+            if not 1 <= val <= 2147483647:
+                return JsonResponse({'available': False, 'error': 'not_found'})
+            product = Product.objects.select_related('category').get(pk=val, is_active=True)
+        except (Product.DoesNotExist, ValueError):
+            return JsonResponse({'available': False, 'error': 'not_found'})
+        if not pickup_date_str or not return_date_str:
             return JsonResponse({'available': True})
         pickup_date = parse_br_date(pickup_date_str)
         return_date = parse_br_date(return_date_str)
         if pickup_date is None or return_date is None:
             return JsonResponse({'available': False, 'error': 'invalid_date'})
-        try:
-            val = int(product_id)
-            if val > 2147483647:
-                return JsonResponse({'available': False, 'error': 'not_found'})
-            product = Product.objects.select_related('category').get(pk=val)
-        except (Product.DoesNotExist, ValueError):
-            return JsonResponse({'available': False, 'error': 'not_found'})
         rental = find_overlapping_rental(product, pickup_date, return_date)
         if rental:
             return JsonResponse({

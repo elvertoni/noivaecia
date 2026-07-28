@@ -30,8 +30,6 @@ class Rental(TimeStampedModel):
     status = models.CharField(
         'situação', max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
     )
-    # R3.08 — uso/evento da locação (legado: locado.usar)
-    use_for = models.CharField('usar em', max_length=200, blank=True)
     # R3.09 — campos de cancelamento
     cancelled_reason = models.TextField('motivo do cancelamento', blank=True)
     cancelled_at = models.DateTimeField('cancelado em', null=True, blank=True)
@@ -92,6 +90,35 @@ class RentalItem(TimeStampedModel):
     )
     description = models.CharField('descrição', max_length=200, blank=True)
     value = models.DecimalField('valor', max_digits=10, decimal_places=2, default=0)
+    product_prefix_snapshot = models.CharField(
+        'prefixo da peça na locação',
+        max_length=10,
+        blank=True,
+    )
+    product_code_snapshot = models.PositiveIntegerField(
+        'código da peça na locação',
+        null=True,
+        blank=True,
+    )
+    product_description_snapshot = models.CharField(
+        'descrição da peça na locação',
+        max_length=200,
+        blank=True,
+    )
+    product_color_snapshot = models.CharField(
+        'cor da peça na locação',
+        max_length=50,
+        blank=True,
+    )
+    product_size_snapshot = models.CharField(
+        'tamanho da peça na locação',
+        max_length=50,
+        blank=True,
+    )
+    product_snapshot_captured = models.BooleanField(
+        'dados da peça preservados',
+        default=False,
+    )
     proof_photo = models.FileField(
         'foto de comprovação',
         upload_to='rentals/proof_photos/%Y/%m/',
@@ -116,7 +143,95 @@ class RentalItem(TimeStampedModel):
         verbose_name_plural = 'itens da locação'
 
     def __str__(self):
-        return f'{self.product} · {self.value}'
+        description = self.display_description
+        label = self.product_reference
+        if description:
+            label = f'{label} · {description}' if label else description
+        return f'{label} · {self.value}'
+
+    def _capture_product_snapshot(self):
+        """Copy mutable catalogue data when this line starts pointing to a product."""
+        product = self._state.fields_cache.get('product')
+        if product is None or product.pk != self.product_id:
+            product_model = self._meta.get_field('product').remote_field.model
+            product = product_model.objects.select_related('category').get(pk=self.product_id)
+
+        self.product_prefix_snapshot = product.category.prefix
+        self.product_code_snapshot = product.code
+        self.product_description_snapshot = product.description
+        self.product_color_snapshot = product.color
+        self.product_size_snapshot = product.size
+        self.product_snapshot_captured = True
+
+    def save(self, *args, **kwargs):
+        """Refresh the snapshot only for a new line or a deliberate product swap."""
+        update_fields = kwargs.get('update_fields')
+        product_is_being_saved = (
+            update_fields is None
+            or 'product' in update_fields
+            or 'product_id' in update_fields
+        )
+        capture_snapshot = False
+
+        if self.product_id and product_is_being_saved:
+            if self._state.adding:
+                capture_snapshot = True
+            else:
+                previous = type(self).objects.filter(pk=self.pk).values(
+                    'product_id',
+                    'product_snapshot_captured',
+                ).first()
+                capture_snapshot = (
+                    previous is None
+                    or previous['product_id'] != self.product_id
+                    or not previous['product_snapshot_captured']
+                )
+
+        if capture_snapshot:
+            self._capture_product_snapshot()
+            if update_fields is not None:
+                kwargs['update_fields'] = set(update_fields) | {
+                    'product_prefix_snapshot',
+                    'product_code_snapshot',
+                    'product_description_snapshot',
+                    'product_color_snapshot',
+                    'product_size_snapshot',
+                    'product_snapshot_captured',
+                }
+
+        super().save(*args, **kwargs)
+
+    @property
+    def product_reference(self):
+        if self.product_snapshot_captured:
+            prefix = self.product_prefix_snapshot
+            code = self.product_code_snapshot
+        else:
+            product = getattr(self, 'product', None)
+            prefix = product.category.prefix if product else ''
+            code = product.code if product else None
+        return f'{prefix}{code}' if code is not None else prefix
+
+    @property
+    def display_description(self):
+        if self.product_snapshot_captured:
+            return self.product_description_snapshot
+        product = getattr(self, 'product', None)
+        return product.description if product else ''
+
+    @property
+    def display_color(self):
+        if self.product_snapshot_captured:
+            return self.product_color_snapshot
+        product = getattr(self, 'product', None)
+        return product.color if product else ''
+
+    @property
+    def display_size(self):
+        if self.product_snapshot_captured:
+            return self.product_size_snapshot
+        product = getattr(self, 'product', None)
+        return product.size if product else ''
 
     @property
     def has_proof_photo(self):

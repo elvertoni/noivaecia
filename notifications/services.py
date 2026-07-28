@@ -64,7 +64,10 @@ def _item_summary(rental):
     items = list(rental.items.all())
     if not items:
         return 'sem itens'
-    summary = str(items[0].product)
+    first_item = items[0]
+    summary = first_item.product_reference
+    if first_item.display_description:
+        summary = f'{summary} · {first_item.display_description}'
     extra = len(items) - 1
     if extra:
         summary += f' +{extra}'

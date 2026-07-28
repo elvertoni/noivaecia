@@ -78,6 +78,24 @@ class DeliveriesBlockTests(TestCase):
         self.assertIn('#1 Maria Silva', text)
         self.assertNotIn('⚠️', text)
 
+    def test_delivery_item_summary_uses_historical_product_snapshot(self):
+        rental = _make_rental(
+            30, self.customer, Rental.Status.PICKED_UP,
+            pickup_date=TODAY - timedelta(days=5), return_date=TODAY,
+        )
+        item = rental.items.get()
+        product = item.product
+        original_reference = item.product_reference
+        original_description = item.display_description
+        product.code = 999
+        product.description = 'Cadastro alterado'
+        product.save()
+
+        text = build_daily_report(TODAY)
+
+        self.assertIn(f'{original_reference} · {original_description}', text)
+        self.assertNotIn('Cadastro alterado', text)
+
     def test_overdue_delivery_is_flagged_and_not_counted_as_today(self):
         _make_rental(
             2, self.customer, Rental.Status.PICKED_UP,

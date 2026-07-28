@@ -340,7 +340,6 @@ class RentalContractPaymentPlanTests(TestCase):
         self.rental = Rental.objects.create(
             number=102,
             customer=customer,
-            use_for='2027-01-16',
             pickup_date=date(2027, 1, 15),
             return_date=date(2027, 1, 20),
             total_value=Decimal('300.00'),
@@ -358,7 +357,6 @@ class RentalContractPaymentPlanTests(TestCase):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'Usar em')
         self.assertContains(response, 'Retirada dos trajes')
         self.assertContains(response, 'Devolução dos trajes')
         self.assertContains(response, '27/07/2026')
@@ -369,7 +367,7 @@ class RentalContractPaymentPlanTests(TestCase):
         self.assertContains(response, 'Diogo / 43 99999-0000')
         self.assertContains(response, 'Locatário(a): Maria Silva')
         self.rental.refresh_from_db()
-        self.assertEqual(self.rental.contract_version, 'v2')
+        self.assertEqual(self.rental.contract_version, 'v3')
 
     def test_contract_distinguishes_partial_receipt_and_write_off(self):
         partial = Receivable.objects.create(

@@ -157,6 +157,20 @@ class ProductListBadgesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['placeholder_count'], 1)
 
+    def test_category_product_count_excludes_archived_products(self):
+        archived = Product.objects.get(description='Vestido branco')
+        archived.is_active = False
+        archived.save(update_fields=['is_active', 'updated_at'])
+
+        response = self.client.get(reverse('catalog:category_list'))
+
+        categories = {
+            category.prefix: category.product_count
+            for category in response.context['categories']
+        }
+        self.assertEqual(categories['VES'], 2)
+        self.assertEqual(categories['TRN'], 1)
+
 
 # ── R8.03 Availability disambiguation ────────────────────────────────────────
 
@@ -461,6 +475,17 @@ class PlaceholderReviewViewTests(TestCase):
         prods = list(response.context['placeholder_products'])
         self.assertEqual(len(prods), 1)
         self.assertEqual(prods[0].description, 'Terno preto')
+
+    def test_placeholder_counts_and_list_exclude_archived_products(self):
+        product = Product.objects.get(description='Terno preto')
+        product.is_active = False
+        product.save(update_fields=['is_active', 'updated_at'])
+
+        response = self.client.get(reverse('catalog:placeholder_review'))
+
+        category = response.context['placeholder_categories'].get(prefix='TRN')
+        self.assertEqual(category.product_count, 0)
+        self.assertEqual(list(response.context['placeholder_products']), [])
 
 
 # ── R8.06 Category merge ──────────────────────────────────────────────────────

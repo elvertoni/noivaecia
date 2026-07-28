@@ -46,7 +46,6 @@
           <th>Cliente</th>
           <th>Retirada</th>
           <th>Retorno previsto</th>
-          <th>Usar em</th>
           <th>Itens</th>
           <th class="text-right">Total</th>
           <th class="text-right">Ações</th>
@@ -68,10 +67,9 @@
               {% endif %}
             </td>
             <td>{{ rental.return_date|date:'d/m/Y' }}</td>
-            <td class="text-app-muted text-sm">{{ rental.use_for|default:'—' }}</td>
             <td class="text-sm">
               {% for item in rental.items.all %}
-                {{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}
+                {{ item.product_reference }}{% if not forloop.last %}, {% endif %}
               {% empty %}—{% endfor %}
             </td>
             <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|brl }}</td>
@@ -127,16 +125,10 @@
             <dt class="text-xs font-medium text-slate-600">Itens</dt>
             <dd class="mt-1 text-slate-900">
               {% for item in rental.items.all %}
-                {{ item.product.category.prefix }}{{ item.product.code }}{% if not forloop.last %}, {% endif %}
+                {{ item.product_reference }}{% if not forloop.last %}, {% endif %}
               {% empty %}—{% endfor %}
             </dd>
           </div>
-          {% if rental.use_for %}
-            <div class="col-span-2">
-              <dt class="text-xs font-medium text-slate-600">Usar em</dt>
-              <dd class="mt-1 text-slate-900">{{ rental.use_for }}</dd>
-            </div>
-          {% endif %}
         </dl>
 
         {# One-click pickup: inherits today's date, no intermediate form. #}

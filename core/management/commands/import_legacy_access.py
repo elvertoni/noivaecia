@@ -801,15 +801,14 @@ class Command(BaseCommand):
             else:
                 status = Rental.Status.PENDING
 
-            # R3.08: use_for from locado.usar
-            use_for_values = unique_clean_values(rows, 'usar', 200)
-            use_for = '; '.join(use_for_values)[:200]
-
-            # R3.01: legacy_notes preserves obs and suspicious date markers
+            # R3.01: legacy_notes preserves obs, event/use and suspicious dates.
             notes_parts = unique_clean_values(rows, 'obs')
             legacy_parts = []
             if notes_parts:
                 legacy_parts.append('locado.obs: ' + '; '.join(notes_parts))
+            legacy_use_values = unique_clean_values(rows, 'usar')
+            if legacy_use_values:
+                legacy_parts.append('locado.usar: ' + '; '.join(legacy_use_values))
             if suspicious_dates:
                 legacy_parts.append('datas_suspeitas: ' + ', '.join(suspicious_dates))
 
@@ -822,7 +821,6 @@ class Command(BaseCommand):
                 total_value=total_value,
                 penalty_value=penalty_value,
                 notes='; '.join(unique_clean_values(rows, 'obs')),
-                use_for=use_for,
                 legacy_notes='\n'.join(legacy_parts),
                 status=status,
                 created_at=self.now,
@@ -890,13 +888,20 @@ class Command(BaseCommand):
                 continue
             if (prefix, code) not in product_by_key:
                 continue
+            product = product_by_key[(prefix, code)]
             items.append(
                 RentalItem(
                     id=legacy_id,
                     rental_id=rental_number,
-                    product=product_by_key[(prefix, code)],
+                    product=product,
                     description=clean_text(row.get('descrição'), 200),
                     value=as_decimal(row.get('valor')),
+                    product_prefix_snapshot=product.category.prefix,
+                    product_code_snapshot=product.code,
+                    product_description_snapshot=product.description,
+                    product_color_snapshot=product.color,
+                    product_size_snapshot=product.size,
+                    product_snapshot_captured=True,
                     created_at=self.now,
                     updated_at=self.now,
                 )

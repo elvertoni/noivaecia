@@ -457,7 +457,7 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
 
 # ── Contract ──────────────────────────────────────────────────────────────────
 
-CONTRACT_VERSION = 'v2'
+CONTRACT_VERSION = 'v3'
 
 
 class RentalContractView(RentalAccessMixin, TemplateView):

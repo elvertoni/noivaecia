@@ -90,7 +90,6 @@ class RentalFormValidationTests(TestCase):
     def _header_data(self, **overrides):
         data = {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '10/06/2026',
             'return_date': '15/06/2026',
             'penalty_value': '0,00',
@@ -297,7 +296,6 @@ class RentalCreateFlowTests(TestCase):
         # Now update the rental and clear the photo
         response = self.client.post(f'/locacoes/{rental.pk}/editar/', {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '2026-06-10',
             'return_date': '2026-06-15',
             'penalty_value': '0',
@@ -347,7 +345,6 @@ class RentalCreateFlowTests(TestCase):
 
         response = self.client.post(f'/locacoes/{rental.pk}/editar/', {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '2026-06-10',
             'return_date': '2026-06-15',
             'penalty_value': '0',
@@ -371,7 +368,7 @@ class RentalCreateFlowTests(TestCase):
 
 
 class RentalCancelledStatusTests(TestCase):
-    """R3.07, R3.08, R3.09 — cancelled status, use_for and cancellation fields."""
+    """R3.07/R3.09 — cancelled status and cancellation fields."""
 
     def setUp(self):
         self.customer = Customer.objects.create(name='Maria')
@@ -384,15 +381,6 @@ class RentalCancelledStatusTests(TestCase):
             status=Rental.Status.CANCELLED,
         )
         self.assertEqual(rental.status, 'cancelled')
-
-    def test_use_for_field_stores_date_string(self):
-        rental = Rental.objects.create(
-            number=11, customer=self.customer,
-            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
-            use_for='2026-06-20',
-        )
-        rental.refresh_from_db()
-        self.assertEqual(rental.use_for, '2026-06-20')
 
     def test_cancellation_fields_nullable_by_default(self):
         rental = Rental.objects.create(
@@ -549,7 +537,6 @@ class RentalItemEditingTests(TestCase):
     def _base_payload(self, **extra):
         data = {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '2026-06-10',
             'return_date': '2026-06-15',
             'penalty_value': '0',
@@ -595,7 +582,6 @@ class RentalItemEditingTests(TestCase):
     def test_duplicate_product_is_blocked(self):
         data = {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '2026-07-01',
             'return_date': '2026-07-05',
             'penalty_value': '0',
@@ -671,7 +657,6 @@ class RentalItemEditingTests(TestCase):
         # item row in the POST must NOT be re-rendered.
         data = {
             'customer': self.customer.pk,
-            'use_for': '',
             'pickup_date': '2026-07-05',
             'return_date': '2026-07-01',  # invalid: before pickup
             'penalty_value': '0',
@@ -697,7 +682,6 @@ class RentalItemEditingTests(TestCase):
 
     def test_paid_rental_allows_notes_only_and_ignores_forged_contract_changes(self):
         rental, _ = self._rental_with_items([self.p1], number=140)
-        rental.use_for = 'Casamento'
         rental.penalty_value = Decimal('50')
         rental.save()
         receivable = Receivable.objects.create(
@@ -723,7 +707,6 @@ class RentalItemEditingTests(TestCase):
 
         response = self.client.post(reverse('rentals:update', args=[rental.pk]), {
             'customer': other_customer.pk,
-            'use_for': 'Outro evento',
             'pickup_date': '2026-07-01',
             'return_date': '2026-07-05',
             'penalty_value': '999,99',
@@ -742,7 +725,6 @@ class RentalItemEditingTests(TestCase):
         self.assertRedirects(response, rental.get_absolute_url())
         rental.refresh_from_db()
         self.assertEqual(rental.customer, self.customer)
-        self.assertEqual(rental.use_for, 'Casamento')
         self.assertEqual(rental.pickup_date, date(2026, 6, 10))
         self.assertEqual(rental.return_date, date(2026, 6, 15))
         self.assertEqual(rental.penalty_value, Decimal('50'))
@@ -829,3 +811,136 @@ class RentalItemEditingTests(TestCase):
         self.assertTrue(rental.items.filter(product=self.p3).exists())
         self.assertContains(response, 'O total da locação foi alterado')
         self.assertContains(response, 'Revise ou gere novamente as parcelas futuras')
+
+
+class RentalItemSnapshotTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='snapshot@example.com',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=self.user,
+            module_key='rentals',
+            allowed=True,
+        )
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name='Maria')
+        self.category = Category.objects.create(prefix='VN', name='Vestidos')
+        self.product = Product.objects.create(
+            category=self.category,
+            code=12,
+            description='Vestido clássico',
+            color='Azul',
+            size='M',
+            value=Decimal('300'),
+        )
+        self.rental = Rental.objects.create(
+            number=200,
+            customer=self.customer,
+            pickup_date=date(2026, 8, 10),
+            return_date=date(2026, 8, 15),
+        )
+
+    def test_contract_and_detail_keep_original_product_data_after_catalog_edit(self):
+        item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=self.product.value,
+        )
+        self.assertTrue(item.product_snapshot_captured)
+        self.assertEqual(item.product_reference, 'VN12')
+        self.assertEqual(item.display_color, 'Azul')
+        self.assertEqual(item.display_size, 'M')
+
+        self.category.prefix = 'AT'
+        self.category.save(update_fields=['prefix', 'updated_at'])
+        self.product.code = 99
+        self.product.description = 'Cadastro alterado'
+        self.product.color = 'Vermelho'
+        self.product.size = 'G'
+        self.product.save()
+
+        contract = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        detail = self.client.get(reverse('rentals:detail', args=[self.rental.pk]))
+        edit = self.client.get(reverse('rentals:update', args=[self.rental.pk]))
+
+        for response in (contract, detail):
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'VN12')
+            self.assertContains(response, 'Vestido clássico')
+            self.assertContains(response, 'Azul')
+            self.assertContains(response, 'M')
+            self.assertNotContains(response, 'Cadastro alterado')
+            self.assertNotContains(response, 'Vermelho')
+
+        self.assertEqual(edit.status_code, 200)
+        self.assertContains(edit, 'VN12')
+        self.assertContains(edit, 'Vestido clássico')
+        self.assertContains(edit, 'Azul')
+        self.assertContains(edit, 'M')
+        self.assertContains(contract, 'Vestido clássico — Azul — M')
+
+    def test_deliberate_product_swap_refreshes_snapshot_with_update_fields(self):
+        item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=self.product.value,
+        )
+        other_category = Category.objects.create(prefix='AC', name='Acessórios')
+        other = Product.objects.create(
+            category=other_category,
+            code=7,
+            description='Tiara',
+            color='Prata',
+            size='Único',
+            value=Decimal('80'),
+        )
+
+        item.product = other
+        item.save(update_fields=['product'])
+        item.refresh_from_db()
+
+        self.assertEqual(item.product_reference, 'AC7')
+        self.assertEqual(item.display_description, 'Tiara')
+        self.assertEqual(item.display_color, 'Prata')
+        self.assertEqual(item.display_size, 'Único')
+
+        other.description = 'Tiara alterada'
+        other.save()
+        item.value = Decimal('75')
+        item.save(update_fields=['value'])
+        item.refresh_from_db()
+        self.assertEqual(item.display_description, 'Tiara')
+
+    def test_objects_create_with_product_id_captures_snapshot(self):
+        item = RentalItem.objects.create(
+            rental=self.rental,
+            product_id=self.product.pk,
+            value=self.product.value,
+        )
+
+        self.assertTrue(item.product_snapshot_captured)
+        self.assertEqual(item.product_reference, 'VN12')
+        self.assertEqual(item.display_description, 'Vestido clássico')
+
+    def test_inactive_product_is_rejected_for_new_item_but_kept_on_existing_item(self):
+        self.product.is_active = False
+        self.product.save(update_fields=['is_active', 'updated_at'])
+        payload = {
+            'items-0-product': self.product.pk,
+            'items-0-description': '',
+            'items-0-value': '300,00',
+        }
+
+        new_form = RentalItemForm(data=payload, prefix='items-0')
+        self.assertFalse(new_form.is_valid())
+        self.assertIn('product', new_form.errors)
+
+        item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=self.product.value,
+        )
+        existing_form = RentalItemForm(data=payload, prefix='items-0', instance=item)
+        self.assertTrue(existing_form.is_valid(), existing_form.errors)

@@ -67,13 +67,6 @@
     </div>
   </div>
 
-  {% if rental.use_for %}
-  <div class="panel">
-    <p class="field-label">Usar em</p>
-    <p class="mt-1 text-sm text-app-ink">{{ rental.use_for|br_date_text }}</p>
-  </div>
-  {% endif %}
-
   <div class="panel">
     <h2 class="section-title">Itens</h2>
     <div class="mt-4 table-shell">
@@ -89,9 +82,16 @@
         <tbody>
           {% for item in rental.items.all %}
             <tr>
-              <td>{{ item.product }}</td>
+              <td>{{ item.product_reference }}</td>
               <td>
-                <p class="font-medium text-app-ink">{{ item.product.description }}</p>
+                <p class="font-medium text-app-ink">{{ item.display_description }}</p>
+                {% if item.display_color or item.display_size %}
+                  <p class="mt-1 text-xs text-app-muted">
+                    {% if item.display_color %}Cor: {{ item.display_color }}{% endif %}
+                    {% if item.display_color and item.display_size %} · {% endif %}
+                    {% if item.display_size %}Tamanho: {{ item.display_size }}{% endif %}
+                  </p>
+                {% endif %}
                 {% if item.description %}
                   <p class="mt-1 text-xs text-app-muted">{{ item.description }}</p>
                 {% endif %}
@@ -100,7 +100,7 @@
                 {% if item.has_proof_photo %}
                   <a href="{% url 'rentals:item_photo' item.pk %}" target="_blank" rel="noopener" class="inline-flex items-center gap-3 text-link">
                     <img src="{% url 'rentals:item_photo' item.pk %}"
-                         alt="Foto de comprovação de {{ item.product }}"
+                         alt="Foto de comprovação da peça {{ item.product_reference }}"
                          class="h-16 w-16 rounded-lg border border-slate-200 object-cover">
                     <span class="text-xs text-slate-600">{{ item.proof_photo_width }}x{{ item.proof_photo_height }} px</span>
                   </a>
