@@ -138,7 +138,7 @@ class CustomerForm(forms.ModelForm):
             'list': 'customer-city-options',
         })
         self.fields['rg'].widget.attrs.update({
-            'placeholder': 'Ex.: 8.241.995-0',
+            'placeholder': '0.000.000-0',
             'maxlength': '20',
             'inputmode': 'text',
             'autocomplete': 'off',

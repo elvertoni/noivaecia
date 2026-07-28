@@ -134,7 +134,7 @@ class CustomerCrudTests(TestCase):
     def test_rg_field_has_no_fixed_javascript_mask(self):
         response = self.client.get(reverse('customers:create'))
 
-        self.assertContains(response, 'placeholder="Ex.: 8.241.995-0"')
+        self.assertContains(response, 'placeholder="0.000.000-0"')
         self.assertContains(response, 'letras e pontuação serão preservadas')
         self.assertNotContains(response, 'data-mask="rg"')
         self.assertContains(response, 'data-rg-format="true"')
