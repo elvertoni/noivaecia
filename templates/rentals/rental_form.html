@@ -9,7 +9,7 @@
     <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
     {% if header_locked %}
       <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Esta locação possui recebimentos registrados. Apenas observações podem ser editadas.
+        Esta locação possui recebimentos registrados. Cliente, datas e multa não podem ser alterados, mas os itens podem ser ajustados.
       </div>
     {% endif %}
 
@@ -44,14 +44,6 @@
           </div>
           <p id="customer-search-status" class="sr-only" aria-live="polite"></p>
           {% if form.customer.errors %}<p id="customer-search-error" class="field-error" role="alert">{{ form.customer.errors|striptags }}</p>{% endif %}
-        </div>
-
-        <!-- use_for -->
-        <div class="field-group">
-          <label class="field-label" for="{{ form.use_for.id_for_label }}">{{ form.use_for.label }}</label>
-          {{ form.use_for|render_field }}
-          {% if form.use_for.help_text %}<p id="{{ form.use_for.auto_id }}-help" class="field-help">{{ form.use_for.help_text }}</p>{% endif %}
-          {% if form.use_for.errors %}<p class="field-error" role="alert">{{ form.use_for.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- Dates -->
@@ -98,7 +90,6 @@
       {% endif %}
 
       <!-- Items -->
-      {% if not has_payments %}
       <div id="itens">
         <div class="flex items-center justify-between gap-3">
           <div>
@@ -159,7 +150,7 @@
                   <div class="min-w-0">
                     <p class="font-medium text-app-ink text-sm truncate summary-product-title">
                       {% if item_form.instance.product %}
-                        {{ item_form.instance.product.category.prefix }}{{ item_form.instance.product.code }} · {{ item_form.instance.product.description|default:'Sem descrição' }}
+                        {{ item_form.instance.product.category.prefix }}{{ item_form.instance.product.code }} · {{ item_form.instance.product.description|default:'Sem descrição' }}{% if item_form.instance.product.color %} — {{ item_form.instance.product.color }}{% endif %}{% if item_form.instance.product.size %} — {{ item_form.instance.product.size }}{% endif %}
                       {% else %}
                         Item sem produto selecionado
                       {% endif %}
@@ -241,7 +232,6 @@
           <button type="button" id="add-item-bottom" class="btn btn-secondary w-full justify-center">+ Adicionar item</button>
         </div>
       </div>
-      {% endif %}
 
       {% if not form.instance.pk %}
       <!-- Payment plan (R7.05/R7.06) -->
@@ -330,7 +320,6 @@
   </div>
 </div>
 
-{% if not has_payments %}
 <template id="empty-form">
   {% with f=items.empty_form %}
   <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
@@ -419,9 +408,7 @@
   </div>
   {% endwith %}
 </template>
-{% endif %}
 
-{% if not has_payments %}
 <!-- Faceted product picker modal (overlay) -->
 <div id="product-browse" class="fixed inset-0 z-50 hidden" aria-hidden="true">
   <div class="absolute inset-0 bg-slate-900/50" data-browse-close></div>
@@ -467,7 +454,6 @@
     </div>
   </div>
 </div>
-{% endif %}
 
 <script>
 (function () {
@@ -1013,7 +999,9 @@
     const availBadge = row.querySelector('.availability-badge');
     if (!productSelect) return;
     const text = product.text || product.description || '';
-    const label = `${product.code} · ${text}`;
+    const label = `${product.code} · ${text}` +
+      (product.color ? ` — ${product.color}` : '') +
+      (product.size ? ` — ${product.size}` : '');
     setHiddenSelectValue(productSelect, product.id, label);
     if (searchInput) searchInput.value = label;
     if (availBadge) checkAvailability(product.id, row, availBadge);

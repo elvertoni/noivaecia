@@ -120,19 +120,6 @@ class RentalFormValidationTests(TestCase):
             set(Payment.Method.values),
         )
 
-    def test_use_for_accepts_date_and_stores_iso_string(self):
-        form = RentalForm(data=self._header_data(use_for='20/06/2026'))
-
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['use_for'], '2026-06-20')
-        self.assertEqual(form.fields['use_for'].widget.input_type, 'date')
-
-    def test_use_for_rejects_free_text_on_form(self):
-        form = RentalForm(data=self._header_data(use_for='Formatura UFMG'))
-
-        self.assertFalse(form.is_valid())
-        self.assertIn('use_for', form.errors)
-
     def test_new_item_value_starts_blank_instead_of_zero(self):
         form = RentalItemForm()
 
@@ -732,6 +719,7 @@ class RentalItemEditingTests(TestCase):
         response = self.client.get(reverse('rentals:update', args=[rental.pk]))
         self.assertTrue(response.context['form'].fields['pickup_date'].disabled)
         self.assertTrue(response.context['form'].fields['customer'].disabled)
+        self.assertContains(response, 'Itens da locação')
 
         response = self.client.post(reverse('rentals:update', args=[rental.pk]), {
             'customer': other_customer.pk,
@@ -740,6 +728,15 @@ class RentalItemEditingTests(TestCase):
             'return_date': '2026-07-05',
             'penalty_value': '999,99',
             'notes': 'Pagamento confirmado no balcão.',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '1',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-id': rental.items.get().pk,
+            'items-0-product': self.p1.pk,
+            'items-0-description': '',
+            'items-0-value': '300',
+            'items-0-DELETE': '',
         })
 
         self.assertRedirects(response, rental.get_absolute_url())
@@ -750,3 +747,85 @@ class RentalItemEditingTests(TestCase):
         self.assertEqual(rental.return_date, date(2026, 6, 15))
         self.assertEqual(rental.penalty_value, Decimal('50'))
         self.assertEqual(rental.notes, 'Pagamento confirmado no balcão.')
+
+    def test_returned_rental_can_be_edited(self):
+        rental, items = self._rental_with_items([self.p1], number=141)
+        rental.status = Rental.Status.RETURNED
+        rental.save(update_fields=['status', 'updated_at'])
+
+        response = self.client.post(
+            reverse('rentals:update', args=[rental.pk]),
+            self._base_payload(**{
+                'notes': 'Contrato conferido após a devolução.',
+                'items-TOTAL_FORMS': '1',
+                'items-INITIAL_FORMS': '1',
+                'items-0-id': items[0].pk,
+                'items-0-product': self.p1.pk,
+                'items-0-description': '',
+                'items-0-value': '300',
+                'items-0-DELETE': '',
+            }),
+        )
+
+        self.assertRedirects(response, rental.get_absolute_url())
+        rental.refresh_from_db()
+        self.assertEqual(rental.notes, 'Contrato conferido após a devolução.')
+
+    def test_cancelled_rental_still_returns_404_when_edited(self):
+        rental, _ = self._rental_with_items([self.p1], number=142)
+        rental.status = Rental.Status.CANCELLED
+        rental.save(update_fields=['status', 'updated_at'])
+
+        response = self.client.get(reverse('rentals:update', args=[rental.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_paid_rental_item_changes_update_total_and_warn_about_installments(self):
+        rental, items = self._rental_with_items([self.p1, self.p2], number=143)
+        first, second = items
+        Receivable.objects.create(
+            rental=rental,
+            due_date=date(2026, 6, 15),
+            amount=Decimal('450'),
+        )
+        Payment.objects.create(
+            receivable=rental.receivables.get(),
+            customer=self.customer,
+            rental=rental,
+            payment_date=date(2026, 6, 10),
+            amount=Decimal('100'),
+            method=Payment.Method.PIX,
+            user=self.user,
+        )
+
+        response = self.client.post(
+            reverse('rentals:update', args=[rental.pk]),
+            self._base_payload(**{
+                'items-TOTAL_FORMS': '3',
+                'items-INITIAL_FORMS': '2',
+                'items-0-id': first.pk,
+                'items-0-product': self.p1.pk,
+                'items-0-description': '',
+                'items-0-value': '300',
+                'items-0-DELETE': 'on',
+                'items-1-id': second.pk,
+                'items-1-product': self.p2.pk,
+                'items-1-description': '',
+                'items-1-value': '150',
+                'items-1-DELETE': '',
+                'items-2-id': '',
+                'items-2-product': self.p3.pk,
+                'items-2-description': '',
+                'items-2-value': '200',
+                'items-2-DELETE': '',
+            }),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        rental.refresh_from_db()
+        self.assertEqual(rental.total_value, Decimal('350'))
+        self.assertFalse(RentalItem.objects.filter(pk=first.pk).exists())
+        self.assertTrue(rental.items.filter(product=self.p3).exists())
+        self.assertContains(response, 'O total da locação foi alterado')
+        self.assertContains(response, 'Revise ou gere novamente as parcelas futuras')

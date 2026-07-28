@@ -271,7 +271,7 @@ class RentalCreateView(RentalAccessMixin, CreateView):
 # ── Update ────────────────────────────────────────────────────────────────────
 
 class RentalUpdateView(RentalAccessMixin, UpdateView):
-    """Edit a rental. Restricted when payments exist (R7.09)."""
+    """Edit a rental while preserving paid commercial terms (R7.09)."""
 
     model = Rental
     form_class = RentalForm
@@ -279,7 +279,6 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
 
     protected_field_names = (
         'customer',
-        'use_for',
         'pickup_date',
         'return_date',
         'penalty_value',
@@ -289,9 +288,6 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         rental = super().get_object(queryset)
         if rental.status == Rental.Status.CANCELLED:
             messages.error(self.request, 'Não é possível editar uma locação cancelada.')
-            raise Http404
-        if rental.status == Rental.Status.RETURNED:
-            messages.error(self.request, 'Não é possível editar uma locação devolvida.')
             raise Http404
         return rental
 
@@ -325,13 +321,6 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         context = self.get_context_data()
         items = context['items']
 
-        if context['has_payments']:
-            # The protected fields are disabled in ``get_form``, so this saves
-            # only the editable notes field even when a client forges a POST.
-            rental = form.save()
-            messages.success(self.request, f'Locação #{rental.number} atualizada.')
-            return HttpResponseRedirect(rental.get_absolute_url())
-
         if not items.is_valid():
             return self.form_invalid(form)
 
@@ -353,13 +342,19 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         with transaction.atomic():
             rental = form.save(commit=False)
             rental.save()
-            # Skip items update if has_payments (protect item history)
-            if not context['has_payments']:
-                items.instance = rental
-                items.save()
-                rental.recalculate_total()
+            old_total = rental.total_value
+            items.instance = rental
+            items.save()
+            rental.recalculate_total()
 
-        messages.success(self.request, f'Locação #{rental.number} atualizada.')
+        if context['has_payments'] and rental.total_value != old_total:
+            messages.warning(
+                self.request,
+                'O total da locação foi alterado. Revise ou gere novamente as parcelas futuras '
+                'na tela de Recebimentos desta locação.',
+            )
+        else:
+            messages.success(self.request, f'Locação #{rental.number} atualizada.')
         return HttpResponseRedirect(rental.get_absolute_url())
 
 
