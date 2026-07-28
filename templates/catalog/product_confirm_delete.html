@@ -9,11 +9,21 @@
     <p class="mt-2 text-sm text-slate-600">
       Tem certeza que deseja excluir <strong>{{ object }}</strong>? Esta ação não pode ser desfeita.
     </p>
-    <form method="post" class="mt-6 form-actions">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-danger">Excluir</button>
-      <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
-    </form>
+    {% if has_related_rentals %}
+      <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+        Este produto possui locações vinculadas e não pode ser excluído.
+      </div>
+      <div class="mt-6 form-actions">
+        <span class="btn btn-danger cursor-not-allowed opacity-50" aria-disabled="true">Excluir indisponível</span>
+        <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Voltar</a>
+      </div>
+    {% else %}
+      <form method="post" class="mt-6 form-actions">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Excluir</button>
+        <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
+      </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

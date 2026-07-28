@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -81,6 +82,14 @@ class CategoryDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
 
     def form_valid(self, form):
         category = self.get_object()
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                'Esta categoria não pode ser excluída porque possui produtos vinculados.',
+            )
+            return redirect('catalog:category_list')
         AuditLog.objects.create(
             user=self.request.user,
             action='category_delete',
@@ -90,7 +99,7 @@ class CategoryDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
             reason='Exclusão de categoria.',
         )
         messages.success(self.request, 'Categoria excluída com sucesso.')
-        return super().form_valid(form)
+        return response
 
 
 # ── Products ──────────────────────────────────────────────────────────────────
@@ -188,8 +197,21 @@ class ProductDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
     template_name = 'catalog/product_confirm_delete.html'
     success_url = reverse_lazy('catalog:product_list')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['has_related_rentals'] = self.object.rental_items.exists()
+        return context
+
     def form_valid(self, form):
         product = self.get_object()
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                'Este produto não pode ser excluído porque possui locações vinculadas.',
+            )
+            return redirect('catalog:product_list')
         AuditLog.objects.create(
             user=self.request.user,
             action='product_delete',
@@ -199,7 +221,7 @@ class ProductDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
             reason='Exclusão de produto.',
         )
         messages.success(self.request, 'Produto excluído com sucesso.')
-        return super().form_valid(form)
+        return response
 
 
 class ProductHistoryView(CatalogAccessMixin, DetailView):
@@ -473,6 +495,8 @@ class ProductSearchView(View):
                 'code': f'{p.category.prefix}{p.code}',
                 'text': p.description,
                 'sub': f'{p.color or "—"} · {p.size or "—"}',
+                'color': p.color,
+                'size': p.size,
                 'value': str(p.value),
             }
             for p in qs

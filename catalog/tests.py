@@ -1,13 +1,15 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import ModulePermission
+from accounts.models import ActionPermission, ModulePermission
 from catalog.availability import find_overlapping_rental, find_rental_for
 from catalog.forms import CategoryForm, ProductForm
 from catalog.models import Category, Product
+from core.models import AuditLog
 from customers.models import Customer
 from rentals.models import Rental, RentalItem
 
@@ -87,6 +89,67 @@ class AvailabilityTests(TestCase):
         self.assertEqual(
             find_overlapping_rental(self.product, date(2026, 6, 1), date(2026, 6, 12)),
             self.rental,
+        )
+
+
+class ProductDeleteViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='catalog@test.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='catalog', allowed=True)
+        ActionPermission.objects.create(user=self.user, action_key='catalog.delete', allowed=True)
+        self.client.force_login(self.user)
+        self.category = Category.objects.create(prefix='VN', name='Vestidos')
+
+    def test_deletes_product_without_related_rentals(self):
+        product = Product.objects.create(
+            category=self.category,
+            code=1,
+            description='Vestido',
+            value=300,
+        )
+
+        response = self.client.post(reverse('catalog:product_delete', args=[product.pk]))
+
+        self.assertRedirects(response, reverse('catalog:product_list'))
+        self.assertFalse(Product.objects.filter(pk=product.pk).exists())
+        self.assertIn(
+            'Produto excluído com sucesso.',
+            [str(message) for message in get_messages(response.wsgi_request)],
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action='product_delete', object_id=str(product.pk)).exists()
+        )
+
+    def test_blocks_deleting_product_with_related_rental_items(self):
+        product = Product.objects.create(
+            category=self.category,
+            code=1,
+            description='Vestido',
+            value=300,
+        )
+        rental = Rental.objects.create(
+            number=1,
+            customer=Customer.objects.create(name='Maria'),
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 20),
+        )
+        RentalItem.objects.create(rental=rental, product=product, value=300)
+        url = reverse('catalog:product_delete', args=[product.pk])
+
+        confirmation = self.client.get(url)
+        self.assertContains(confirmation, 'Este produto possui locações vinculadas e não pode ser excluído.')
+        self.assertNotContains(confirmation, '<form method="post" class="mt-6 form-actions">')
+
+        response = self.client.post(url)
+
+        self.assertRedirects(response, reverse('catalog:product_list'))
+        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        self.assertFalse(
+            AuditLog.objects.filter(action='product_delete', object_id=str(product.pk)).exists()
+        )
+        self.assertIn(
+            'Este produto não pode ser excluído porque possui locações vinculadas.',
+            [str(message) for message in get_messages(response.wsgi_request)],
         )
 
 
