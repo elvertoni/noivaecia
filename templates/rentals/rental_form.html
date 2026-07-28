@@ -309,7 +309,13 @@
   {% if not has_payments %}
     <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
   {% endif %}
-  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+    <button type="button"
+            id="add-item-footer"
+            class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4"
+            aria-controls="item-forms">
+      <span aria-hidden="true">+</span> Adicionar item
+    </button>
     {% if form.instance.pk %}
       <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">Cancelar</a>
     {% else %}
@@ -910,7 +916,7 @@
       }
       addItemRow(true);
     }
-    ['add-item', 'add-item-bottom'].forEach(function (id) {
+    ['add-item', 'add-item-bottom', 'add-item-footer'].forEach(function (id) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener('click', handleAddItem);
     });

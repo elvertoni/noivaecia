@@ -77,7 +77,7 @@ class RentalFooterUITests(TestCase):
             'grid',
             'w-full',
             'min-w-0',
-            'grid-cols-2',
+            'grid-cols-3',
             'sm:flex',
             'sm:w-auto',
         }.issubset(button_group_classes))
@@ -96,22 +96,29 @@ class RentalFooterUITests(TestCase):
         self.assertContains(self.response, '>Cancelar</a>', html=False)
         self.assertContains(self.response, 'form="rental-form"')
         self.assertContains(self.response, 'Salvar locação')
+        self.assertContains(self.response, 'id="add-item-footer"')
 
     def test_add_item_actions_remain_in_the_items_section(self):
         items_position = self.html.index('id="itens"')
         top_add_position = self.html.index('id="add-item"')
         bottom_add_position = self.html.index('id="add-item-bottom"')
         action_bar_position = self.html.index('id="rental-action-bar"')
+        footer_add_position = self.html.index('id="add-item-footer"')
 
         self.assertLess(items_position, top_add_position)
         self.assertLess(top_add_position, bottom_add_position)
         self.assertLess(bottom_add_position, action_bar_position)
+        self.assertLess(action_bar_position, footer_add_position)
         self.assertEqual(
             self.elements['add-item']['attrs'].get('aria-controls'),
             'item-forms',
         )
         self.assertEqual(
             self.elements['add-item-bottom']['attrs'].get('aria-controls'),
+            'item-forms',
+        )
+        self.assertEqual(
+            self.elements['add-item-footer']['attrs'].get('aria-controls'),
             'item-forms',
         )
         self.assertTrue({
