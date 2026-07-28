@@ -13,13 +13,16 @@
   </div>
 
   <div class="panel">
-    <h2 class="section-title">Gerar parcelas</h2>
+    <h2 class="section-title">Organizar parcelas futuras</h2>
+    <p class="mt-1 text-sm text-app-muted">
+      Divide o saldo sem recebimentos registrados. Entradas e títulos com histórico financeiro são preservados.
+    </p>
     <form method="post" action="{% url 'billing:generate' rental.pk %}" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
       {% csrf_token %}
       {% for field in generate_form %}
         {% include 'includes/form_field.html' with field=field only %}
       {% endfor %}
-      <button type="submit" class="btn btn-primary">Gerar</button>
+      <button type="submit" class="btn btn-primary">Atualizar parcelas</button>
     </form>
   </div>
 

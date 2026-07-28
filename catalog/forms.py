@@ -59,6 +59,71 @@ class ProductForm(forms.ModelForm):
         self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
 
 
+class AvailabilityQueryForm(forms.Form):
+    """Validate the fast prefix/code availability lookup.
+
+    The date remains optional for compatibility with date-specific checks.  In
+    the operational flow the view uses the current local date when it is empty.
+    """
+
+    prefix = forms.CharField(
+        label='Prefixo',
+        max_length=10,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'off',
+            'autocapitalize': 'characters',
+            'autofocus': True,
+            'data-enter-next': 'availability-code',
+            'id': 'availability-prefix',
+            'placeholder': 'Ex.: VF',
+        }),
+    )
+    code = forms.CharField(
+        label='Código',
+        max_length=10,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'off',
+            'data-submit-on-enter': 'true',
+            'id': 'availability-code',
+            'inputmode': 'numeric',
+            'pattern': '[0-9]*',
+            'placeholder': 'Ex.: 38',
+        }),
+    )
+    date = forms.DateField(
+        label='Data de consulta',
+        required=False,
+        input_formats=('%d/%m/%Y', '%Y-%m-%d'),
+        error_messages={'invalid': 'Informe uma data válida.'},
+        help_text='Deixe em branco para consultar a disponibilidade de hoje.',
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'off',
+            'data-date-br': 'true',
+            'id': 'availability-date',
+            'inputmode': 'numeric',
+            'maxlength': '10',
+            'placeholder': 'dd/mm/aaaa',
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _style_fields(self)
+
+    def clean_prefix(self):
+        return self.cleaned_data['prefix'].strip().upper()
+
+    def clean_code(self):
+        code = self.cleaned_data['code'].strip()
+        if not code.isdigit():
+            raise ValidationError('Informe um código de produto válido.')
+
+        numeric_code = code.lstrip('0') or '0'
+        if len(numeric_code) > 10 or int(numeric_code) > 2147483647:
+            raise ValidationError('Informe um código de produto válido.')
+        return int(numeric_code)
+
+
 class CategoryMergeForm(forms.Form):
     """Select source and target for category merge (R8.06)."""
 

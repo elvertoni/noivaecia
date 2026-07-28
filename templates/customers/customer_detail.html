@@ -18,7 +18,11 @@
         {% if customer.city %}{{ customer.city }}{% endif %}
         {% if customer.cpf %} · CPF {{ customer.cpf }}{% endif %}
         {% if customer.phone_mobile %} · {{ customer.phone_mobile }}{% endif %}
-        {% if customer.phone_home %} · {{ customer.phone_home }}{% endif %}
+        {% if customer.phone_home %}
+          · Alternativo: {{ customer.phone_home }}{% if customer.alternate_phone_contact %} ({{ customer.alternate_phone_contact }}){% endif %}
+        {% elif customer.alternate_phone_contact %}
+          · Identificação do telefone alternativo: {{ customer.alternate_phone_contact }}
+        {% endif %}
       </p>
     </div>
     <div class="flex gap-2">

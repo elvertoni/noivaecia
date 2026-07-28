@@ -12,11 +12,11 @@ class GenerateReceivablesForm(forms.Form):
     """Generate N installments for a rental (RF-19)."""
 
     installments = forms.IntegerField(
-        label='Número de parcelas', min_value=1, initial=1,
+        label='Número de parcelas futuras', min_value=1, initial=1,
         widget=forms.NumberInput(attrs={'class': INPUT_CLASS}),
     )
     first_due_date = forms.DateField(
-        label='Primeiro vencimento', required=False,
+        label='Primeiro vencimento futuro', required=False,
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )

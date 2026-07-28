@@ -3,81 +3,189 @@
 {% block title %}Disponibilidade · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-2xl space-y-6">
+<div class="mx-auto max-w-5xl space-y-6">
   <div>
     <h1 class="page-title">Disponibilidade do produto</h1>
-    <p class="page-description">Informe prefixo, código e data.</p>
+    <p class="page-description">Consulte pelo prefixo e código.</p>
   </div>
 
-  <form method="get" class="panel-spacious">
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <div class="field-group">
-        <label class="field-label" for="availability-prefix">Prefixo</label>
-        <input type="text" name="prefix" id="availability-prefix" value="{{ prefix }}" class="field-input" placeholder="Ex: VES">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="availability-code">Código</label>
-        <input type="text" name="code" id="availability-code" value="{{ code }}" class="field-input" placeholder="Ex: 42" inputmode="numeric" pattern="[0-9]*">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="availability-date">Data</label>
-        <input type="text" name="date" id="availability-date" value="{{ date }}" class="field-input" data-date-br="true" inputmode="numeric" autocomplete="off" placeholder="dd/mm/aaaa" maxlength="10">
-      </div>
+  <form method="get" id="availability-form" class="panel-spacious" aria-label="Consultar disponibilidade">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+      {% include 'includes/form_field.html' with field=form.prefix %}
+      {% include 'includes/form_field.html' with field=form.code %}
+      <button type="submit" id="availability-submit" class="btn btn-primary lg:mb-px">Consultar produto</button>
     </div>
-    <button type="submit" class="mt-4 btn btn-primary">Consultar</button>
+
   </form>
 
   {% if error %}
     <div class="alert alert-error" role="alert">{{ error }}</div>
   {% endif %}
 
-  {# R8.03 — disambiguation when multiple products share prefix+code #}
   {% if needs_disambiguation %}
-    <div class="panel-spacious space-y-4">
-      <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <strong>Código duplicado:</strong> {{ candidates|length }} produtos com o código {{ prefix }}{{ code }}.
-        Selecione o produto correto para consultar a disponibilidade.
+    <section class="surface-section overflow-hidden" aria-labelledby="duplicate-product-title">
+      <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 text-amber-900">
+        <h2 id="duplicate-product-title" class="font-semibold">Escolha o produto correto</h2>
+        <p class="mt-1 text-sm leading-6">
+          Foram encontrados {{ candidates|length }} produtos com o código {{ prefix }}{{ code }}.
+        </p>
       </div>
-      <div class="space-y-3">
+      <div class="divide-y divide-slate-200">
         {% for candidate in candidates %}
-          <a href="?prefix={{ prefix }}&code={{ code }}&date={{ date }}&product_id={{ candidate.pk }}"
-             class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-700 hover:bg-slate-50 transition-colors">
+          <form method="get" class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <input type="hidden" name="prefix" value="{{ prefix }}">
+            <input type="hidden" name="code" value="{{ code }}">
+            <input type="hidden" name="date" value="{{ date }}">
+            <input type="hidden" name="product_id" value="{{ candidate.pk }}">
             <div>
               <p class="font-semibold text-app-ink">{{ candidate.category.prefix }}{{ candidate.code }} · {{ candidate.description }}</p>
-              <p class="text-xs text-app-muted mt-0.5">
-                Cor: {{ candidate.color|default:'—' }} · Tamanho: {{ candidate.size|default:'—' }}
+              <p class="mt-1 text-sm text-app-muted">
+                Cor: {{ candidate.color|default:'Não informada' }} · Tamanho: {{ candidate.size|default:'Não informado' }}
                 {% if candidate.notes %} · {{ candidate.notes|truncatechars:60 }}{% endif %}
               </p>
             </div>
-            <span class="text-sm text-brand-700 font-medium">Selecionar →</span>
-          </a>
+            <button type="submit" class="btn btn-secondary shrink-0">Selecionar produto</button>
+          </form>
         {% endfor %}
       </div>
-    </div>
+    </section>
   {% endif %}
 
   {% if checked %}
-    <div class="panel-spacious space-y-3">
-      <h2 class="section-title">{{ product }}</h2>
-      {% if product.is_placeholder %}
-        <span class="badge badge-warning">placeholder</span>
-      {% endif %}
-      <div class="text-sm text-app-muted">
-        Cor: {{ product.color|default:'—' }} · Tamanho: {{ product.size|default:'—' }}
+    <section class="surface-section overflow-hidden" aria-labelledby="availability-result-title" aria-live="polite">
+      <div class="px-5 py-5 sm:px-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="text-sm font-medium text-app-muted">Produto consultado</p>
+            <h2 id="availability-result-title" class="mt-1 text-xl font-semibold text-app-ink">
+              {{ product.category.prefix }}{{ product.code }} · {{ product.description }}
+            </h2>
+          </div>
+          {% if product.is_placeholder %}
+            <span class="badge badge-warning self-start">Cadastro provisório</span>
+          {% endif %}
+        </div>
+        <dl class="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="font-medium text-slate-600">Cor</dt>
+            <dd class="mt-0.5 text-app-ink">{{ product.color|default:'Não informada' }}</dd>
+          </div>
+          <div>
+            <dt class="font-medium text-slate-600">Tamanho</dt>
+            <dd class="mt-0.5 text-app-ink">{{ product.size|default:'Não informado' }}</dd>
+          </div>
+        </dl>
       </div>
+
       {% if rental %}
-        <div><span class="badge badge-danger">Locado nesta data</span></div>
-        <div class="grid grid-cols-1 gap-3 text-sm text-app-muted sm:grid-cols-2">
-          <p><span class="font-medium text-app-ink">Locação:</span> #{{ rental.number }}</p>
-          <p><span class="font-medium text-app-ink">Cliente:</span> {{ rental.customer.name }}</p>
-          <p><span class="font-medium text-app-ink">Retirada:</span> {{ rental.pickup_date|date:'d/m/Y' }}</p>
-          <p><span class="font-medium text-app-ink">Retorno:</span> {{ rental.return_date|date:'d/m/Y' }}</p>
+        <div class="border-y border-red-200 bg-red-50 px-5 py-5 text-red-900 sm:px-6">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-danger">Locado</span>
+            <h3 class="font-semibold">
+              Produto indisponível {% if uses_custom_date %}em {{ reference_date|date:'d/m/Y' }}{% else %}hoje{% endif %}
+            </h3>
+          </div>
+          <p class="mt-2 text-sm leading-6">
+            Locação #{{ rental.number }} para {{ rental.customer.name }}, com retirada em
+            {{ rental.pickup_date|date:'d/m/Y' }} e devolução em {{ rental.return_date|date:'d/m/Y' }}.
+          </p>
         </div>
       {% else %}
-        <div><span class="badge badge-success">Disponível nesta data</span></div>
+        <div class="border-y border-emerald-200 bg-emerald-50 px-5 py-5 text-emerald-900 sm:px-6">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="badge badge-success">Disponível</span>
+            <h3 class="font-semibold">
+              Produto disponível {% if uses_custom_date %}em {{ reference_date|date:'d/m/Y' }}{% else %}hoje{% endif %}
+            </h3>
+          </div>
+          {% if scheduled_rentals %}
+            <p class="mt-2 text-sm leading-6">
+              Há {% if scheduled_rentals|length == 1 %}uma locação futura{% else %}{{ scheduled_rentals|length }} locações futuras{% endif %}.
+              Confira as datas antes de oferecer o produto ao cliente.
+            </p>
+          {% else %}
+            <p class="mt-2 text-sm leading-6">Não há locações ativas para este produto a partir da data consultada.</p>
+          {% endif %}
+        </div>
       {% endif %}
-      <a href="{% url 'catalog:product_history' product.pk %}" class="text-sm text-link">Ver histórico completo →</a>
-    </div>
+
+      <div class="px-5 py-5 sm:px-6">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 class="section-title">Locações atuais e futuras</h3>
+            <p class="mt-1 text-sm text-app-muted">
+              Compromissos ativos a partir de {{ reference_date|date:'d/m/Y' }}.
+            </p>
+          </div>
+          <a href="{% url 'catalog:product_history' product.pk %}" class="text-link text-sm">Ver histórico completo</a>
+        </div>
+
+        {% if scheduled_rentals %}
+          <div class="mt-4 overflow-x-auto rounded-lg border border-app-border">
+            <table class="data-table">
+              <caption class="sr-only">Locações ativas do produto {{ product.category.prefix }}{{ product.code }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Locação</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Retirada</th>
+                  <th scope="col">Devolução</th>
+                  <th scope="col">Na consulta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for scheduled_rental in scheduled_rentals %}
+                  <tr>
+                    <td class="whitespace-nowrap font-medium text-app-ink">#{{ scheduled_rental.number }}</td>
+                    <td>{{ scheduled_rental.customer.name }}</td>
+                    <td class="whitespace-nowrap tabular-nums">{{ scheduled_rental.pickup_date|date:'d/m/Y' }}</td>
+                    <td class="whitespace-nowrap tabular-nums">{{ scheduled_rental.return_date|date:'d/m/Y' }}</td>
+                    <td>
+                      {% if scheduled_rental.status == 'picked_up' %}
+                        <span class="badge badge-danger">Em uso</span>
+                      {% elif rental and scheduled_rental.pk == rental.pk %}
+                        <span class="badge badge-danger">Comprometida</span>
+                      {% else %}
+                        <span class="badge badge-info">Agendada</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="mt-4 rounded-lg bg-slate-50 px-4 py-6 text-center ring-1 ring-inset ring-slate-200">
+            <p class="font-medium text-app-ink">Sem locações ativas</p>
+            <p class="mt-1 text-sm text-app-muted">Este produto não possui retirada ou devolução futura registrada.</p>
+          </div>
+        {% endif %}
+      </div>
+    </section>
   {% endif %}
 </div>
+
+<script>
+  (function () {
+    var form = document.getElementById('availability-form');
+    if (!form) return;
+
+    var prefixInput = form.querySelector('[data-enter-next]');
+    var codeInput = form.querySelector('[data-submit-on-enter]');
+    var submitButton = document.getElementById('availability-submit');
+
+    prefixInput.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      codeInput.focus();
+      codeInput.select();
+    });
+
+    codeInput.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      form.requestSubmit(submitButton);
+    });
+  }());
+</script>
 {% endblock %}

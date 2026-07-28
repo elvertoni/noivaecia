@@ -11,17 +11,16 @@
     .copy { page-break-after: always; padding-bottom: 4px; }
     .copy:last-child { page-break-after: auto; }
 
-    /* ── Compressão para caber 2 vias em uma folha A4 (até 10 itens) ── */
+    /* ── Compressão para duas vias; conteúdo excedente nunca é cortado ── */
     .single-page-a4 {
       --copy-height: 131mm;
       --cut-gap: 10mm;
       font-size: 8.5pt;
     }
     .single-page-a4 .copy {
-      height: var(--copy-height);
+      min-height: var(--copy-height);
       page-break-after: avoid;
       break-after: avoid;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -256,8 +255,14 @@
           <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
         </div>
         <div class="field">
-          <span class="field-caption">Telefone fixo</span>
-          <span>{{ rental.customer.phone_home|default:'—' }}</span>
+          <span class="field-caption">Telefone alternativo</span>
+          <span>
+            {% if rental.customer.phone_home or rental.customer.alternate_phone_contact %}
+              {% if rental.customer.alternate_phone_contact %}{{ rental.customer.alternate_phone_contact }}{% endif %}{% if rental.customer.alternate_phone_contact and rental.customer.phone_home %} / {% endif %}{% if rental.customer.phone_home %}{{ rental.customer.phone_home }}{% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </span>
         </div>
       </div>
     </div>
@@ -266,19 +271,13 @@
     <div class="section">
       <div class="section-title">Dados da locação</div>
       <div class="row">
-        <div class="field" style="flex:2">
-          <span class="field-caption">Usar em</span>
-          <span>{{ rental.use_for|br_date_text|default:'—' }}</span>
-        </div>
-      </div>
-      <div class="row">
         <div class="field">
-          <span class="field-caption">Data de retirada</span>
-          <span>{{ rental.pickup_date|date:"d/m/Y" }}</span>
+          <span class="field-caption">Retirada dos trajes</span>
+          <strong>{{ rental.pickup_date|date:"d/m/Y" }}</strong>
         </div>
         <div class="field">
-          <span class="field-caption">Data de retorno</span>
-          <span>{{ rental.return_date|date:"d/m/Y" }}</span>
+          <span class="field-caption">Devolução dos trajes</span>
+          <strong>{{ rental.return_date|date:"d/m/Y" }}</strong>
         </div>
       </div>
     </div>
@@ -322,9 +321,11 @@
     <table>
       <thead>
         <tr>
-          <th style="width:10%">Nº</th>
-          <th style="width:30%">Vencimento</th>
-          <th class="text-right" style="width:28%">Valor</th>
+          <th style="width:7%">Nº</th>
+          <th style="width:19%">Vencimento</th>
+          <th class="text-right" style="width:18%">Valor</th>
+          <th class="text-right" style="width:18%">Recebido</th>
+          <th class="text-right" style="width:18%">Saldo</th>
           <th>Situação</th>
         </tr>
       </thead>
@@ -334,10 +335,31 @@
           <td style="text-align:center">{{ forloop.counter }}ª</td>
           <td>{{ rec.due_date|date:"d/m/Y" }}</td>
           <td class="text-right">R$ {{ rec.amount|brl }}</td>
-          <td>{% if rec.is_paid %}Quitada{% else %}Em aberto{% endif %}</td>
+          <td class="text-right">R$ {{ rec.paid_amount|brl }}</td>
+          <td class="text-right">R$ {{ rec.balance|brl }}</td>
+          <td>
+            {% if rec.is_written_off %}
+              Baixada
+            {% elif rec.is_paid %}
+              Quitada{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
+            {% elif rec.paid_amount > 0 %}
+              Recebida parcialmente{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
+            {% else %}
+              Em aberto
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="text-right">Totais</td>
+          <td class="text-right">R$ {{ payment_totals.amount|brl }}</td>
+          <td class="text-right">R$ {{ payment_totals.paid|brl }}</td>
+          <td class="text-right">R$ {{ payment_totals.balance|brl }}</td>
+          <td>{% if payment_totals.balance <= 0 %}Sem saldo em aberto{% else %}Saldo em aberto{% endif %}</td>
+        </tr>
+      </tfoot>
     </table>
   </div>
   {% endif %}
@@ -359,7 +381,7 @@
   <div class="signatures">
     <div class="sig-block">
       <div class="sig-line">
-        Locador(a): {{ rental.customer.name }}<br>
+        Locatário(a): {{ rental.customer.name }}<br>
         CPF: {{ rental.customer.cpf|default:'____________________' }}
       </div>
     </div>

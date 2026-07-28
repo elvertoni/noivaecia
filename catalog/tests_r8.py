@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -172,7 +173,7 @@ class AvailabilityDisambiguationTests(TestCase):
         self.assertEqual(response.context['product'], self.p3)
 
     def test_duplicate_triggers_disambiguation(self):
-        response = self.client.get(self.url, {'prefix': 'VES', 'code': '1', 'date': '2026-06-15'})
+        response = self.client.get(self.url, {'prefix': 'VES', 'code': '1'})
         self.assertTrue(response.context.get('needs_disambiguation'))
         self.assertEqual(len(response.context['candidates']), 2)
 
@@ -193,6 +194,216 @@ class AvailabilityDisambiguationTests(TestCase):
     def test_available_product_returns_no_rental(self):
         response = self.client.get(self.url, {'prefix': 'VES', 'code': '2', 'date': '2026-07-01'})
         self.assertIsNone(response.context.get('rental'))
+
+
+class AvailabilityOperationalLookupTests(TestCase):
+    def setUp(self):
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.url = reverse('catalog:availability')
+        self.category = Category.objects.create(prefix='VF', name='Vestidos de festa')
+        self.product = Product.objects.create(
+            category=self.category,
+            code=38,
+            description='Vestido sereia com pala',
+            color='Verde escuro',
+            size='GG',
+            value=Decimal('300'),
+        )
+        self.customer = Customer.objects.create(name='Walter Domingues')
+
+    def make_rental(
+        self,
+        *,
+        number,
+        pickup_date,
+        return_date,
+        status=Rental.Status.PENDING,
+        customer=None,
+    ):
+        rental = Rental.objects.create(
+            number=number,
+            customer=customer or self.customer,
+            pickup_date=pickup_date,
+            return_date=return_date,
+            status=status,
+        )
+        RentalItem.objects.create(rental=rental, product=self.product, value=Decimal('300'))
+        return rental
+
+    @patch('catalog.views.timezone.localdate', return_value=date(2026, 7, 27))
+    def test_prefix_and_code_without_date_show_current_and_future_rentals(self, _localdate):
+        current = self.make_rental(
+            number=56037,
+            pickup_date=date(2026, 7, 25),
+            return_date=date(2026, 8, 2),
+            status=Rental.Status.PICKED_UP,
+        )
+        future_customer = Customer.objects.create(name='Ana Beatriz')
+        future = self.make_rental(
+            number=56050,
+            customer=future_customer,
+            pickup_date=date(2026, 9, 3),
+            return_date=date(2026, 9, 8),
+        )
+        returned = self.make_rental(
+            number=56051,
+            pickup_date=date(2026, 10, 1),
+            return_date=date(2026, 10, 5),
+            status=Rental.Status.RETURNED,
+        )
+        cancelled = self.make_rental(
+            number=56052,
+            pickup_date=date(2026, 11, 1),
+            return_date=date(2026, 11, 5),
+            status=Rental.Status.CANCELLED,
+        )
+
+        response = self.client.get(self.url, {'prefix': 'vf', 'code': '0038'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['checked'])
+        self.assertFalse(response.context['uses_custom_date'])
+        self.assertEqual(response.context['reference_date'], date(2026, 7, 27))
+        self.assertEqual(response.context['rental'], current)
+        self.assertEqual(response.context['scheduled_rentals'], [current, future])
+        self.assertNotIn(returned, response.context['scheduled_rentals'])
+        self.assertNotIn(cancelled, response.context['scheduled_rentals'])
+        self.assertContains(response, 'Locado')
+        self.assertContains(response, 'Walter Domingues')
+        self.assertContains(response, 'Ana Beatriz')
+        self.assertContains(response, '03/09/2026')
+        self.assertContains(response, '08/09/2026')
+
+    @patch('catalog.views.timezone.localdate', return_value=date(2026, 7, 27))
+    def test_future_rental_is_visible_without_marking_product_rented_today(self, _localdate):
+        future = self.make_rental(
+            number=56050,
+            pickup_date=date(2026, 9, 3),
+            return_date=date(2026, 9, 8),
+        )
+
+        response = self.client.get(self.url, {'prefix': 'VF', 'code': '38'})
+
+        self.assertIsNone(response.context['rental'])
+        self.assertEqual(response.context['scheduled_rentals'], [future])
+        self.assertContains(response, 'Produto disponível hoje')
+        self.assertContains(response, 'uma locação futura')
+
+    @patch('catalog.views.timezone.localdate', return_value=date(2026, 7, 27))
+    def test_picked_up_overdue_rental_remains_unavailable_until_returned(self, _localdate):
+        overdue = self.make_rental(
+            number=56040,
+            pickup_date=date(2026, 7, 10),
+            return_date=date(2026, 7, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+
+        response = self.client.get(self.url, {'prefix': 'VF', 'code': '38'})
+
+        self.assertEqual(response.context['rental'], overdue)
+        self.assertEqual(response.context['scheduled_rentals'], [overdue])
+        self.assertContains(response, 'Produto indisponível hoje')
+        self.assertContains(response, 'Em uso')
+
+    def test_picked_up_overdue_rental_remains_unavailable_on_a_future_date(self):
+        overdue = self.make_rental(
+            number=56041,
+            pickup_date=date(2026, 7, 10),
+            return_date=date(2026, 7, 20),
+            status=Rental.Status.PICKED_UP,
+        )
+
+        response = self.client.get(self.url, {
+            'prefix': 'VF',
+            'code': '38',
+            'date': '15/08/2026',
+        })
+
+        self.assertEqual(response.context['rental'], overdue)
+        self.assertContains(response, 'Produto indisponível em 15/08/2026')
+
+    @patch('catalog.views.timezone.localdate', return_value=date(2026, 7, 27))
+    def test_product_without_rentals_has_clear_available_empty_state(self, _localdate):
+        response = self.client.get(self.url, {'prefix': 'VF', 'code': '38'})
+
+        self.assertTrue(response.context['checked'])
+        self.assertIsNone(response.context['rental'])
+        self.assertEqual(response.context['scheduled_rentals'], [])
+        self.assertContains(response, 'Disponível')
+        self.assertContains(response, 'Sem locações ativas')
+
+    def test_optional_date_remains_compatible(self):
+        rental = self.make_rental(
+            number=56060,
+            pickup_date=date(2027, 1, 15),
+            return_date=date(2027, 1, 20),
+        )
+
+        response = self.client.get(self.url, {
+            'prefix': 'VF',
+            'code': '38',
+            'date': '16/01/2027',
+        })
+
+        self.assertTrue(response.context['uses_custom_date'])
+        self.assertEqual(response.context['reference_date'], date(2027, 1, 16))
+        self.assertEqual(response.context['rental'], rental)
+        self.assertContains(response, 'Produto indisponível em 16/01/2027')
+
+    def test_unknown_prefix_and_code_show_specific_not_found_message(self):
+        response = self.client.get(self.url, {'prefix': 'XX', 'code': '999'})
+
+        self.assertFalse(response.context.get('checked'))
+        self.assertContains(response, 'Produto XX999 não encontrado')
+
+    def test_invalid_code_is_rejected_without_querying_a_product(self):
+        response = self.client.get(self.url, {'prefix': 'VF', 'code': '38A'})
+
+        self.assertFalse(response.context.get('checked'))
+        self.assertIn('code', response.context['form'].errors)
+        self.assertContains(response, 'Informe um código de produto válido.')
+
+    def test_missing_prefix_is_rejected(self):
+        response = self.client.get(self.url, {'prefix': '', 'code': '38'})
+
+        self.assertFalse(response.context.get('checked'))
+        self.assertIn('prefix', response.context['form'].errors)
+
+    def test_keyboard_flow_hooks_are_rendered(self):
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'data-enter-next="availability-code"')
+        self.assertContains(response, 'data-submit-on-enter="true"')
+        self.assertContains(response, "form.requestSubmit(submitButton)")
+        self.assertNotContains(response, 'availability-date')
+
+
+class AvailabilityAccessTests(TestCase):
+    def setUp(self):
+        self.url = reverse('catalog:availability')
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+
+    def test_authenticated_user_without_catalog_permission_is_denied(self):
+        user = _make_user(module_key='rentals')
+        self.client.force_login(user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_catalog_permission_allows_lookup(self):
+        user = _make_user()
+        self.client.force_login(user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
 
 
 # ── R8.04 Product history ─────────────────────────────────────────────────────

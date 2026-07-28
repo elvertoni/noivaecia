@@ -29,12 +29,21 @@ class Customer(TimeStampedModel):
     city = models.CharField('cidade', max_length=100, blank=True, default='Bandeirantes')
     rg = models.CharField('RG', max_length=20, blank=True)
     cpf = models.CharField('CPF', max_length=14, blank=True)
-    phone_home = models.CharField('telefone residencial', max_length=20, blank=True)
+    # Kept under its legacy Python/database name so imported residential
+    # numbers remain available while the UI uses the broader business concept
+    # of an alternate contact number.
+    phone_home = models.CharField('telefone alternativo', max_length=20, blank=True)
+    alternate_phone_contact = models.CharField(
+        'identificação do telefone alternativo',
+        max_length=100,
+        blank=True,
+        default='',
+    )
     phone_mobile = models.CharField('celular', max_length=20, blank=True)
     phone_work = models.CharField('telefone comercial', max_length=20, blank=True)
     cpf_digits = models.CharField('CPF (só dígitos)', max_length=14, blank=True, db_index=True)
     rg_digits = models.CharField('RG (só dígitos)', max_length=20, blank=True, db_index=True)
-    phone_home_digits = models.CharField('tel. residencial (só dígitos)', max_length=20, blank=True)
+    phone_home_digits = models.CharField('tel. alternativo (só dígitos)', max_length=20, blank=True)
     phone_mobile_digits = models.CharField('celular (só dígitos)', max_length=20, blank=True, db_index=True)
     phone_work_digits = models.CharField('tel. comercial (só dígitos)', max_length=20, blank=True)
     name_search = models.CharField('nome normalizado', max_length=180, blank=True)

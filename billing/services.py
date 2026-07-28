@@ -55,7 +55,11 @@ def interest_breakdown(receivable, on_date=None, company=None):
     }
 
 
-def generate_for_rental(rental, installments=1, first_due_date=None):
+class PaymentPlanError(ValueError):
+    """Raised when a rental payment plan would violate financial invariants."""
+
+
+def generate_for_rental(rental, installments=1, first_due_date=None, total_amount=None):
     """Create receivables splitting the rental total into N installments (RF-19/8.1.3).
 
     The total is divided evenly; any rounding remainder lands on the first
@@ -64,7 +68,13 @@ def generate_for_rental(rental, installments=1, first_due_date=None):
     """
     installments = max(1, int(installments))
     first_due_date = first_due_date or rental.return_date
-    total = rental.total_value or Decimal('0')
+    total = (
+        Decimal(str(total_amount))
+        if total_amount is not None
+        else (rental.total_value or Decimal('0'))
+    )
+    if total < 0:
+        raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
 
     base = (total / installments).quantize(Decimal('0.01'))
     remainder = total - base * installments
@@ -77,6 +87,228 @@ def generate_for_rental(rental, installments=1, first_due_date=None):
             Receivable.objects.create(rental=rental, due_date=due, amount=amount)
         )
     return created
+
+
+def reprocess_future_installments(
+    rental,
+    installments=1,
+    first_due_date=None,
+    *,
+    user=None,
+    reason='Reorganização manual das parcelas futuras.',
+):
+    """Replace only receivables without payment history.
+
+    Receivables with any payment, write-off, or imported paid amount are kept
+    intact.  The remaining contract amount is split into a fresh schedule.  This
+    allows the attendant to reorganize the future balance after an entry was
+    recorded without deleting or duplicating financial history.
+    """
+    installments = int(installments or 0)
+    if installments < 1:
+        raise PaymentPlanError('Informe ao menos uma parcela futura.')
+
+    with transaction.atomic():
+        locked_rental = rental.__class__.objects.select_for_update().get(pk=rental.pk)
+        existing = list(
+            Receivable.objects.select_for_update()
+            .filter(rental=locked_rental)
+            .prefetch_related('payments')
+            .order_by('due_date', 'pk')
+        )
+        previous_schedule = [
+            {
+                'id': receivable.pk,
+                'due_date': receivable.due_date.isoformat(),
+                'amount': str(receivable.amount),
+                'paid_amount': str(receivable.paid_amount),
+                'balance': str(receivable.balance),
+            }
+            for receivable in existing
+        ]
+        protected = [
+            receivable for receivable in existing
+            if (
+                receivable.paid_amount != 0
+                or receivable.written_off_at is not None
+                or len(receivable.payments.all()) > 0
+            )
+        ]
+        replaceable_ids = [
+            receivable.pk for receivable in existing if receivable not in protected
+        ]
+        adjusted_partial_ids = []
+        for receivable in protected:
+            if (
+                receivable.written_off_at is None
+                and receivable.paid_amount > 0
+                and receivable.balance > 0
+            ):
+                # Legacy entries were recorded as a partial payment against one
+                # title for the full contract. Convert its paid portion into a
+                # closed historical title before scheduling the remaining balance.
+                receivable.amount = receivable.paid_amount
+                receivable.save(update_fields=['amount', 'balance', 'updated_at'])
+                adjusted_partial_ids.append(receivable.pk)
+        protected_total = sum(
+            (receivable.amount for receivable in protected),
+            Decimal('0'),
+        )
+        remaining = (locked_rental.total_value or Decimal('0')) - protected_total
+        if remaining < 0:
+            raise PaymentPlanError(
+                'Os títulos com histórico financeiro superam o valor da locação. '
+                'Revise os recebimentos antes de reprocessar as parcelas.'
+            )
+        if remaining == 0:
+            raise PaymentPlanError(
+                'Não há saldo sem histórico financeiro para gerar novas parcelas.'
+            )
+        effective_due_date = first_due_date or locked_rental.return_date
+        payment_dates = [
+            receivable.last_payment_date
+            for receivable in protected
+            if receivable.last_payment_date
+        ]
+        if payment_dates and effective_due_date <= max(payment_dates):
+            raise PaymentPlanError(
+                'O primeiro vencimento futuro deve ser posterior ao último recebimento.'
+            )
+
+        Receivable.objects.filter(pk__in=replaceable_ids).delete()
+        created = generate_for_rental(
+            locked_rental,
+            installments=installments,
+            first_due_date=effective_due_date,
+            total_amount=remaining,
+        )
+        AuditLog.record(
+            user=user,
+            action='reprocess_future_installments',
+            obj=locked_rental,
+            reason=reason,
+            metadata={
+                'previous_schedule': previous_schedule,
+                'protected_receivable_ids': [item.pk for item in protected],
+                'adjusted_partial_receivable_ids': adjusted_partial_ids,
+                'deleted_receivable_ids': replaceable_ids,
+                'new_schedule': [
+                    {
+                        'id': item.pk,
+                        'due_date': item.due_date.isoformat(),
+                        'amount': str(item.amount),
+                    }
+                    for item in created
+                ],
+                'previous_contract_version': locked_rental.contract_version,
+                'previous_contract_printed_at': (
+                    locked_rental.contract_printed_at.isoformat()
+                    if locked_rental.contract_printed_at
+                    else None
+                ),
+            },
+        )
+
+    return {
+        'protected': protected,
+        'created': created,
+        'scheduled_amount': remaining,
+    }
+
+
+def create_rental_payment_plan(
+    rental,
+    *,
+    installments=0,
+    first_due_date=None,
+    down_payment_amount=None,
+    down_payment_date=None,
+    down_payment_method=None,
+    user=None,
+):
+    """Create a contract plan with a distinct paid entry and future balance.
+
+    The entry becomes its own fully paid receivable, so contracts and accounts
+    receivable show it as a separate condition.  The remaining amount is split
+    evenly into monthly future installments, with cent rounding applied to the
+    first future installment.
+    """
+    total = rental.total_value or Decimal('0')
+    entry_amount = Decimal(str(down_payment_amount or 0))
+    installments = int(installments or 0)
+
+    if entry_amount < 0:
+        raise PaymentPlanError('O valor da entrada não pode ser negativo.')
+    if entry_amount > total:
+        raise PaymentPlanError('O valor da entrada não pode superar o total da locação.')
+
+    remaining = total - entry_amount
+    if entry_amount > 0:
+        if not down_payment_date:
+            raise PaymentPlanError('Informe a data em que a entrada foi recebida.')
+        if down_payment_date > timezone.localdate():
+            raise PaymentPlanError('A data da entrada não pode estar no futuro.')
+        if down_payment_method not in Payment.Method.values:
+            raise PaymentPlanError('Informe uma forma de recebimento válida para a entrada.')
+    if remaining > 0 and installments < 1:
+        raise PaymentPlanError('Informe ao menos uma parcela futura para o saldo restante.')
+    if entry_amount > 0 and remaining > 0:
+        if not first_due_date:
+            raise PaymentPlanError('Informe a data do próximo pagamento.')
+        if first_due_date <= down_payment_date:
+            raise PaymentPlanError(
+                'O próximo vencimento deve ser posterior à data da entrada.'
+            )
+
+    with transaction.atomic():
+        locked_rental = rental.__class__.objects.select_for_update().get(pk=rental.pk)
+        if locked_rental.receivables.select_for_update().exists():
+            raise PaymentPlanError(
+                'As condições de pagamento desta locação já foram geradas.'
+            )
+
+        entry_receivable = None
+        entry_payment = None
+        if entry_amount > 0:
+            account = (
+                CashAccount.objects.select_for_update()
+                .filter(active=True)
+                .order_by('id')
+                .first()
+            )
+            if account is None:
+                raise PaymentPlanError(
+                    'Ative uma conta de caixa antes de registrar a entrada.'
+                )
+            entry_receivable = Receivable.objects.create(
+                rental=locked_rental,
+                due_date=down_payment_date,
+                amount=entry_amount,
+            )
+            entry_payment = register_payment(
+                entry_receivable,
+                amount=entry_amount,
+                payment_date=down_payment_date,
+                method=down_payment_method,
+                notes='Entrada na criação da locação',
+                user=user,
+            )
+            entry_receivable.refresh_from_db()
+
+        future_receivables = []
+        if remaining > 0:
+            future_receivables = generate_for_rental(
+                locked_rental,
+                installments=installments,
+                first_due_date=first_due_date or locked_rental.pickup_date,
+                total_amount=remaining,
+            )
+
+    return {
+        'entry_receivable': entry_receivable,
+        'entry_payment': entry_payment,
+        'future_receivables': future_receivables,
+    }
 
 
 def _add_months(start, months):

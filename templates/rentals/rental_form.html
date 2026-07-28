@@ -244,46 +244,52 @@
       {% endif %}
 
       {% if not form.instance.pk %}
-      <!-- Installments (R7.05) -->
-      <div class="rounded-xl border border-slate-200 p-4 space-y-4">
-        <h2 class="section-title">Parcelas</h2>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <!-- Payment plan (R7.05/R7.06) -->
+      <fieldset class="rounded-xl border border-slate-200 p-4 space-y-5" aria-describedby="payment-plan-help">
+        <legend class="section-title px-1">Condições de pagamento</legend>
+        <p id="payment-plan-help" class="text-sm text-app-muted">
+          Registre a entrada recebida agora e programe o saldo. Sem entrada, o valor total será dividido nas parcelas futuras.
+        </p>
+
+        <div>
+          <h3 class="text-sm font-semibold text-app-ink">Entrada paga agora <span class="font-normal text-app-muted">(opcional)</span></h3>
+          <div class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field-group">
+              <label class="field-label" for="{{ form.down_payment_amount.id_for_label }}">{{ form.down_payment_amount.label }}</label>
+              {{ form.down_payment_amount|render_field }}
+              {% if form.down_payment_amount.errors %}<p id="{{ form.down_payment_amount.auto_id }}-error" class="field-error" role="alert">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="{{ form.down_payment_method.id_for_label }}">{{ form.down_payment_method.label }}</label>
+              {{ form.down_payment_method|render_field }}
+              {% if form.down_payment_method.errors %}<p id="{{ form.down_payment_method.auto_id }}-error" class="field-error" role="alert">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="{{ form.down_payment_date.id_for_label }}">{{ form.down_payment_date.label }}</label>
+              {{ form.down_payment_date|render_field }}
+              {% if form.down_payment_date.errors %}<p id="{{ form.down_payment_date.auto_id }}-error" class="field-error" role="alert">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-200 pt-4">
+          <h3 class="text-sm font-semibold text-app-ink">Saldo a pagar</h3>
+          <div class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div class="field-group">
             <label class="field-label" for="{{ form.installment_count.id_for_label }}">{{ form.installment_count.label }}</label>
             {{ form.installment_count|render_field }}
             {% if form.installment_count.help_text %}<p class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
-            {% if form.installment_count.errors %}<p class="field-error" role="alert">{{ form.installment_count.errors|striptags }}</p>{% endif %}
+            {% if form.installment_count.errors %}<p id="{{ form.installment_count.auto_id }}-error" class="field-error" role="alert">{{ form.installment_count.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.first_due_date.id_for_label }}">{{ form.first_due_date.label }}</label>
             {{ form.first_due_date|render_field }}
             {% if form.first_due_date.help_text %}<p class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
-            {% if form.first_due_date.errors %}<p class="field-error" role="alert">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
+            {% if form.first_due_date.errors %}<p id="{{ form.first_due_date.auto_id }}-error" class="field-error" role="alert">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
+          </div>
           </div>
         </div>
-      </div>
-
-      <!-- Down payment (R7.06) -->
-      <div class="rounded-xl border border-slate-200 p-4 space-y-4">
-        <h2 class="section-title">Recebimento de entrada <span class="text-sm font-normal text-app-muted">(opcional)</span></h2>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div class="field-group">
-            <label class="field-label" for="{{ form.down_payment_amount.id_for_label }}">{{ form.down_payment_amount.label }}</label>
-            {{ form.down_payment_amount|render_field }}
-            {% if form.down_payment_amount.errors %}<p class="field-error" role="alert">{{ form.down_payment_amount.errors|striptags }}</p>{% endif %}
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="{{ form.down_payment_method.id_for_label }}">{{ form.down_payment_method.label }}</label>
-            {{ form.down_payment_method|render_field }}
-            {% if form.down_payment_method.errors %}<p class="field-error" role="alert">{{ form.down_payment_method.errors|striptags }}</p>{% endif %}
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="{{ form.down_payment_date.id_for_label }}">{{ form.down_payment_date.label }}</label>
-            {{ form.down_payment_date|render_field }}
-            {% if form.down_payment_date.errors %}<p class="field-error" role="alert">{{ form.down_payment_date.errors|striptags }}</p>{% endif %}
-          </div>
-        </div>
-      </div>
+      </fieldset>
       {% endif %}
 
       <!-- Observações — campo reduzido (auto-expand ao digitar) -->

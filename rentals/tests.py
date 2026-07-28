@@ -10,7 +10,7 @@ from django.urls import reverse
 from PIL import Image
 
 from accounts.models import ActionPermission, ModulePermission
-from billing.models import Payment, Receivable
+from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
 from customers.models import Customer
 from movements.models import Pickup
@@ -105,16 +105,20 @@ class RentalFormValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('penalty_value', form.errors)
 
-    def test_down_payment_requires_a_receivable(self):
+    def test_down_payment_uses_only_payment_model_methods(self):
         form = RentalForm(data=self._header_data(
-            installment_count='',
+            installment_count='1',
+            first_due_date='15/01/2027',
             down_payment_amount='100,00',
             down_payment_method='pix',
             down_payment_date='10/06/2026',
         ))
 
-        self.assertFalse(form.is_valid())
-        self.assertIn('installment_count', form.errors)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            {value for value, _label in form.fields['down_payment_method'].choices if value},
+            set(Payment.Method.values),
+        )
 
     def test_use_for_accepts_date_and_stores_iso_string(self):
         form = RentalForm(data=self._header_data(use_for='20/06/2026'))
@@ -190,6 +194,68 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
         # Proof photo is served as a streaming FileResponse.
         self.assertGreater(len(b''.join(response.streaming_content)), 0)
+
+    def test_create_rental_records_entry_and_schedules_remaining_balance(self):
+        CashAccount.objects.create(name='Caixa principal')
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'installment_count': '1',
+            'first_due_date': '2027-01-15',
+            'down_payment_amount': '150,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-27',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        rental = Rental.objects.get()
+        receivables = list(rental.receivables.order_by('due_date', 'pk'))
+        self.assertEqual(len(receivables), 2)
+        self.assertEqual(receivables[0].amount, Decimal('150.00'))
+        self.assertEqual(receivables[0].balance, Decimal('0.00'))
+        self.assertEqual(receivables[1].amount, Decimal('150.00'))
+        self.assertEqual(receivables[1].balance, Decimal('150.00'))
+        self.assertEqual(receivables[1].due_date, date(2027, 1, 15))
+        self.assertEqual(Payment.objects.count(), 1)
+
+    def test_create_rental_rejects_entry_above_items_total(self):
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'installment_count': '1',
+            'first_due_date': '2027-01-15',
+            'down_payment_amount': '300,01',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-27',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'O valor da entrada não pode superar o total da locação.')
+        self.assertFalse(Rental.objects.exists())
+        self.assertFalse(Receivable.objects.exists())
+        self.assertFalse(Payment.objects.exists())
 
     def test_create_requires_at_least_one_item(self):
         response = self.client.post('/locacoes/nova/', {

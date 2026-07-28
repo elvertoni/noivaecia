@@ -6,6 +6,7 @@ from django.db.models import Count, Exists, OuterRef, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
 
@@ -13,11 +14,15 @@ from core.mixins import ModuleAccessMixin, ActionRequiredMixin
 from core.models import AuditLog
 from core.ui import parse_br_date
 
-from rentals.models import RentalItem
+from rentals.models import Rental, RentalItem
 from customers.models import _normalize_name
 
-from .availability import INACTIVE_RENTAL_STATUSES, find_overlapping_rental, find_rental_for
-from .forms import CategoryForm, CategoryMergeForm, ProductForm
+from .availability import (
+    INACTIVE_RENTAL_STATUSES,
+    find_overlapping_rental,
+    find_relevant_rentals,
+)
+from .forms import AvailabilityQueryForm, CategoryForm, CategoryMergeForm, ProductForm
 from .models import Category, Product
 
 
@@ -230,59 +235,79 @@ class ProductHistoryView(CatalogAccessMixin, DetailView):
 # ── Availability ──────────────────────────────────────────────────────────────
 
 class AvailabilityView(CatalogAccessMixin, TemplateView):
-    """Check availability — handles duplicate products with disambiguation (R8.03)."""
+    """Operational prefix/code lookup with an optional reference date."""
 
     template_name = 'catalog/availability.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        prefix = self.request.GET.get('prefix', '').strip()
-        code = self.request.GET.get('code', '').strip()
-        date_str = self.request.GET.get('date', '').strip()
+        form = AvailabilityQueryForm(self.request.GET or None)
         product_id = self.request.GET.get('product_id', '').strip()
 
+        context['form'] = form
+        context['prefix'] = self.request.GET.get('prefix', '').strip()
+        context['code'] = self.request.GET.get('code', '').strip()
+        context['date'] = self.request.GET.get('date', '').strip()
+
+        if not form.is_bound:
+            return context
+
+        if not form.is_valid():
+            context['error'] = 'Revise os campos indicados para consultar o produto.'
+            return context
+
+        prefix = form.cleaned_data['prefix']
+        code = form.cleaned_data['code']
+        requested_date = form.cleaned_data['date']
+        reference_date = requested_date or timezone.localdate()
         context['prefix'] = prefix
-        context['code'] = code
-        context['date'] = date_str
-
-        if not (prefix and code and date_str):
-            return context
-
-        on_date = parse_br_date(date_str)
-        if on_date is None:
-            context['error'] = 'Data inválida.'
-            return context
-
-        # ``code`` is received as text and can otherwise make the integer
-        # model lookup raise a ValueError instead of showing a form error.
-        numeric_code = code.lstrip('0') or '0'
-        if not code.isdigit() or len(numeric_code) > 10 or int(numeric_code) > 2147483647:
-            context['error'] = 'Informe um código de produto válido.'
-            return context
+        context['reference_date'] = reference_date
+        context['uses_custom_date'] = requested_date is not None
 
         products = list(
-            Product.objects.filter(category__prefix__iexact=prefix, code=int(numeric_code))
+            Product.objects.filter(category__prefix__iexact=prefix, code=code)
             .select_related('category')
         )
         if not products:
-            context['error'] = 'Produto não encontrado.'
+            context['error'] = (
+                f'Produto {prefix}{code} não encontrado. Confira o prefixo e o código.'
+            )
             return context
 
         # R8.03 — disambiguation when duplicates exist
-        if len(products) > 1 and not product_id:
+        if len(products) > 1:
             context['needs_disambiguation'] = True
             context['candidates'] = products
-            return context
-
-        # Resolve which product to check
-        if product_id and len(products) > 1:
-            product = next((p for p in products if str(p.pk) == product_id), products[0])
+            if not product_id:
+                return context
+            product = next((p for p in products if str(p.pk) == product_id), None)
+            if product is None:
+                context['error'] = 'Selecione um dos produtos encontrados para continuar.'
+                return context
+            context['needs_disambiguation'] = False
         else:
             product = products[0]
 
+        scheduled_rentals = list(find_relevant_rentals(product, reference_date))
+        rentals_on_date = [
+            rental for rental in scheduled_rentals
+            if (
+                (
+                    rental.status == Rental.Status.PICKED_UP
+                    and reference_date >= rental.pickup_date
+                )
+                or rental.pickup_date <= reference_date <= rental.return_date
+            )
+        ]
+
         context['product'] = product
         context['checked'] = True
-        context['rental'] = find_rental_for(product, on_date)
+        context['rental'] = min(
+            rentals_on_date,
+            key=lambda rental: (rental.return_date, rental.number),
+            default=None,
+        )
+        context['scheduled_rentals'] = scheduled_rentals
         return context
 
 

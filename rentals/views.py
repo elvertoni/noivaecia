@@ -1,4 +1,4 @@
-from datetime import date as date_cls
+from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
@@ -14,7 +14,7 @@ from django.views.generic import (
     UpdateView,
 )
 
-from billing.services import generate_for_rental, register_payment
+from billing.services import PaymentPlanError, create_rental_payment_plan
 from catalog.availability import find_overlapping_rental
 from company.models import Company
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
@@ -205,38 +205,63 @@ class RentalCreateView(RentalAccessMixin, CreateView):
             )
             return self.form_invalid(form)
 
-        with transaction.atomic():
-            rental = form.save(commit=False)
-            rental.number = Company.next_rental_number()
-            rental.save()
-            items.instance = rental
-            items.save()
-            rental.recalculate_total()
+        items_total = sum(
+            (
+                item_form.cleaned_data.get('value') or Decimal('0')
+                for item_form in items.forms
+                if item_form.cleaned_data
+                and not item_form.cleaned_data.get('DELETE')
+                and item_form.cleaned_data.get('product')
+            ),
+            Decimal('0'),
+        )
+        installment_count = form.cleaned_data.get('installment_count') or 0
+        first_due_date = form.cleaned_data.get('first_due_date')
+        dp_amount = form.cleaned_data.get('down_payment_amount') or Decimal('0')
+        dp_method = form.cleaned_data.get('down_payment_method')
+        dp_date = form.cleaned_data.get('down_payment_date')
+        remaining = items_total - dp_amount
 
-            # R7.05 — generate installments if requested
-            installment_count = form.cleaned_data.get('installment_count') or 0
-            first_due_date = form.cleaned_data.get('first_due_date')
-            receivables = []
-            if installment_count and installment_count >= 1:
-                receivables = generate_for_rental(
-                    rental,
-                    installments=installment_count,
-                    first_due_date=first_due_date,
-                )
+        if dp_amount > items_total:
+            form.add_error(
+                'down_payment_amount',
+                'O valor da entrada não pode superar o total da locação.',
+            )
+        if remaining > 0 and dp_amount > 0 and not installment_count:
+            form.add_error(
+                'installment_count',
+                'Informe ao menos uma parcela futura para o saldo restante.',
+            )
+        if remaining > 0 and dp_amount > 0 and not first_due_date:
+            form.add_error(
+                'first_due_date',
+                'Informe a data do próximo pagamento.',
+            )
+        if form.errors:
+            return self.form_invalid(form)
 
-            # R7.06 — register down payment against first receivable if provided
-            dp_amount = form.cleaned_data.get('down_payment_amount')
-            dp_method = form.cleaned_data.get('down_payment_method')
-            dp_date = form.cleaned_data.get('down_payment_date')
-            if dp_amount and dp_amount > 0 and receivables:
-                register_payment(
-                    receivables[0],
-                    amount=dp_amount,
-                    payment_date=dp_date or date_cls.today(),
-                    method=dp_method or 'cash',
-                    notes='Entrada na criação da locação',
-                    user=self.request.user,
-                )
+        try:
+            with transaction.atomic():
+                rental = form.save(commit=False)
+                rental.number = Company.next_rental_number()
+                rental.save()
+                items.instance = rental
+                items.save()
+                rental.recalculate_total()
+
+                if installment_count or dp_amount > 0:
+                    create_rental_payment_plan(
+                        rental,
+                        installments=installment_count,
+                        first_due_date=first_due_date,
+                        down_payment_amount=dp_amount,
+                        down_payment_method=dp_method,
+                        down_payment_date=dp_date,
+                        user=self.request.user,
+                    )
+        except PaymentPlanError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
 
         self.object = rental
         messages.success(self.request, f'Locação #{rental.number} criada com sucesso.')
@@ -437,7 +462,7 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
 
 # ── Contract ──────────────────────────────────────────────────────────────────
 
-CONTRACT_VERSION = 'v1'
+CONTRACT_VERSION = 'v2'
 
 
 class RentalContractView(RentalAccessMixin, TemplateView):
@@ -455,21 +480,28 @@ class RentalContractView(RentalAccessMixin, TemplateView):
             ),
             pk=kwargs['pk'],
         )
-        # R7.08 — stamp first print
-        if not rental.contract_printed_at:
+        # R7.08 — stamp first print and keep the rendered layout version auditable.
+        if not rental.contract_printed_at or rental.contract_version != CONTRACT_VERSION:
+            printed_at = timezone.now()
             Rental.objects.filter(pk=rental.pk).update(
                 contract_version=CONTRACT_VERSION,
-                contract_printed_at=timezone.now(),
+                contract_printed_at=printed_at,
             )
             rental.contract_version = CONTRACT_VERSION
-            rental.contract_printed_at = timezone.now()
+            rental.contract_printed_at = printed_at
 
         company = Company.load()
-        receivables = rental.receivables.order_by('due_date')
+        receivables = list(rental.receivables.order_by('due_date', 'pk'))
+        payment_totals = {
+            'amount': sum((receivable.amount for receivable in receivables), Decimal('0')),
+            'paid': sum((receivable.paid_amount for receivable in receivables), Decimal('0')),
+            'balance': sum((receivable.balance for receivable in receivables), Decimal('0')),
+        }
         return self.render_to_response(self.get_context_data(
             rental=rental,
             company=company,
             receivables=receivables,
+            payment_totals=payment_totals,
             contract_version=CONTRACT_VERSION,
             copy_labels=['1ª via — Locatário', '2ª via — Empresa'],
         ))

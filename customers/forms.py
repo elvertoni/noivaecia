@@ -64,6 +64,19 @@ def _format_phone(d):
     return f'({d[:2]}) {d[2:6]}-{d[6:]}'
 
 
+def _format_numeric_rg(value):
+    """Format the two numeric RG lengths used by the existing customer base.
+
+    Other lengths and alphanumeric identifiers remain untouched because RG
+    formats vary by issuing authority.
+    """
+    if len(value) == 8:
+        return f'{value[0]}.{value[1:4]}.{value[4:7]}-{value[7]}'
+    if len(value) == 9:
+        return f'{value[:2]}.{value[2:5]}.{value[5:8]}-{value[8]}'
+    return value
+
+
 class CustomerForm(forms.ModelForm):
     state = forms.ChoiceField(
         label='Estado',
@@ -83,8 +96,15 @@ class CustomerForm(forms.ModelForm):
         model = Customer
         fields = (
             'name', 'address', 'district', 'state', 'city',
-            'rg', 'cpf', 'phone_home', 'phone_mobile', 'phone_work', 'notes',
+            'rg', 'cpf', 'phone_mobile', 'phone_home',
+            'alternate_phone_contact', 'phone_work', 'notes',
         )
+        help_texts = {
+            'rg': 'Digite como consta no documento; letras e pontuação serão preservadas.',
+            'alternate_phone_contact': (
+                'Informe de quem é o número ou a relação com o cliente.'
+            ),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -118,10 +138,13 @@ class CustomerForm(forms.ModelForm):
             'list': 'customer-city-options',
         })
         self.fields['rg'].widget.attrs.update({
-            'placeholder': 'Ex.: 12.345.678-9',
-            'maxlength': '15',
-            'inputmode': 'numeric',
-            'data-mask': 'rg',
+            'placeholder': 'Ex.: 8.241.995-0',
+            'maxlength': '20',
+            'inputmode': 'text',
+            'autocomplete': 'off',
+            'autocapitalize': 'characters',
+            'data-rg-format': 'true',
+            'spellcheck': 'false',
         })
         self.fields['cpf'].widget.attrs.update({
             'placeholder': 'Ex.: 000.000.000-00',
@@ -131,12 +154,16 @@ class CustomerForm(forms.ModelForm):
             'data-mask': 'cpf',
         })
         self.fields['phone_home'].widget.attrs.update({
-            'placeholder': 'Ex.: (43) 3542-1234',
+            'placeholder': 'Ex.: (43) 99999-1234',
             'maxlength': '20',
             'type': 'tel',
             'inputmode': 'tel',
-            'autocomplete': 'tel',
+            'autocomplete': 'off',
             'data-mask': 'phone',
+        })
+        self.fields['alternate_phone_contact'].widget.attrs.update({
+            'placeholder': 'Ex.: esposo João, mãe ou vizinha Ana',
+            'autocomplete': 'off',
         })
         self.fields['phone_mobile'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 99123-4567',
@@ -171,9 +198,17 @@ class CustomerForm(forms.ModelForm):
         rg = self.cleaned_data.get('rg', '').strip()
         if not rg:
             return rg
-        d = _digits(rg)
-        if len(d) < 5 or len(d) > 10:
-            raise forms.ValidationError('RG inválido. Informe entre 5 e 10 dígitos.')
+        if not re.fullmatch(r'[A-Za-z0-9.\-/\s]+', rg):
+            raise forms.ValidationError(
+                'RG inválido. Use apenas letras, números, pontos, hífen, barra e espaços.'
+            )
+        identifier = re.sub(r'[^A-Za-z0-9]', '', rg)
+        if len(identifier) < 5:
+            raise forms.ValidationError(
+                'RG inválido. Informe ao menos 5 letras ou números.'
+            )
+        if rg.isdigit():
+            return _format_numeric_rg(rg)
         return rg
 
     def clean_phone_home(self):

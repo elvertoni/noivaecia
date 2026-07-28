@@ -64,7 +64,7 @@
           <th>RG</th>
           <th>CPF</th>
           <th>Celular</th>
-          <th>Tel. Residencial</th>
+          <th>Tel. alternativo</th>
           <th class="text-right">Ações</th>
         </tr>
       </thead>
@@ -89,7 +89,12 @@
             <td class="text-sm">{{ customer.rg|default:'—' }}</td>
             <td class="text-sm">{{ customer.cpf|default:'—' }}</td>
             <td>{{ customer.phone_mobile|default:'—' }}</td>
-            <td>{{ customer.phone_home|default:'—' }}</td>
+            <td>
+              {{ customer.phone_home|default:'—' }}
+              {% if customer.alternate_phone_contact %}
+                <span class="block text-xs text-app-muted">{{ customer.alternate_phone_contact }}</span>
+              {% endif %}
+            </td>
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'customers:detail' customer.pk %}" class="text-link">Histórico</a>
               <a href="{% url 'customers:update' customer.pk %}" class="ml-3 text-link">Editar</a>

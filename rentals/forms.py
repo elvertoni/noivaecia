@@ -6,8 +6,10 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from billing.models import Payment
 from catalog.models import Product
 from core.ui import (
     BRMoneyField,
@@ -97,15 +99,18 @@ class RentalForm(forms.ModelForm):
 
     # Extra: installment generation (R7.05)
     installment_count = forms.IntegerField(
-        label='Número de parcelas', min_value=1, max_value=9, initial=1,
+        label='Número de parcelas futuras', min_value=1, max_value=9, initial=1,
         required=False,
-        help_text='Deixe em branco para não gerar cobranças automaticamente.',
+        help_text='O saldo após a entrada será dividido igualmente entre elas.',
     )
     first_due_date = forms.DateField(
-        label='1ª data de vencimento', required=False,
+        label='Data do próximo pagamento', required=False,
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
-        help_text='Padrão: data de retorno.',
+        help_text=(
+            'Sem entrada, deixe em branco para usar a data de retirada. '
+            'As demais parcelas vencem mensalmente na mesma data.'
+        ),
     )
 
     # Extra: down payment (R7.06)
@@ -115,11 +120,7 @@ class RentalForm(forms.ModelForm):
     )
     down_payment_method = forms.ChoiceField(
         label='Forma de recebimento da entrada',
-        choices=[('', '—')] + [
-            ('cash', 'Dinheiro'), ('pix', 'PIX'), ('card_debit', 'Cartão débito'),
-            ('card_credit', 'Cartão crédito'), ('bank_transfer', 'Transferência'),
-            ('check', 'Cheque'),
-        ],
+        choices=[('', 'Selecione')] + list(Payment.Method.choices),
         required=False,
     )
     down_payment_date = forms.DateField(
@@ -188,16 +189,22 @@ class RentalForm(forms.ModelForm):
         dp_amount = cleaned.get('down_payment_amount')
         dp_method = cleaned.get('down_payment_method')
         dp_date = cleaned.get('down_payment_date')
+        first_due_date = cleaned.get('first_due_date')
         if dp_amount and dp_amount > 0:
-            if not cleaned.get('installment_count'):
-                self.add_error(
-                    'installment_count',
-                    'Informe ao menos uma parcela para registrar a entrada.',
-                )
             if not dp_method:
                 self.add_error('down_payment_method', 'Informe a forma de recebimento da entrada.')
             if not dp_date:
                 self.add_error('down_payment_date', 'Informe a data da entrada.')
+            elif dp_date > timezone.localdate():
+                self.add_error(
+                    'down_payment_date',
+                    'A data da entrada não pode estar no futuro.',
+                )
+            if dp_date and first_due_date and first_due_date <= dp_date:
+                self.add_error(
+                    'first_due_date',
+                    'O próximo vencimento deve ser posterior à data da entrada.',
+                )
         return cleaned
 
 

@@ -317,7 +317,7 @@ class GenerateReceivablesViewTests(TestCase):
         self.assertFalse(Receivable.objects.filter(pk=old_rec.pk).exists())
         self.assertEqual(sum(r.amount for r in self.rental.receivables.all()), Decimal('300.00'))
 
-    def test_re_generate_blocked_when_payments_exist(self):
+    def test_re_generate_preserves_paid_part_and_splits_remaining_balance(self):
         # Create an existing receivable
         rec = Receivable.objects.create(
             rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('300.00')
@@ -341,7 +341,16 @@ class GenerateReceivablesViewTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
 
-        # Validate that the generation was blocked and the old receivable is still there
-        self.assertEqual(self.rental.receivables.count(), 1)
+        # The paid portion keeps its history; only the remaining R$ 200 is
+        # reorganized into three future titles.
+        self.assertEqual(self.rental.receivables.count(), 4)
         self.assertTrue(Receivable.objects.filter(pk=rec.pk).exists())
-
+        rec.refresh_from_db()
+        self.assertEqual(rec.amount, Decimal('100.00'))
+        self.assertEqual(rec.paid_amount, Decimal('100.00'))
+        self.assertEqual(rec.balance, Decimal('0.00'))
+        future = self.rental.receivables.exclude(pk=rec.pk)
+        self.assertEqual(
+            sum((item.amount for item in future), Decimal('0')),
+            Decimal('200.00'),
+        )

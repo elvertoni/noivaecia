@@ -41,8 +41,10 @@ class CustomerListView(ModuleAccessMixin, ListView):
     paginate_by = 25
 
     # Colunas necessárias na lista — evita carregar text blobs de 18k linhas
-    _LIST_FIELDS = ('pk', 'name', 'city', 'state', 'rg', 'cpf', 'phone_mobile',
-                    'phone_home', 'is_active', 'legacy_id')
+    _LIST_FIELDS = (
+        'pk', 'name', 'city', 'state', 'rg', 'cpf', 'phone_mobile',
+        'phone_home', 'alternate_phone_contact', 'is_active', 'legacy_id',
+    )
 
     def get_queryset(self):
         queryset = Customer.objects.only(*self._LIST_FIELDS).order_by('name')
@@ -58,6 +60,7 @@ class CustomerListView(ModuleAccessMixin, ListView):
                 # name_search is accent-normalized and backed by a trigram GIN
                 # index (customer_name_trgm_idx) — query it, not the raw name.
                 Q(name_search__icontains=name_norm)
+                | Q(alternate_phone_contact__icontains=search)
                 | Q(phone_home__icontains=search)
                 | Q(phone_mobile__icontains=search)
                 | Q(phone_work__icontains=search)
@@ -68,6 +71,7 @@ class CustomerListView(ModuleAccessMixin, ListView):
                 q_filter |= (
                     Q(cpf_digits__icontains=digits)
                     | Q(rg_digits__icontains=digits)
+                    | Q(phone_home_digits__icontains=digits)
                     | Q(phone_mobile_digits__icontains=digits)
                 )
                 # Aceita CPF digitado sem formatação (11 dígitos)
@@ -310,6 +314,7 @@ class CustomerSearchView(View):
         name_norm = _normalize_name(q)
         q_filter = (
             Q(name_search__icontains=name_norm)
+            | Q(alternate_phone_contact__icontains=q)
             | Q(cpf__icontains=q)
             | Q(rg__icontains=q)
             | Q(phone_home__icontains=q)
@@ -322,6 +327,7 @@ class CustomerSearchView(View):
             q_filter |= (
                 Q(cpf_digits__icontains=digits)
                 | Q(rg_digits__icontains=digits)
+                | Q(phone_home_digits__icontains=digits)
                 | Q(phone_mobile_digits__icontains=digits)
             )
         qs = qs.filter(q_filter).values('id', 'name', 'cpf', 'rg', 'city')[:15]

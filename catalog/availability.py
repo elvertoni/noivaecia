@@ -7,6 +7,8 @@ pickup/return window contains that date.
 
 from datetime import timedelta
 
+from django.db.models import Q
+
 from rentals.models import Rental, RentalItem
 
 # A rental no longer holds its items once it is returned or cancelled.
@@ -28,6 +30,24 @@ def find_rental_for(product, on_date):
         .first()
     )
     return item.rental if item else None
+
+
+def find_relevant_rentals(product, from_date):
+    """Return active rentals holding ``product`` from ``from_date`` onward.
+
+    This is the operational schedule shown by the availability lookup. Past
+    contracts and rentals already returned or cancelled do not help the
+    attendant decide what can be offered to a customer. A picked-up item stays
+    relevant even after its expected return date until the return is recorded.
+    """
+    return (
+        Rental.objects.filter(items__product=product)
+        .filter(Q(return_date__gte=from_date) | Q(status=Rental.Status.PICKED_UP))
+        .exclude(status__in=INACTIVE_RENTAL_STATUSES)
+        .select_related('customer')
+        .order_by('pickup_date', 'return_date', 'number')
+        .distinct()
+    )
 
 
 def find_overlapping_rental(product, pickup_date, return_date, exclude_rental_id=None):

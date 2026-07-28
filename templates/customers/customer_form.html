@@ -57,6 +57,7 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.rg.id_for_label }}">RG</label>
           {{ form.rg|render_field }}
+          {% if form.rg.help_text %}<p id="{{ form.rg.auto_id }}-help" class="field-help">{{ form.rg.help_text }}</p>{% endif %}
           {% if form.rg.errors %}<p id="{{ form.rg.auto_id }}-error" class="field-error" role="alert">{{ form.rg.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
@@ -73,14 +74,22 @@
         {% if form.phone_mobile.errors %}<p id="{{ form.phone_mobile.auto_id }}-error" class="field-error" role="alert">{{ form.phone_mobile.errors|striptags }}</p>{% endif %}
       </div>
 
-      {# Telefones secundários #}
-      <details class="rounded-lg border border-slate-200 px-4 py-3"{% if form.phone_home.value or form.phone_work.value %} open{% endif %}>
-        <summary class="cursor-pointer text-sm font-medium text-app-muted hover:text-app-ink select-none">Outros telefones</summary>
-        <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div class="field-group">
-            <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone residencial</label>
-            {{ form.phone_home|render_field }}
-            {% if form.phone_home.errors %}<p id="{{ form.phone_home.auto_id }}-error" class="field-error" role="alert">{{ form.phone_home.errors|striptags }}</p>{% endif %}
+      {# Telefones adicionais #}
+      <details class="rounded-lg border border-slate-200 px-4 py-3"{% if form.phone_home.value or form.alternate_phone_contact.value or form.phone_work.value or form.phone_home.errors or form.alternate_phone_contact.errors or form.phone_work.errors %} open{% endif %}>
+        <summary class="flex min-h-11 cursor-pointer select-none items-center text-sm font-medium text-app-muted hover:text-app-ink">Telefones adicionais</summary>
+        <div class="mt-3 space-y-4">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="field-group">
+              <label class="field-label" for="{{ form.phone_home.id_for_label }}">Telefone alternativo</label>
+              {{ form.phone_home|render_field }}
+              {% if form.phone_home.errors %}<p id="{{ form.phone_home.auto_id }}-error" class="field-error" role="alert">{{ form.phone_home.errors|striptags }}</p>{% endif %}
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="{{ form.alternate_phone_contact.id_for_label }}">Identificação do telefone alternativo</label>
+              {{ form.alternate_phone_contact|render_field }}
+              {% if form.alternate_phone_contact.help_text %}<p id="{{ form.alternate_phone_contact.auto_id }}-help" class="field-help">{{ form.alternate_phone_contact.help_text }}</p>{% endif %}
+              {% if form.alternate_phone_contact.errors %}<p id="{{ form.alternate_phone_contact.auto_id }}-error" class="field-error" role="alert">{{ form.alternate_phone_contact.errors|striptags }}</p>{% endif %}
+            </div>
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.phone_work.id_for_label }}">Telefone comercial</label>
@@ -146,14 +155,6 @@
     return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
   }
 
-  function maskRG(v) {
-    const d = onlyDigits(v).slice(0, 9);
-    if (d.length <= 2) return d;
-    if (d.length <= 5) return d.slice(0,2) + '.' + d.slice(2);
-    if (d.length <= 8) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5);
-    return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '-' + d.slice(8);
-  }
-
   function maskPhone(v) {
     let d = onlyDigits(v);
     if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
@@ -164,7 +165,26 @@
     return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);
   }
 
-  const MASKS = { cpf: maskCPF, rg: maskRG, phone: maskPhone };
+  function formatNumericRG(v) {
+    const value = v.trim();
+    if (!/^\d+$/.test(value)) return v;
+    if (value.length === 8) {
+      return value.slice(0,1) + '.' + value.slice(1,4) + '.' + value.slice(4,7) + '-' + value.slice(7);
+    }
+    if (value.length === 9) {
+      return value.slice(0,2) + '.' + value.slice(2,5) + '.' + value.slice(5,8) + '-' + value.slice(8);
+    }
+    return v;
+  }
+
+  const MASKS = { cpf: maskCPF, phone: maskPhone };
+
+  const rgInput = document.querySelector('[data-rg-format="true"]');
+  if (rgInput) {
+    rgInput.addEventListener('blur', function () {
+      this.value = formatNumericRG(this.value);
+    });
+  }
 
   /* Após aplicar máscara, calcula a nova posição do cursor contando
      quantos dígitos havia antes do cursor e localizando esse mesmo
