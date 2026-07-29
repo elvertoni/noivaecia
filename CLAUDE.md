@@ -130,6 +130,11 @@ it.
   other CSS frameworks.
 - Brazilian monetary inputs use `core.ui.BRDecimalInput` with masking/parsing
   in `static/js/app.js` (`1.234,56` → `1234.56`).
+- Rental form (`templates/rentals/rental_form.html`) uses a high-density grid
+  table (`<tr>` per item, keyboard-first: `Enter` navigates, `F2` adds a row,
+  `Ctrl+S` submits) — see "Rental Form UI/UX Conventions" in `AGENTS.md`.
+  Rationale/history: `tela-cliente.md` (repo root) + ai-memory
+  `decisions/refactor-tela-locacao-grid-antigravity.md`.
 
 ### Management commands worth knowing
 

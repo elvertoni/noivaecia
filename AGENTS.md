@@ -49,4 +49,6 @@ Do not commit local artifacts such as `venv/`, `node_modules/`, `db.sqlite3`, `.
 - Keyboard-first shortcuts: `Enter` to navigate fields, `F2` to add new row, `Ctrl+S` to submit form.
 - Direct "Salvar e Imprimir" button sending `save_and_print=1` to immediately open print view after save.
 - Support item proof photo upload (`proof_photo_upload`) via expandable `tr.item-photo-row`.
+- Rationale/history: `tela-cliente.md` (repo root) + ai-memory
+  `decisions/refactor-tela-locacao-grid-antigravity.md`.
 
