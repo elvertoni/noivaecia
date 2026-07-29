@@ -306,10 +306,25 @@
         {% endfor %}
       </tbody>
       <tfoot>
+        {% if rental.cash_discount %}
+        <tr>
+          <td colspan="2" class="text-right">Subtotal das peças</td>
+          <td class="text-right">R$ {{ rental.total_value|brl }}</td>
+        </tr>
+        <tr>
+          <td colspan="2" class="text-right">Desconto à vista (10%)</td>
+          <td class="text-right">- R$ {{ rental.discount_amount|brl }}</td>
+        </tr>
+        <tr>
+          <td colspan="2" class="text-right"><strong>Valor total</strong></td>
+          <td class="text-right"><strong>R$ {{ rental.final_value|brl }}</strong></td>
+        </tr>
+        {% else %}
         <tr>
           <td colspan="2" class="text-right">Valor total</td>
           <td class="text-right">R$ {{ rental.total_value|brl }}</td>
         </tr>
+        {% endif %}
       </tfoot>
     </table>
   </div>

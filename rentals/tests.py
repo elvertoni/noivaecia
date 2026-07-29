@@ -59,6 +59,24 @@ class RentalModelTests(TestCase):
         rental.recalculate_total()
         self.assertEqual(rental.total_value, Decimal('450'))
 
+    def test_final_value_without_discount_equals_total(self):
+        rental = Rental.objects.create(
+            number=100, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            total_value=Decimal('450'),
+        )
+        self.assertEqual(rental.final_value, Decimal('450'))
+        self.assertEqual(rental.discount_amount, Decimal('0.00'))
+
+    def test_final_value_with_cash_discount_applies_10_percent(self):
+        rental = Rental.objects.create(
+            number=101, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            total_value=Decimal('450'), cash_discount=True,
+        )
+        self.assertEqual(rental.final_value, Decimal('405.00'))
+        self.assertEqual(rental.discount_amount, Decimal('45.00'))
+
     def test_default_status_is_pending(self):
         rental = Rental.objects.create(
             number=2, customer=self.customer,

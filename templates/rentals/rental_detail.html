@@ -67,7 +67,12 @@
     </div>
     <div class="panel">
       <p class="field-label">Total</p>
-      <p class="mt-1 text-lg font-semibold text-app-ink">R$ {{ rental.total_value|brl }}</p>
+      {% if rental.cash_discount %}
+        <p class="mt-1 text-sm text-app-muted line-through">R$ {{ rental.total_value|brl }}</p>
+        <p class="text-lg font-semibold text-app-ink">R$ {{ rental.final_value|brl }} <span class="text-xs font-normal text-emerald-600">(10% à vista)</span></p>
+      {% else %}
+        <p class="mt-1 text-lg font-semibold text-app-ink">R$ {{ rental.total_value|brl }}</p>
+      {% endif %}
     </div>
   </div>
 

@@ -23,7 +23,7 @@ from core.models import AuditLog
 from customers.models import _normalize_name
 
 from .forms import RentalCancelForm, RentalForm, RentalItemFormSet, RentalItemEditFormSet
-from .models import Rental, RentalItem
+from .models import CASH_DISCOUNT_RATE, Rental, RentalItem
 
 
 def check_item_availability(items, pickup_date, return_date, exclude_rental_id=None):
@@ -232,9 +232,14 @@ class RentalCreateView(RentalAccessMixin, CreateView):
         dp_amount = form.cleaned_data.get('down_payment_amount') or Decimal('0')
         dp_method = form.cleaned_data.get('down_payment_method')
         dp_date = form.cleaned_data.get('down_payment_date')
-        remaining = items_total - dp_amount
+        cash_discount = form.cleaned_data.get('cash_discount')
+        effective_total = (
+            (items_total * (Decimal('1') - CASH_DISCOUNT_RATE)).quantize(Decimal('0.01'))
+            if cash_discount else items_total
+        )
+        remaining = effective_total - dp_amount
 
-        if dp_amount > items_total:
+        if dp_amount > effective_total:
             form.add_error(
                 'down_payment_amount',
                 'O valor da entrada não pode superar o total da locação.',

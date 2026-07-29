@@ -135,7 +135,7 @@ class RentalForm(forms.ModelForm):
 
     class Meta:
         model = Rental
-        fields = ('customer', 'pickup_date', 'return_date', 'penalty_value', 'notes')
+        fields = ('customer', 'pickup_date', 'return_date', 'penalty_value', 'cash_discount', 'notes')
         widgets = {
             'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
             'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
@@ -146,6 +146,9 @@ class RentalForm(forms.ModelForm):
         _style(self)
         self.fields['penalty_value'].min_value = Decimal('0')
         self.fields['penalty_value'].validators.append(MinValueValidator(Decimal('0')))
+        self.fields['cash_discount'].widget.attrs['class'] = (
+            'rounded border-slate-300 text-rose-600 focus:ring-rose-500'
+        )
         for field_name in ('pickup_date', 'return_date'):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options

@@ -209,12 +209,11 @@
               <p id="subtotal-display" class="text-lg font-semibold text-app-ink mt-0.5">R$ 0,00</p>
             </div>
             <div>
-              <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted cursor-pointer" for="apply-cash-discount">
-                <input type="checkbox" id="apply-cash-discount" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+              <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted cursor-pointer" for="{{ form.cash_discount.id_for_label }}">
+                {{ form.cash_discount }}
                 Desconto à vista (10%)
               </label>
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
-              <p class="text-[10px] text-app-muted">Apenas referência visual, não altera o valor salvo</p>
             </div>
             <div>
               <p class="text-xs font-medium text-app-muted">Multa diária por atraso</p>
@@ -1282,7 +1281,7 @@
       });
     }
 
-    const applyDiscountCb = document.getElementById('apply-cash-discount');
+    const applyDiscountCb = document.getElementById('{{ form.cash_discount.id_for_label }}');
     const isCashDiscount = applyDiscountCb ? applyDiscountCb.checked : false;
     const discount = isCashDiscount ? (subtotal * 0.10) : 0;
     const totalFinal = Math.max(0, subtotal - discount);
@@ -1321,7 +1320,7 @@
     });
   }
 
-  const applyDiscountCb = document.getElementById('apply-cash-discount');
+  const applyDiscountCb = document.getElementById('{{ form.cash_discount.id_for_label }}');
   if (applyDiscountCb) {
     applyDiscountCb.addEventListener('change', updateFinancialTotals);
   }

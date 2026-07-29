@@ -65,6 +65,23 @@ class RentalPaymentPlanServiceTests(TestCase):
             Decimal('150.00'),
         )
 
+    def test_cash_discount_reduces_generated_receivables_total(self):
+        self.rental.cash_discount = True
+        self.rental.save(update_fields=['cash_discount', 'updated_at'])
+
+        create_rental_payment_plan(
+            self.rental,
+            installments=1,
+            first_due_date=date(2027, 1, 15),
+        )
+
+        receivables = list(self.rental.receivables.order_by('due_date', 'pk'))
+        self.assertEqual(
+            sum((item.amount for item in receivables), Decimal('0')),
+            Decimal('270.00'),
+        )
+        self.assertEqual(self.rental.total_value, Decimal('300.00'))
+
     def test_full_entry_creates_only_one_paid_receivable(self):
         create_rental_payment_plan(
             self.rental,

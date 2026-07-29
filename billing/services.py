@@ -76,7 +76,7 @@ def generate_for_rental(rental, installments=1, first_due_date=None, total_amoun
     total = (
         Decimal(str(total_amount))
         if total_amount is not None
-        else (rental.total_value or Decimal('0'))
+        else rental.final_value
     )
     if total < 0:
         raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
@@ -159,7 +159,7 @@ def reprocess_future_installments(
             (receivable.amount for receivable in protected),
             Decimal('0'),
         )
-        remaining = (locked_rental.total_value or Decimal('0')) - protected_total
+        remaining = locked_rental.final_value - protected_total
         if remaining < 0:
             raise PaymentPlanError(
                 'Os títulos com histórico financeiro superam o valor da locação. '
@@ -238,7 +238,7 @@ def create_rental_payment_plan(
     evenly into monthly future installments, with cent rounding applied to the
     first future installment.
     """
-    total = rental.total_value or Decimal('0')
+    total = rental.final_value
     entry_amount = Decimal(str(down_payment_amount or 0))
     installments = int(installments or 0)
 
