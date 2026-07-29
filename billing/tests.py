@@ -100,6 +100,7 @@ class InterestServiceTests(TestCase):
         self.rental.save()
         company = Company.load()
         company.daily_interest_rate = Decimal('1.00')
+        company.monthly_interest_rate = Decimal('0')
         company.save()
 
     def test_no_interest_before_due(self):
@@ -115,6 +116,18 @@ class InterestServiceTests(TestCase):
         interest = services.compute_interest(rec, on_date=date(2026, 6, 30))
         self.assertEqual(interest, Decimal('10.00'))
         self.assertEqual(services.total_with_interest(rec, on_date=date(2026, 6, 30)), Decimal('110.00'))
+
+    def test_interest_uses_monthly_rate_divided_by_thirty(self):
+        rec = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('100'),
+        )
+        company = Company.load()
+        company.monthly_interest_rate = Decimal('3.00')
+        company.save()
+
+        interest = services.compute_interest(rec, on_date=date(2026, 6, 30))
+
+        self.assertEqual(interest, Decimal('1.00'))
 
     def test_interest_uses_provided_company_without_loading_config(self):
         rec = Receivable.objects.create(

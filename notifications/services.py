@@ -23,7 +23,7 @@ from decimal import Decimal
 from string import Formatter
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from notifications import evolution
@@ -387,14 +387,33 @@ _MESSAGE_RENDERERS = {
 }
 
 
+# A ``pending`` row younger than this is treated as an in-flight send by a
+# concurrent/racing call (so it is not retried); one older than this is
+# assumed to have crashed before recording a final result and is safe to
+# retry. The stale ``pending`` row itself is left behind for manual review
+# rather than reused, keeping every send attempt append-only.
+_PENDING_GRACE_PERIOD = timedelta(minutes=2)
+
+
 def dispatch_customer_message(rental, kind, user=None, message_template=None):
     """Send (or record the failure to send) a customer WhatsApp message for
     ``rental``, and return the resulting ``CustomerMessage``.
 
-    Idempotent: a rental that already has a ``SENT`` ``CustomerMessage`` for
-    ``kind`` is returned as-is, without calling the Evolution API again.
-    An invalid phone number short-circuits to a ``FAILED`` record without any
-    network call.
+    Idempotent: a rental that already has a ``SENT`` ``CustomerMessage`` (or a
+    still-fresh ``PENDING`` one — see ``_PENDING_GRACE_PERIOD``) for ``kind``
+    is returned as-is, without calling the Evolution API again. An invalid
+    phone number short-circuits to a ``FAILED`` record without any network
+    call.
+
+    The Evolution API call itself runs *outside* any database transaction:
+    a ``PENDING`` record is committed first (inside a short transaction that
+    also holds the row lock on ``rental``, so concurrent calls for the same
+    rental/kind serialize against it), then the HTTP call happens with no
+    transaction open, then the record is updated to its final ``SENT``/
+    ``FAILED`` state in a second short transaction. This way a DB failure
+    right after a real send can never leave us without a record that the
+    message actually went out — which is what used to risk a duplicate real
+    send on retry when the HTTP call happened before the row was written.
     """
     if kind not in _MESSAGE_RENDERERS:
         raise ValueError('Tipo de aviso inválido.')
@@ -405,14 +424,17 @@ def dispatch_customer_message(rental, kind, user=None, message_template=None):
             .select_related('customer')
             .get(pk=rental.pk)
         )
-        existing = CustomerMessage.objects.filter(
-            rental=rental, kind=kind, status=CustomerMessage.Status.SENT,
+        existing = CustomerMessage.objects.filter(rental=rental, kind=kind).filter(
+            Q(status=CustomerMessage.Status.SENT)
+            | Q(
+                status=CustomerMessage.Status.PENDING,
+                created_at__gte=timezone.now() - _PENDING_GRACE_PERIOD,
+            )
         ).first()
         if existing:
             return existing
 
         customer = rental.customer
-        render = _MESSAGE_RENDERERS[kind]
         phone = format_whatsapp_number(customer.phone_mobile_digits)
 
         if not phone:
@@ -426,27 +448,37 @@ def dispatch_customer_message(rental, kind, user=None, message_template=None):
                 sent_by=user,
             )
 
-        message = render(rental, message_template)
-        try:
-            message_id = evolution.send_text(phone, message)
-        except evolution.EvolutionError as exc:
-            return CustomerMessage.objects.create(
-                rental=rental,
-                customer=customer,
-                kind=kind,
-                phone=phone,
-                status=CustomerMessage.Status.FAILED,
-                error=str(exc),
-                sent_by=user,
-            )
+        message = _MESSAGE_RENDERERS[kind](rental, message_template)
 
-        return CustomerMessage.objects.create(
+        # Commit the "about to send" record — and release the rental lock —
+        # before making the external call, so the HTTP request never runs
+        # inside a transaction.
+        record = CustomerMessage.objects.create(
             rental=rental,
             customer=customer,
             kind=kind,
             phone=phone,
-            status=CustomerMessage.Status.SENT,
-            message_id=str(message_id),
-            sent_at=timezone.now(),
+            status=CustomerMessage.Status.PENDING,
             sent_by=user,
         )
+
+    try:
+        message_id = evolution.send_text(phone, message)
+    except evolution.EvolutionError as exc:
+        CustomerMessage.objects.filter(pk=record.pk).update(
+            status=CustomerMessage.Status.FAILED, error=str(exc),
+        )
+        record.status = CustomerMessage.Status.FAILED
+        record.error = str(exc)
+        return record
+
+    sent_at = timezone.now()
+    CustomerMessage.objects.filter(pk=record.pk).update(
+        status=CustomerMessage.Status.SENT,
+        message_id=str(message_id),
+        sent_at=sent_at,
+    )
+    record.status = CustomerMessage.Status.SENT
+    record.message_id = str(message_id)
+    record.sent_at = sent_at
+    return record

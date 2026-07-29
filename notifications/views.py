@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
-from core.mixins import ModuleAccessMixin
+from core.mixins import ActionRequiredMixin, ModuleAccessMixin
 from rentals.models import Rental
 
 from .models import CustomerMessage
@@ -66,7 +66,11 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
         if evolution_configured:
             try:
                 evolution_state = evolution.get_connection_state()
-                if self.request.GET.get('connect') == '1' and evolution_state != 'open':
+                if (
+                    self.request.GET.get('connect') == '1'
+                    and evolution_state != 'open'
+                    and self.request.user.has_action('notifications.manage')
+                ):
                     evolution_qrcode = evolution.connect_instance_qrcode()
             except evolution.EvolutionError as exc:
                 evolution_error = str(exc)
@@ -95,8 +99,15 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
         return ctx
 
 
-class WhatsAppDispatchView(NotificationsAccessMixin, View):
-    """Send the selected (or entire) reminder queue for one ``kind``."""
+class WhatsAppDispatchView(NotificationsAccessMixin, ActionRequiredMixin, View):
+    """Send the selected (or entire) reminder queue for one ``kind``.
+
+    Gated by ``notifications.send`` on top of the ``movements`` module: any
+    user who can see the Movimentação module can review the queues, but only
+    users with this action may actually trigger a mass WhatsApp dispatch.
+    """
+
+    action_key = 'notifications.send'
 
     def post(self, request, *args, **kwargs):
         kind = request.POST.get('kind')
@@ -161,8 +172,15 @@ class WhatsAppDispatchView(NotificationsAccessMixin, View):
         return redirect('notifications:whatsapp_panel')
 
 
-class WhatsAppConnectionView(NotificationsAccessMixin, View):
-    """Disconnect the Evolution instance so another WhatsApp number can pair."""
+class WhatsAppConnectionView(NotificationsAccessMixin, ActionRequiredMixin, View):
+    """Disconnect the Evolution instance so another WhatsApp number can pair.
+
+    Gated by ``notifications.manage`` — disconnecting drops the store's only
+    WhatsApp session, so it needs a permission distinct from plain
+    ``movements`` module access.
+    """
+
+    action_key = 'notifications.manage'
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get('action')

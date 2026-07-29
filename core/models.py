@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -44,6 +45,21 @@ class AuditLog(TimeStampedModel):
 
     def __str__(self):
         return f'{self.action} · {self.model_name}#{self.object_id} · {self.created_at:%Y-%m-%d %H:%M}'
+
+    def save(self, *args, **kwargs):
+        """Enforce immutability: allow creation only, block updates."""
+        if self.pk is not None:
+            raise ValidationError(
+                'AuditLog records are immutable and cannot be updated. '
+                'Create a new AuditLog record instead.'
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Enforce immutability: prevent deletion of audit records."""
+        raise ValidationError(
+            'AuditLog records are immutable and cannot be deleted.'
+        )
 
     @classmethod
     def record(cls, *, user, action, obj, reason='', metadata=None):

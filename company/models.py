@@ -55,6 +55,28 @@ class Company(TimeStampedModel):
     class Meta:
         verbose_name = 'empresa'
         verbose_name_plural = 'empresa'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(daily_interest_rate__gte=0),
+                name='company_daily_interest_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(late_fee_rate__gte=0),
+                name='company_late_fee_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(monthly_interest_rate__gte=0),
+                name='company_monthly_interest_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(damage_penalty_rate__gte=0),
+                name='company_damage_penalty_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(loss_penalty_rate__gte=0),
+                name='company_loss_penalty_rate_gte_0',
+            ),
+        ]
 
     def __str__(self):
         return self.name or 'Configuração da empresa'

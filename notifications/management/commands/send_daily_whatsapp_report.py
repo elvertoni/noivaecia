@@ -5,12 +5,22 @@ AuditLog for its reference date and destination. The ``--if-due`` flag lets
 the in-container scheduler call this command frequently; once the configured
 time has passed, any recipient still pending is sent without duplicating the
 ones that already succeeded.
+
+``scripts/report_scheduler.sh`` polls this command every 30s, so two
+invocations can genuinely overlap (e.g. during a deploy that briefly runs the
+old and new containers side by side). The "already sent today?" check and the
+decision to send are guarded by a ``select_for_update`` lock on the
+(singleton) ``Company`` row plus a short-lived "claimed" AuditLog written
+while still holding that lock — see ``_claimed_targets``/``_claim_targets`` —
+so a second concurrent run blocks on the same row, then sees the targets as
+claimed and skips them instead of sending the report twice.
 """
 
 import re
 from datetime import date as date_cls, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from django.utils import timezone
 
 from company.models import Company
@@ -20,7 +30,12 @@ from notifications.services import build_daily_report
 
 SENT_ACTION = 'whatsapp_daily_report'
 FAILED_ACTION = 'whatsapp_send_failed'
+CLAIMED_ACTION = 'whatsapp_report_claimed'
 FAILED_RETRY_DELAY = timedelta(minutes=5)
+# How long a "claimed" target blocks a concurrent run before being treated as
+# abandoned (e.g. the process that claimed it crashed before sending or
+# recording a result) and made eligible for retry again.
+CLAIM_GRACE_PERIOD = timedelta(minutes=3)
 
 
 def _digits(value):
@@ -117,17 +132,37 @@ class Command(BaseCommand):
 
         send_targets = targets
         if not options['force'] and not is_manual:
-            sent_targets = self._sent_targets(on_date)
-            send_targets = [target for target in targets if target not in sent_targets]
-            if not send_targets:
-                if not if_due:
-                    self.stdout.write(self.style.WARNING(
-                        f'Relatório de {on_date.isoformat()} já foi enviado '
-                        'para todos os destinos configurados.'
-                    ))
-                return
-
-        if if_due and not options['force']:
+            # Hold the Company row lock across the "already sent?" check and
+            # the claim below so a concurrent scheduler run (see module
+            # docstring) blocks here instead of racing past the same check.
+            with transaction.atomic():
+                locked_company = Company.objects.select_for_update().get(pk=company.pk)
+                sent_targets = self._sent_targets(on_date)
+                send_targets = [target for target in targets if target not in sent_targets]
+                if if_due:
+                    recently_failed = self._recently_failed_targets(on_date)
+                    send_targets = [
+                        target for target in send_targets
+                        if target not in recently_failed
+                    ]
+                if send_targets:
+                    claimed = self._claimed_targets(on_date)
+                    send_targets = [
+                        target for target in send_targets if target not in claimed
+                    ]
+                if not send_targets:
+                    if not if_due:
+                        self.stdout.write(self.style.WARNING(
+                            f'Relatório de {on_date.isoformat()} já foi enviado '
+                            'para todos os destinos configurados.'
+                        ))
+                    return
+                if not dry_run:
+                    # Reserve these targets while still holding the lock, so
+                    # a concurrent run waiting on it sees them claimed and
+                    # skips them. A dry-run must never consume a real claim.
+                    self._claim_targets(locked_company, on_date, send_targets)
+        elif if_due and not options['force']:
             recently_failed = self._recently_failed_targets(on_date)
             send_targets = [
                 target for target in send_targets
@@ -234,3 +269,42 @@ class Command(BaseCommand):
                     str(target) for target in targets if target
                 )
         return failed_targets
+
+    def _claimed_targets(self, on_date):
+        """Targets a concurrent (or very recent) run has already reserved.
+
+        Only claims younger than ``CLAIM_GRACE_PERIOD`` count — an older one
+        means whatever process wrote it never followed up with a sent/failed
+        result (most likely it crashed), so the target is treated as free
+        again rather than blocked forever.
+        """
+        claimed_after = timezone.now() - CLAIM_GRACE_PERIOD
+        logs = AuditLog.objects.filter(
+            action=CLAIMED_ACTION,
+            metadata__reference_date=on_date.isoformat(),
+            created_at__gte=claimed_after,
+        ).only('metadata')
+        claimed_targets = set()
+        for log in logs:
+            targets = (log.metadata or {}).get('targets', [])
+            if isinstance(targets, list):
+                claimed_targets.update(
+                    str(target) for target in targets if target
+                )
+        return claimed_targets
+
+    def _claim_targets(self, company, on_date, targets):
+        """Reserve ``targets`` for ``on_date`` before the actual send.
+
+        Written while still holding the ``Company`` row lock so a concurrent
+        run blocked on it will see this claim as soon as it gets the lock.
+        """
+        AuditLog.record(
+            user=None,
+            action=CLAIMED_ACTION,
+            obj=company,
+            metadata={
+                'reference_date': on_date.isoformat(),
+                'targets': list(targets),
+            },
+        )

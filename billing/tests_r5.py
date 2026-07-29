@@ -80,6 +80,23 @@ class RegisterPaymentServiceTests(TestCase):
         self.assertEqual(self.rec.paid_amount, Decimal('0'))
         self.assertEqual(self.rec.balance, Decimal('300'))
 
+    def test_requires_an_active_cash_account_before_creating_payment(self):
+        self.account.active = False
+        self.account.save()
+
+        with self.assertRaisesMessage(
+            ValueError,
+            'Não é possível registrar recebimento sem uma conta caixa ativa. '
+            'Configure uma conta em Financeiro > Contas.',
+        ):
+            register_payment(self.rec, Decimal('150'), date(2026, 6, 20))
+
+        self.assertFalse(Payment.objects.exists())
+        self.assertFalse(FinancialMovement.objects.exists())
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.paid_amount, Decimal('0'))
+        self.assertEqual(self.rec.balance, Decimal('300'))
+
     def test_links_payment_to_customer_and_rental(self):
         register_payment(self.rec, Decimal('50'), date(2026, 6, 20))
         p = Payment.objects.first()
@@ -356,6 +373,32 @@ class ReceivablePayViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(FinancialMovement.objects.count(), 1)
+
+    def test_post_without_active_cash_account_shows_error_and_saves_nothing(self):
+        self.account.active = False
+        self.account.save()
+
+        response = self.client.post(
+            reverse('billing:pay_receivable', args=[self.rec.pk]),
+            {
+                'amount': '150.00',
+                'payment_date': '2026-06-20',
+                'method': 'cash',
+                'interest_amount': '0',
+                'discount_amount': '0',
+                'notes': '',
+                'confirm_overpayment': '',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Não é possível registrar recebimento sem uma conta caixa ativa. '
+            'Configure uma conta em Financeiro &gt; Contas.',
+        )
+        self.assertFalse(Payment.objects.exists())
+        self.assertFalse(FinancialMovement.objects.exists())
 
     def test_overpayment_requires_confirmation(self):
         response = self.client.post(

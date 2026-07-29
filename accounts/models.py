@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.db.models.functions import Lower
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -55,6 +56,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     class Meta:
         verbose_name = 'usuário'
         verbose_name_plural = 'usuários'
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='accounts_user_email_ci_uniq',
+                violation_error_message='Já existe um usuário com este e-mail.',
+            ),
+        ]
 
     def __str__(self):
         return self.email

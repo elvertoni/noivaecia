@@ -221,16 +221,20 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
             )
             return self.form_invalid(form)
 
-        register_payment(
-            receivable=self.receivable,
-            amount=amount,
-            payment_date=form.cleaned_data['payment_date'],
-            method=form.cleaned_data['method'],
-            interest_amount=form.cleaned_data.get('interest_amount'),
-            discount_amount=form.cleaned_data.get('discount_amount'),
-            notes=form.cleaned_data.get('notes', ''),
-            user=self.request.user,
-        )
+        try:
+            register_payment(
+                receivable=self.receivable,
+                amount=amount,
+                payment_date=form.cleaned_data['payment_date'],
+                method=form.cleaned_data['method'],
+                interest_amount=form.cleaned_data.get('interest_amount'),
+                discount_amount=form.cleaned_data.get('discount_amount'),
+                notes=form.cleaned_data.get('notes', ''),
+                user=self.request.user,
+            )
+        except ValueError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
         messages.success(self.request, 'Recebimento registrado com sucesso.')
 
         next_url = self.request.POST.get('next') or self.request.GET.get('next')
@@ -288,48 +292,52 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
             messages.error(self.request, 'Selecione pelo menos um título.')
             return self.form_invalid(form)
 
-        with transaction.atomic():
-            # Lock and recalculate the selected balances inside the transaction.
-            # A second cashier may have paid one of these titles after the page
-            # was opened, so a pre-lock total must never drive the allocation.
-            selected = list(
-                Receivable.objects.select_for_update()
-                .filter(
-                    pk__in=receivable_ids,
-                    rental__customer=self.customer,
-                    balance__gt=0,
+        try:
+            with transaction.atomic():
+                # Lock and recalculate the selected balances inside the transaction.
+                # A second cashier may have paid one of these titles after the page
+                # was opened, so a pre-lock total must never drive the allocation.
+                selected = list(
+                    Receivable.objects.select_for_update()
+                    .filter(
+                        pk__in=receivable_ids,
+                        rental__customer=self.customer,
+                        balance__gt=0,
+                    )
+                    .select_related('rental')
+                    .order_by('due_date')
                 )
-                .select_related('rental')
-                .order_by('due_date')
-            )
-            selected_total = sum((rec.balance for rec in selected), Decimal('0'))
-            if not selected_total:
-                form.add_error('total_amount', 'Nenhum título em aberto foi selecionado.')
-                return self.form_invalid(form)
+                selected_total = sum((rec.balance for rec in selected), Decimal('0'))
+                if not selected_total:
+                    form.add_error('total_amount', 'Nenhum título em aberto foi selecionado.')
+                    return self.form_invalid(form)
 
-            if form.cleaned_data['total_amount'] > selected_total:
-                form.add_error(
-                    'total_amount',
-                    f'O valor informado é maior que o saldo dos títulos selecionados (R$ {selected_total:.2f}).',
-                )
-                return self.form_invalid(form)
+                if form.cleaned_data['total_amount'] > selected_total:
+                    form.add_error(
+                        'total_amount',
+                        f'O valor informado é maior que o saldo dos títulos selecionados (R$ {selected_total:.2f}).',
+                    )
+                    return self.form_invalid(form)
 
-            remaining = form.cleaned_data['total_amount']
-            paid_count = 0
-            for rec in selected:
-                if remaining <= 0:
-                    break
-                pay_amount = min(remaining, rec.balance)
-                register_payment(
-                    receivable=rec,
-                    amount=pay_amount,
-                    payment_date=form.cleaned_data['payment_date'],
-                    method=form.cleaned_data['method'],
-                    notes=form.cleaned_data.get('notes', ''),
-                    user=self.request.user,
-                )
-                remaining -= pay_amount
-                paid_count += 1
+                remaining = form.cleaned_data['total_amount']
+                paid_count = 0
+                for rec in selected:
+                    if remaining <= 0:
+                        break
+                    pay_amount = min(remaining, rec.balance)
+                    register_payment(
+                        receivable=rec,
+                        amount=pay_amount,
+                        payment_date=form.cleaned_data['payment_date'],
+                        method=form.cleaned_data['method'],
+                        notes=form.cleaned_data.get('notes', ''),
+                        user=self.request.user,
+                    )
+                    remaining -= pay_amount
+                    paid_count += 1
+        except ValueError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
 
         messages.success(self.request, f'{paid_count} título(s) recebido(s) com sucesso.')
         return redirect('billing:customer_receivables', pk=self.customer.pk)
@@ -751,12 +759,16 @@ class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
                 'O valor informado é maior que o saldo total deste título.',
             )
             return self.form_invalid(form)
-        register_payment(
-            receivable=self.receivable,
-            amount=form.cleaned_data['value'],
-            payment_date=form.cleaned_data['payment_date'],
-            method=Payment.Method.CASH,
-            user=self.request.user,
-        )
+        try:
+            register_payment(
+                receivable=self.receivable,
+                amount=form.cleaned_data['value'],
+                payment_date=form.cleaned_data['payment_date'],
+                method=Payment.Method.CASH,
+                user=self.request.user,
+            )
+        except ValueError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
         messages.success(self.request, 'Recebimento registrado com sucesso.')
         return redirect('billing:list', rental_pk=self.receivable.rental_id)

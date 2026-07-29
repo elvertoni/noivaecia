@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import ModulePermission
+from accounts.models import ActionPermission, ModulePermission
 from company.models import Company
 from customers.models import Customer
 from notifications import views as panel_views
@@ -28,12 +28,14 @@ TOMORROW = TODAY + timedelta(days=1)
 _user_seq = 0
 
 
-def _make_user(module_key='movements'):
+def _make_user(module_key='movements', actions=()):
     global _user_seq
     _user_seq += 1
     user = User.objects.create_user(email=f'panel{_user_seq}@test.com', password='pass')
     if module_key:
         ModulePermission.objects.create(user=user, module_key=module_key, allowed=True)
+    for action_key in actions:
+        ActionPermission.objects.create(user=user, action_key=action_key, allowed=True)
     return user
 
 
@@ -90,7 +92,7 @@ class PanelAccessTests(TestCase):
 class PanelQueueRenderingTests(TestCase):
     def setUp(self):
         _make_company()
-        self.user = _make_user()
+        self.user = _make_user(actions=('notifications.manage',))
         self.client.force_login(self.user)
         self.url = reverse('notifications:whatsapp_panel')
 
@@ -180,11 +182,66 @@ class PanelQueueRenderingTests(TestCase):
         self.assertContains(r, reverse('notifications:connection'))
 
 
+class PanelActionGatingTests(TestCase):
+    """Buttons for fine-grained actions must not render without them (R3.11)."""
+
+    def setUp(self):
+        _make_company()
+        self.url = reverse('notifications:whatsapp_panel')
+
+    @override_settings(
+        EVOLUTION_API_URL='http://work_evolution-api:8080',
+        EVOLUTION_API_KEY='secret',
+        EVOLUTION_INSTANCE='noivascia',
+    )
+    @mock.patch('notifications.views.evolution.connect_instance_qrcode')
+    @mock.patch('notifications.views.evolution.get_connection_state', return_value='close')
+    def test_qrcode_button_and_generation_hidden_without_manage_action(self, state, qrcode):
+        user = _make_user()  # movements module only, no notifications.manage
+        self.client.force_login(user)
+        r = self.client.get(f'{self.url}?connect=1')
+        self.assertNotContains(r, 'Gerar QR Code')
+        qrcode.assert_not_called()
+
+    @override_settings(
+        EVOLUTION_API_URL='http://work_evolution-api:8080',
+        EVOLUTION_API_KEY='secret',
+        EVOLUTION_INSTANCE='noivascia',
+    )
+    @mock.patch('notifications.views.evolution.get_connection_state', return_value='open')
+    def test_disconnect_button_hidden_without_manage_action(self, state):
+        user = _make_user()  # movements module only, no notifications.manage
+        self.client.force_login(user)
+        r = self.client.get(self.url)
+        self.assertContains(r, 'Conectado')
+        self.assertNotContains(r, 'Desconectar')
+
+    @mock.patch('notifications.views.timezone')
+    def test_dispatch_buttons_hidden_without_send_action(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        _make_pickup_rental()
+        user = _make_user()  # movements module only, no notifications.send
+        self.client.force_login(user)
+        r = self.client.get(self.url)
+        self.assertNotContains(r, 'Enviar selecionados')
+        self.assertNotContains(r, 'Enviar todos')
+
+    @mock.patch('notifications.views.timezone')
+    def test_dispatch_buttons_shown_with_send_action(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        _make_pickup_rental()
+        user = _make_user(actions=('notifications.send',))
+        self.client.force_login(user)
+        r = self.client.get(self.url)
+        self.assertContains(r, 'Enviar selecionados')
+        self.assertContains(r, 'Enviar todos')
+
+
 @override_settings()
 class DispatchViewTests(TestCase):
     def setUp(self):
         _make_company()
-        self.user = _make_user()
+        self.user = _make_user(actions=('notifications.send',))
         self.client.force_login(self.user)
         self.url = reverse('notifications:dispatch')
         self.panel_url = reverse('notifications:whatsapp_panel')
@@ -292,11 +349,24 @@ class DispatchViewTests(TestCase):
         })
         self.assertEqual(r.status_code, 403)
 
+    def test_gating_blocks_dispatch_for_user_without_send_action(self):
+        # Has the movements module (so they can review the panel) but not
+        # the fine-grained notifications.send action (R3.11 audit finding).
+        outsider = _make_user()
+        self.client.force_login(outsider)
+        rental = _make_pickup_rental()
+        r = self.client.post(self.url, {
+            'kind': CustomerMessage.Kind.PICKUP_REMINDER,
+            'rental_ids': [rental.pk],
+        })
+        self.assertEqual(r.status_code, 403)
+        self.assertFalse(CustomerMessage.objects.filter(rental=rental).exists())
+
 
 class ConnectionViewTests(TestCase):
     def setUp(self):
         _make_company()
-        self.user = _make_user()
+        self.user = _make_user(actions=('notifications.manage',))
         self.client.force_login(self.user)
         self.url = reverse('notifications:connection')
         self.panel_url = reverse('notifications:whatsapp_panel')
@@ -317,6 +387,14 @@ class ConnectionViewTests(TestCase):
 
     def test_gating_blocks_connection_for_user_without_module(self):
         outsider = _make_user(module_key='catalog')
+        self.client.force_login(outsider)
+        r = self.client.post(self.url, {'action': 'logout'})
+        self.assertEqual(r.status_code, 403)
+
+    def test_gating_blocks_connection_for_user_without_manage_action(self):
+        # Has the movements module but not the fine-grained
+        # notifications.manage action (R3.11 audit finding).
+        outsider = _make_user()
         self.client.force_login(outsider)
         r = self.client.post(self.url, {'action': 'logout'})
         self.assertEqual(r.status_code, 403)

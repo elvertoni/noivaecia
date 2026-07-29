@@ -316,3 +316,57 @@ class SendDailyReportCommandTests(TestCase):
         self.run_cmd('--if-due', '--date', '2026-07-20')
 
         send_text.assert_called_once()
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
+    def test_configured_send_claims_targets_before_sending(self, send_text):
+        # Guards against a second concurrent scheduler run (R3.11 audit
+        # finding): the claim must exist even for a normal, successful send.
+        self.run_cmd('--date', '2026-07-20')
+        send_text.assert_called_once()
+        claim = AuditLog.objects.get(action='whatsapp_report_claimed')
+        self.assertEqual(claim.metadata['reference_date'], '2026-07-20')
+        self.assertEqual(claim.metadata['targets'], ['5543999998888'])
+
+    @mock.patch(f'{CMD}.evolution.send_text')
+    def test_target_claimed_by_concurrent_run_is_skipped(self, send_text):
+        # Simulates a second scheduler invocation racing a first one that has
+        # already claimed (but not yet finished sending/recording) the target.
+        AuditLog.objects.create(
+            user=None, action='whatsapp_report_claimed',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+            },
+        )
+        out = self.run_cmd('--date', '2026-07-20')
+        send_text.assert_not_called()
+        self.assertIn('todos os destinos configurados', out)
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
+    def test_stale_claim_past_grace_period_is_retried(self, send_text):
+        # A claim old enough to have plausibly come from a crashed run must
+        # not block the report forever.
+        claim = AuditLog.objects.create(
+            user=None, action='whatsapp_report_claimed',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543999998888'],
+            },
+        )
+        AuditLog.objects.filter(pk=claim.pk).update(
+            created_at=timezone.now() - timedelta(minutes=10)
+        )
+
+        self.run_cmd('--date', '2026-07-20')
+
+        send_text.assert_called_once()
+
+    @mock.patch(f'{CMD}.evolution.send_text')
+    def test_dry_run_does_not_claim_targets(self, send_text):
+        self.run_cmd('--dry-run', '--date', '2026-07-20')
+        send_text.assert_not_called()
+        self.assertFalse(
+            AuditLog.objects.filter(action='whatsapp_report_claimed').exists()
+        )

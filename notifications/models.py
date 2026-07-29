@@ -18,6 +18,7 @@ class CustomerMessage(TimeStampedModel):
         RETURN_REMINDER = 'return_reminder', 'Cobrança de devolução'
 
     class Status(models.TextChoices):
+        PENDING = 'pending', 'Enviando'
         SENT = 'sent', 'Enviado'
         FAILED = 'failed', 'Falhou'
 

@@ -13,6 +13,8 @@ ACTIONS = [
     ('billing.reverse', 'Estornar pagamentos'),
     ('billing.cash', 'Lançar movimentos manuais de caixa'),
     ('reports.export', 'Exportar relatórios (CSV)'),
+    ('notifications.send', 'Enviar avisos por WhatsApp'),
+    ('notifications.manage', 'Conectar/desconectar o WhatsApp'),
 ]
 
 ACTION_KEYS = [key for key, _ in ACTIONS]

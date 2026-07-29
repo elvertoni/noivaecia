@@ -1,8 +1,8 @@
 """Single source of truth for late interest and installment generation.
 
 Centralizing interest here addresses the incorrect-interest risk in PRD section 12.
-Interest is simple per-day on the open balance using the company's configured
-daily rate (RF-20): interest = balance * (daily_rate / 100) * days_late.
+Interest uses the company's monthly rate divided by 30 and applied for each overdue
+day, with the legacy daily rate as a fallback when the monthly rate is zero.
 """
 
 from datetime import date as date_cls
@@ -28,13 +28,18 @@ def days_overdue(receivable, on_date=None):
 
 
 def compute_interest(receivable, on_date=None, company=None):
-    """Late interest on the open balance using the company daily rate (RF-20)."""
+    """Late interest using the monthly rate per 30 days, with daily fallback."""
     days = days_overdue(receivable, on_date)
     if days == 0:
         return Decimal('0.00')
     company = company or Company.load()
-    rate = company.daily_interest_rate or Decimal('0')
-    interest = receivable.balance * (rate / Decimal('100')) * days
+    monthly_rate = company.monthly_interest_rate or Decimal('0')
+    daily_rate = (
+        monthly_rate / Decimal('30')
+        if monthly_rate
+        else company.daily_interest_rate or Decimal('0')
+    )
+    interest = receivable.balance * (daily_rate / Decimal('100')) * days
     return interest.quantize(Decimal('0.01'))
 
 
@@ -343,6 +348,17 @@ def register_payment(receivable, amount, payment_date, method='cash',
         )
         if locked_receivable.written_off_at is not None:
             raise ValueError('Não é possível receber um título baixado.')
+        account = (
+            CashAccount.objects.select_for_update()
+            .filter(active=True)
+            .order_by('id')
+            .first()
+        )
+        if account is None:
+            raise ValueError(
+                'Não é possível registrar recebimento sem uma conta caixa ativa. '
+                'Configure uma conta em Financeiro > Contas.'
+            )
         payment = Payment.objects.create(
             receivable=locked_receivable,
             customer=locked_receivable.rental.customer,
@@ -357,21 +373,19 @@ def register_payment(receivable, amount, payment_date, method='cash',
         )
         locked_receivable.recalculate_from_payments()
 
-        account = CashAccount.objects.select_for_update().filter(active=True).order_by('id').first()
-        if account:
-            FinancialMovement.objects.create(
-                date=payment_date,
-                account=account,
-                direction=FinancialMovement.Direction.INFLOW,
-                amount=amount,
-                description=f'Recebimento — Locação #{locked_receivable.rental.number}',
-                source=FinancialMovement.Source.PAYMENT,
-                customer=locked_receivable.rental.customer,
-                receivable=locked_receivable,
-                payment=payment,
-                rental=locked_receivable.rental,
-                created_by=user,
-            )
+        FinancialMovement.objects.create(
+            date=payment_date,
+            account=account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=amount,
+            description=f'Recebimento — Locação #{locked_receivable.rental.number}',
+            source=FinancialMovement.Source.PAYMENT,
+            customer=locked_receivable.rental.customer,
+            receivable=locked_receivable,
+            payment=payment,
+            rental=locked_receivable.rental,
+            created_by=user,
+        )
     return payment
 
 
@@ -498,21 +512,8 @@ def compute_moratoria(receivable, on_date=None, company=None):
 
 
 def compute_monthly_interest(receivable, on_date=None, company=None):
-    """Monthly interest (juros ao mês) using Company.monthly_interest_rate, applied daily (R6.09).
-
-    Uses monthly_rate/30 per day. Falls back to daily_interest_rate if monthly is zero.
-    """
-    days = days_overdue(receivable, on_date)
-    if days == 0:
-        return Decimal('0.00')
-    company = company or Company.load()
-    monthly_rate = company.monthly_interest_rate or Decimal('0')
-    if monthly_rate:
-        daily = monthly_rate / Decimal('30')
-    else:
-        daily = company.daily_interest_rate or Decimal('0')
-    interest = receivable.balance * (daily / Decimal('100')) * days
-    return interest.quantize(Decimal('0.01'))
+    """Compatibility alias for the canonical monthly interest calculation."""
+    return compute_interest(receivable, on_date=on_date, company=company)
 
 
 def compute_damage_penalty(item_value, company=None):

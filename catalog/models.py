@@ -57,6 +57,12 @@ class Product(TimeStampedModel):
         indexes = [
             models.Index(fields=('category', 'code'), name='catalog_product_lookup_idx'),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(value__gte=0),
+                name='catalog_product_value_gte_0',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.category.prefix}{self.code} · {self.description}'

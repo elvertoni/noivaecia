@@ -3,8 +3,9 @@ Normalize customer city names: fix abbreviations, typos, encoding artifacts,
 and compound garbage values (phone numbers, RG numbers, names mixed into city field).
 
 Usage:
-    python manage.py normalize_cities             # apply all normalizations
-    python manage.py normalize_cities --dry-run   # preview without saving
+    python manage.py normalize_cities             # preview changes without saving (safe)
+    python manage.py normalize_cities --apply     # apply all normalizations
+    python manage.py normalize_cities --dry-run   # equivalent to no flags (preview mode)
 """
 
 import re
@@ -508,21 +509,36 @@ def normalize(raw: str) -> str | None:
 class Command(BaseCommand):
     help = (
         'Normalize customer city names: fix abbreviations, typos, encoding '
-        'artifacts, and compound garbage from the legacy Access import.'
+        'artifacts, and compound garbage from the legacy Access import. '
+        'By default (no flags), previews changes without saving. Use --apply to save.'
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
+            '--apply',
+            action='store_true',
+            help='Apply changes to the database. Without this flag, only preview is shown.',
+        )
+        parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Preview changes without saving to the database.',
+            help='Deprecated: equivalent to running with no flags (preview mode).',
         )
 
     def handle(self, *args, **options):
-        dry_run = options['dry_run']
+        # Invert the logic: default is preview mode (safe), --apply enables writes
+        should_apply = options['apply']
+        is_dry_run = options['dry_run']
 
-        if dry_run:
-            self.stdout.write(self.style.WARNING('DRY RUN — no changes will be saved.\n'))
+        # --dry-run is now redundant (preview mode is default), but supported for backwards compatibility
+        if is_dry_run and should_apply:
+            self.stdout.write(
+                self.style.WARNING('--dry-run and --apply conflict; --dry-run takes precedence (preview mode).\n')
+            )
+            should_apply = False
+
+        if not should_apply:
+            self.stdout.write(self.style.WARNING('PREVIEW MODE — no changes will be saved.\n'))
 
         # Collect all distinct city values
         distinct_cities = (
@@ -568,8 +584,8 @@ class Command(BaseCommand):
             f'-> {len(by_canonical)} cidades canonicas.\n'
         )
 
-        if dry_run:
-            self.stdout.write(self.style.WARNING('\nDRY RUN -- execute sem --dry-run para aplicar.'))
+        if not should_apply:
+            self.stdout.write(self.style.WARNING('\nPREVIEW -- run with --apply flag to save changes.'))
             return
 
         # Apply changes

@@ -126,8 +126,11 @@ class ARetirarReportView(_BaseReportView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        rentals = self._get_data()
         ctx.update({
-            'rentals': self._get_data(),
+            'rentals': rentals,
+            'truncated': getattr(rentals, 'truncated', False),
+            'total_count': getattr(rentals, 'total_count', len(rentals)),
             'date_from': self._date_input('date_from'),
             'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
@@ -174,8 +177,11 @@ class RetiradosReportView(_BaseReportView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        rentals = self._get_data()
         ctx.update({
-            'rentals': self._get_data(),
+            'rentals': rentals,
+            'truncated': getattr(rentals, 'truncated', False),
+            'total_count': getattr(rentals, 'total_count', len(rentals)),
             'date_from': self._date_input('date_from'),
             'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
@@ -227,8 +233,11 @@ class DevolvidosReportView(_BaseReportView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        rentals = self._get_data()
         ctx.update({
-            'rentals': self._get_data(),
+            'rentals': rentals,
+            'truncated': getattr(rentals, 'truncated', False),
+            'total_count': getattr(rentals, 'total_count', len(rentals)),
             'date_from': self._date_input('date_from'),
             'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
@@ -273,8 +282,11 @@ class AtrasadosReportView(_BaseReportView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        overdue = self._get_data()
         ctx.update({
-            'overdue': self._get_data(),
+            'overdue': overdue,
+            'truncated': getattr(overdue, 'truncated', False),
+            'total_count': getattr(overdue, 'total_count', len(overdue)),
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
@@ -320,8 +332,11 @@ class LocacoesReportView(_BaseReportView):
     def get_context_data(self, **kwargs):
         from rentals.models import Rental as RentalModel
         ctx = super().get_context_data(**kwargs)
+        rentals = self._get_data()
         ctx.update({
-            'rentals': self._get_data(),
+            'rentals': rentals,
+            'truncated': getattr(rentals, 'truncated', False),
+            'total_count': getattr(rentals, 'total_count', len(rentals)),
             'date_from': self._date_input('date_from'),
             'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
@@ -372,6 +387,8 @@ class ContasVencimentoReportView(_BaseReportView):
         receivables, totals = self._get_data()
         ctx.update({
             'receivables': receivables,
+            'truncated': getattr(receivables, 'truncated', False),
+            'total_count': getattr(receivables, 'total_count', len(receivables)),
             'totals': totals,
             'date_from': self._date_input('date_from'),
             'date_to': self._date_input('date_to'),
@@ -418,8 +435,11 @@ class ContasClienteReportView(_BaseReportView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        groups = self._get_data()
         ctx.update({
-            'groups': self._get_data(),
+            'groups': groups,
+            'truncated': getattr(groups, 'truncated', False),
+            'total_count': getattr(groups, 'total_count', len(groups)),
             'customer': self._p('customer'),
             'status': self._p('status'),
             'report_limit': self.report_limit,

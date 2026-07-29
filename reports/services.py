@@ -14,6 +14,16 @@ from rentals.models import Rental, RentalItem
 DEFAULT_REPORT_LIMIT = 500
 
 
+class TruncatedResults(list):
+    """List subclass that carries truncation metadata (R11.01)."""
+    def __init__(self, data, truncated=False, total_count=None):
+        if total_count is None:
+            total_count = len(data)
+        super().__init__(data)
+        self.truncated = truncated
+        self.total_count = total_count
+
+
 def _rental_base(status_filter=None):
     items = RentalItem.objects.select_related('product__category').defer('proof_photo')
     qs = (
@@ -29,6 +39,21 @@ def _apply_limit(qs, max_results):
     if max_results is None:
         return qs
     return qs[:max_results]
+
+
+def _apply_limit_with_truncation(qs, max_results):
+    """Apply limit and detect truncation (R11.01).
+
+    Returns QuerySet if no limit (for backward compatibility with tests).
+    Returns TruncatedResults (list subclass) if limit is set.
+    """
+    if max_results is None:
+        # No limit: return QuerySet as-is (backward compatible)
+        return qs
+    total = qs.count()
+    truncated = total > max_results
+    items = list(qs[:max_results])
+    return TruncatedResults(items, truncated=truncated, total_count=total)
 
 
 def _apply_rental_filters(
@@ -48,7 +73,7 @@ def _apply_rental_filters(
     date_from = parse_br_date(date_from)
     date_to = parse_br_date(date_to)
     if (date_from_raw and not date_from) or (date_to_raw and not date_to):
-        return qs.none()
+        return TruncatedResults([], truncated=False, total_count=0)
     if date_from:
         qs = qs.filter(**{f'{date_field}__gte': date_from})
     if date_to:
@@ -70,7 +95,7 @@ def _apply_rental_filters(
             qs = qs.none()
     if needs_distinct:
         qs = qs.distinct()
-    return _apply_limit(qs.order_by('-number'), max_results)
+    return _apply_limit_with_truncation(qs.order_by('-number'), max_results)
 
 
 def report_a_retirar(date_from='', date_to='', customer='', prefix='', code='', max_results=DEFAULT_REPORT_LIMIT):
@@ -103,11 +128,11 @@ def report_atrasados(customer='', prefix='', code='', max_results=DEFAULT_REPORT
     """Picked-up rentals past return date (R11.05)."""
     today = timezone.localdate()
     qs = _rental_base(Rental.Status.PICKED_UP).filter(return_date__lt=today)
-    qs = _apply_rental_filters(qs, customer=customer, prefix=prefix, code=code, max_results=max_results)
+    results = _apply_rental_filters(qs, customer=customer, prefix=prefix, code=code, max_results=max_results)
     rows = []
-    for r in qs:
+    for r in results:
         rows.append({'rental': r, 'days_late': (today - r.return_date).days})
-    return rows
+    return TruncatedResults(rows, truncated=results.truncated, total_count=results.total_count)
 
 
 def report_locacoes(date_from='', date_to='', customer='', status='', max_results=DEFAULT_REPORT_LIMIT):
@@ -143,7 +168,8 @@ def report_contas_vencimento(
     date_from = parse_br_date(date_from)
     date_to = parse_br_date(date_to)
     if (date_from_raw and not date_from) or (date_to_raw and not date_to):
-        return qs.none(), {
+        empty_list = TruncatedResults([], truncated=False, total_count=0)
+        return empty_list, {
             't_amount': Decimal('0'),
             't_paid': Decimal('0'),
             't_balance': Decimal('0'),
@@ -157,7 +183,8 @@ def report_contas_vencimento(
     if overdue_only:
         qs = qs.filter(due_date__lt=today)
     totals = qs.aggregate(t_amount=Sum('amount'), t_paid=Sum('paid_amount'), t_balance=Sum('balance'))
-    return _apply_limit(qs, max_results), totals
+    receivables = _apply_limit_with_truncation(qs, max_results)
+    return receivables, totals
 
 
 def report_contas_cliente(customer='', status='', max_results=DEFAULT_REPORT_LIMIT):
@@ -172,10 +199,10 @@ def report_contas_cliente(customer='', status='', max_results=DEFAULT_REPORT_LIM
         qs = qs.filter(balance__gt=0)
     elif status == 'paid':
         qs = qs.filter(balance__lte=0)
-    qs = _apply_limit(qs, max_results)
+    receivables = _apply_limit_with_truncation(qs, max_results)
     # Group in Python (avoids DB-level grouping complexity with DTL)
     groups = {}
-    for rec in qs:
+    for rec in receivables:
         cust = rec.rental.customer
         if cust.pk not in groups:
             groups[cust.pk] = {
@@ -190,4 +217,5 @@ def report_contas_cliente(customer='', status='', max_results=DEFAULT_REPORT_LIM
         g['total_amount'] += rec.amount
         g['total_paid'] += rec.paid_amount
         g['total_balance'] += rec.balance
-    return list(groups.values())
+    result = list(groups.values())
+    return TruncatedResults(result, truncated=receivables.truncated, total_count=receivables.total_count)

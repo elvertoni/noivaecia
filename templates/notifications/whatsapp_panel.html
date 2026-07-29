@@ -30,14 +30,14 @@
             <span class="badge badge-warning">{{ evolution_connection_state }}</span>
           {% endif %}
         {% endif %}
-        {% if evolution_configured and evolution_connection_state == 'open' %}
+        {% if evolution_configured and evolution_connection_state == 'open' and request.user|has_action:'notifications.manage' %}
           <form method="post" action="{% url 'notifications:connection' %}" onsubmit="return confirm('Desconectar este WhatsApp para conectar outro número?');">
             {% csrf_token %}
             <input type="hidden" name="action" value="logout">
             <button type="submit" class="btn btn-danger">Desconectar</button>
           </form>
         {% endif %}
-        {% if evolution_configured and evolution_connection_state != 'open' %}
+        {% if evolution_configured and evolution_connection_state != 'open' and request.user|has_action:'notifications.manage' %}
           <form method="get">
             <input type="hidden" name="connect" value="1">
             <button type="submit" class="btn btn-secondary">Gerar QR Code</button>
@@ -136,8 +136,10 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-          <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+          {% if request.user|has_action:'notifications.send' %}
+            <button type="submit" class="btn btn-primary">Enviar selecionados</button>
+            <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+          {% endif %}
         </div>
       </form>
     {% else %}
@@ -206,8 +208,10 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-          <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+          {% if request.user|has_action:'notifications.send' %}
+            <button type="submit" class="btn btn-primary">Enviar selecionados</button>
+            <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+          {% endif %}
         </div>
       </form>
     {% else %}
@@ -246,8 +250,10 @@
               <td>
                 {% if msg.status == 'sent' %}
                   <span class="badge badge-success">Enviado</span>
-                {% else %}
+                {% elif msg.status == 'failed' %}
                   <span class="badge badge-danger">Falhou</span>
+                {% else %}
+                  <span class="badge badge-warning">{{ msg.get_status_display }}</span>
                 {% endif %}
               </td>
               <td>{{ msg.created_at|date:'d/m/Y H:i' }}</td>
@@ -273,8 +279,10 @@
             </div>
             {% if msg.status == 'sent' %}
               <span class="badge badge-success">Enviado</span>
-            {% else %}
+            {% elif msg.status == 'failed' %}
               <span class="badge badge-danger">Falhou</span>
+            {% else %}
+              <span class="badge badge-warning">{{ msg.get_status_display }}</span>
             {% endif %}
           </div>
           <p class="mt-2 text-sm text-slate-600">{{ msg.get_kind_display }} · {{ msg.created_at|date:'d/m/Y H:i' }}</p>
