@@ -113,25 +113,26 @@
         <!-- High-Density Items Table Shell -->
         <div class="mt-4 table-shell overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table class="data-table w-full text-left border-collapse">
-            <thead>
+            <thead class="hidden sm:table-header-group">
               <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                <th class="w-12 px-3 py-2.5 text-center">#</th>
-                <th class="min-w-[240px] px-3 py-2.5">Produto / Código</th>
-                <th class="min-w-[200px] px-3 py-2.5">Descrição / Ajustes</th>
-                <th class="w-32 px-3 py-2.5 text-right">Valor (R$)</th>
-                <th class="w-16 px-3 py-2.5 text-center">Ações</th>
+                <th class="w-10 px-3 py-2.5 text-center">#</th>
+                <th class="px-3 py-2.5">Produto / Código</th>
+                <th class="px-3 py-2.5">Descrição / Ajustes</th>
+                <th class="w-28 px-3 py-2.5 text-right">Valor (R$)</th>
+                <th class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
             </thead>
             <tbody id="item-forms" class="divide-y divide-slate-100 text-sm">
               {% for item_form in items %}
                 {# Skip blank, unsaved rows on re-render so leftover empty items never pile up. #}
                 {% if not items.is_bound or item_form.instance.pk or item_form.has_changed %}
-                <tr class="item-form transition-colors hover:bg-slate-50/80">
-                  <td class="px-3 py-2 text-center font-medium text-slate-500 align-middle">
+                <tr class="item-form flex flex-col gap-2 p-3 sm:table-row sm:p-0 transition-colors hover:bg-slate-50/80">
+                  <td class="hidden sm:table-cell px-3 py-2 text-center font-medium text-slate-500 align-middle" data-label="#">
                     {{ item_form.id }}
                     <span class="item-index text-xs font-semibold text-slate-600">#{{ forloop.counter }}</span>
                   </td>
-                  <td class="px-3 py-2 align-top">
+                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Produto">
+                    {{ item_form.id }}
                     <div class="field-group product-search-field mb-0">
                       {{ item_form.product }}
                       <div class="relative">
@@ -143,6 +144,7 @@
                                aria-autocomplete="list"
                                aria-expanded="false"
                                aria-required="true"
+                               aria-label="Produto"
                                {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.id_for_label }}-error"{% endif %}>
                         <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
                       </div>
@@ -153,23 +155,44 @@
                       {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
-                  <td class="px-3 py-2 align-top">
+                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Descrição">
                     <div class="field-group mb-0">
                       {{ item_form.description|render_field }}
                       {% if item_form.description.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.description.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
-                  <td class="px-3 py-2 align-top">
+                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Valor">
                     <div class="field-group mb-0">
                       {{ item_form.value|render_field }}
                       {% if item_form.value.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
-                  <td class="px-3 py-2 text-center align-top">
-                    <label class="touch-target inline-flex items-center justify-center p-1 text-rose-600 hover:text-rose-800 cursor-pointer" title="Remover item" for="{{ item_form.DELETE.id_for_label }}">
+                  <td class="flex items-center gap-2 sm:table-cell sm:px-3 sm:py-2 sm:text-center sm:align-top" data-label="Ações">
+                    <label class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer transition-colors" title="Remover item" for="{{ item_form.DELETE.id_for_label }}">
                       {{ item_form.DELETE }}
-                      <span class="sr-only">Remover</span>
+                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                      </svg>
+                      <span class="text-xs text-rose-600 sm:hidden">Remover</span>
                     </label>
+                    <label class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer transition-colors btn-photo-toggle" title="Foto de comprovação">
+                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.04l-.821 1.316Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                      </svg>
+                      <span class="text-xs text-sky-600 sm:hidden">Foto</span>
+                    </label>
+                  </td>
+                </tr>
+                <!-- Photo upload row (hidden by default) -->
+                <tr class="item-photo-row hidden bg-slate-50/50">
+                  <td colspan="5" class="px-4 py-2">
+                    <div class="field-group mb-0">
+                      <label class="field-label text-xs" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
+                      {{ item_form.proof_photo_upload|render_field }}
+                      {% if item_form.proof_photo_upload.help_text %}<p class="field-help text-xs">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
+                      {% if item_form.proof_photo_upload.errors %}<p class="field-error text-xs" role="alert">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+                    </div>
                   </td>
                 </tr>
                 {% endif %}
@@ -179,25 +202,26 @@
         </div>
 
         <!-- Resumo de Totais da Locação em Tempo Real -->
-        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-xs">
+        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p class="text-xs font-medium text-app-muted uppercase tracking-wider">Subtotal dos Itens</p>
+              <p class="text-xs font-medium text-app-muted">Subtotal dos itens</p>
               <p id="subtotal-display" class="text-lg font-semibold text-app-ink mt-0.5">R$ 0,00</p>
             </div>
             <div>
-              <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted uppercase tracking-wider cursor-pointer" for="apply-cash-discount">
+              <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted cursor-pointer" for="apply-cash-discount">
                 <input type="checkbox" id="apply-cash-discount" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
-                Desconto à Vista (10%)
+                Desconto à vista (10%)
               </label>
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
+              <p class="text-[10px] text-app-muted">Apenas referência visual, não altera o valor salvo</p>
             </div>
             <div>
-              <p class="text-xs font-medium text-app-muted uppercase tracking-wider">Multa Reposição Estimada</p>
+              <p class="text-xs font-medium text-app-muted">Multa de reposição</p>
               <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">
-              <p class="text-xs font-semibold text-rose-900 uppercase tracking-wider">Total Final Locação</p>
+              <p class="text-xs font-semibold text-rose-900">Total final da locação</p>
               <p id="total-final-display" class="text-xl font-bold text-rose-700 mt-0.5">R$ 0,00</p>
             </div>
           </div>
@@ -281,7 +305,7 @@
   {% if not has_payments %}
     <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
   {% endif %}
-  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
     <button type="button"
             id="add-item-footer"
             class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4"
@@ -316,12 +340,13 @@
 
 <template id="empty-form">
   {% with f=items.empty_form %}
-  <tr class="item-form transition-colors hover:bg-slate-50/80">
-    <td class="px-3 py-2 text-center font-medium text-slate-500 align-middle">
+  <tr class="item-form flex flex-col gap-2 p-3 sm:table-row sm:p-0 transition-colors hover:bg-slate-50/80">
+    <td class="hidden sm:table-cell px-3 py-2 text-center font-medium text-slate-500 align-middle">
       {{ f.id }}
-      <span class="item-index text-xs font-semibold text-slate-600">#__prefix__</span>
+      <span class="item-index text-xs font-semibold text-slate-600">#</span>
     </td>
-    <td class="px-3 py-2 align-top">
+    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
+      {{ f.id }}
       <div class="field-group product-search-field mb-0">
         {{ f.product }}
         <div class="relative">
@@ -331,7 +356,8 @@
                  role="combobox"
                  aria-autocomplete="list"
                  aria-expanded="false"
-                 aria-required="true">
+                 aria-required="true"
+                 aria-label="Produto">
           <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
         </div>
         <div class="mt-1 flex items-center justify-between gap-2">
@@ -340,21 +366,41 @@
         <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
       </div>
     </td>
-    <td class="px-3 py-2 align-top">
+    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
       <div class="field-group mb-0">
         {{ f.description|render_field }}
       </div>
     </td>
-    <td class="px-3 py-2 align-top">
+    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
       <div class="field-group mb-0">
         {{ f.value|render_field }}
       </div>
     </td>
-    <td class="px-3 py-2 text-center align-top">
-      <label class="touch-target inline-flex items-center justify-center p-1 text-rose-600 hover:text-rose-800 cursor-pointer" title="Remover item" for="{{ f.DELETE.id_for_label }}">
+    <td class="flex items-center gap-2 sm:table-cell sm:px-3 sm:py-2 sm:text-center sm:align-top">
+      <label class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer transition-colors" title="Remover item" for="{{ f.DELETE.id_for_label }}">
         {{ f.DELETE }}
-        <span class="sr-only">Remover</span>
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+        </svg>
+        <span class="text-xs text-rose-600 sm:hidden">Remover</span>
       </label>
+      <label class="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer transition-colors btn-photo-toggle" title="Foto de comprovação">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.04l-.821 1.316Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+        </svg>
+        <span class="text-xs text-sky-600 sm:hidden">Foto</span>
+      </label>
+    </td>
+  </tr>
+  <!-- Photo upload row for new items (hidden by default) -->
+  <tr class="item-photo-row hidden bg-slate-50/50">
+    <td colspan="5" class="px-4 py-2">
+      <div class="field-group mb-0">
+        <label class="field-label text-xs" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
+        {{ f.proof_photo_upload|render_field }}
+        {% if f.proof_photo_upload.help_text %}<p class="field-help text-xs">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+      </div>
     </td>
   </tr>
   {% endwith %}
@@ -654,146 +700,41 @@
   const container = document.getElementById('item-forms');
   const tpl = document.getElementById('empty-form');
 
-  function updateSummaryPreview(row) {
-    const summaryCard = row.querySelector('.item-summary-card');
-    if (!summaryCard) return;
+  // updateSummaryPreview is no longer needed — items are inline in the data table.
+  function updateSummaryPreview(row) { /* noop — table layout has no summary cards */ }
 
-    const productSelect = row.querySelector('select[name$="-product"]');
-    const searchInput = row.querySelector('.product-search-input');
-    const descInput = row.querySelector('input[name$="-description"]');
-    const valueInput = row.querySelector('input[name$="-value"]');
-
-    const titleEl = summaryCard.querySelector('.summary-product-title');
-    const descEl = summaryCard.querySelector('.summary-product-details');
-    const valueEl = summaryCard.querySelector('.summary-product-value');
-
-    // Title
-    if (titleEl) {
-      if (searchInput && searchInput.value.trim()) {
-        titleEl.textContent = searchInput.value;
-      } else if (productSelect && productSelect.selectedIndex >= 0 && productSelect.options[productSelect.selectedIndex].text) {
-        titleEl.textContent = productSelect.options[productSelect.selectedIndex].text;
-      } else {
-        titleEl.textContent = "Item sem produto selecionado";
-      }
-    }
-
-    // Description
-    if (descEl) {
-      if (descInput && descInput.value.trim()) {
-        descEl.textContent = `Obs: ${descInput.value}`;
-      } else {
-        descEl.textContent = "Sem observações adicionais";
-      }
-    }
-
-    // Value
-    if (valueEl) {
-      if (valueInput && valueInput.value.trim()) {
-        var parseFn = (window.NoivasCiaForms && window.NoivasCiaForms.parseBRDecimal)
-          ? window.NoivasCiaForms.parseBRDecimal
-          : function (v) { return v.replace(',', '.'); };
-        var formatFn = (window.NoivasCiaForms && window.NoivasCiaForms.formatBRDecimal)
-          ? window.NoivasCiaForms.formatBRDecimal
-          : function (v) { var n = parseFloat(v) || 0; return n.toFixed(2).replace('.', ','); };
-        var normalized = parseFn(valueInput.value);
-        valueEl.textContent = `R$ ${formatFn(normalized)}`;
-      } else {
-        valueEl.textContent = "R$ 0,00";
-      }
-    }
-
-    // Update Concluir button visibility
-    const hasProduct = productSelect && productSelect.value;
-    const concluirBtn = row.querySelector('.btn-concluir-item');
-    if (concluirBtn) {
-      if (hasProduct) concluirBtn.classList.remove('hidden');
-      else concluirBtn.classList.add('hidden');
-    }
-  }
-
+  // toggleItemForm simplified — table layout has no expand/collapse; just focus the search input.
   window.toggleItemForm = function (row, expand) {
     const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
     if (del && del.checked) return;
-
-    const summaryCard = row.querySelector('.item-summary-card');
-    const editFields = row.querySelector('.item-edit-fields');
-    const concluirBtn = row.querySelector('.btn-concluir-item');
-
-    if (!summaryCard || !editFields) return;
-
     if (expand) {
-      summaryCard.classList.add('hidden');
-      editFields.classList.remove('hidden');
-      
-      const productSelect = row.querySelector('select[name$="-product"]');
-      if (concluirBtn && productSelect && productSelect.value) {
-        concluirBtn.classList.remove('hidden');
-      }
-      
       const searchInput = row.querySelector('.product-search-input');
-      if (searchInput && !searchInput.value) {
-        searchInput.focus();
-      }
-    } else {
-      const productSelect = row.querySelector('select[name$="-product"]');
-      if (!productSelect || !productSelect.value) {
-        const searchInput = row.querySelector('.product-search-input');
-        if (searchInput) {
-          searchInput.classList.add('border-red-500');
-          searchInput.focus();
-          setTimeout(() => searchInput.classList.remove('border-red-500'), 1500);
-        }
-        return;
-      }
-      updateSummaryPreview(row);
-      summaryCard.classList.remove('hidden');
-      editFields.classList.add('hidden');
-      if (concluirBtn) concluirBtn.classList.add('hidden');
+      if (searchInput) searchInput.focus();
     }
   };
 
-  // Number the visible (non-removed) item cards as "Item 1", "Item 2"…
+  // Number visible (non-removed) item rows as "#1", "#2"…
   function renumberItems() {
     if (!container) return;
     let n = 0;
     container.querySelectorAll('.item-form').forEach(function (row) {
       const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
       const label = row.querySelector('.item-index');
-      const summaryCard = row.querySelector('.item-summary-card');
-      const editFields = row.querySelector('.item-edit-fields');
-      const titleEl = row.querySelector('.summary-product-title');
-      const concluirBtn = row.querySelector('.btn-concluir-item');
+      // Find associated photo row (next sibling tr.item-photo-row)
+      const photoRow = row.nextElementSibling;
 
       if (del && del.checked) {
         row.classList.add('opacity-40');
-        if (label) label.textContent = 'Item removido';
-        if (summaryCard) {
-          summaryCard.classList.remove('hidden');
-          summaryCard.style.pointerEvents = 'none';
+        if (label) label.textContent = '×';
+        if (photoRow && photoRow.classList.contains('item-photo-row')) {
+          photoRow.classList.add('hidden');
         }
-        if (editFields) editFields.classList.add('hidden');
-        if (titleEl) titleEl.style.textDecoration = 'line-through';
-        if (concluirBtn) concluirBtn.classList.add('hidden');
         return;
       }
 
       row.classList.remove('opacity-40');
       n += 1;
-      if (label) label.textContent = `Item ${n}`;
-      if (summaryCard) {
-        summaryCard.style.pointerEvents = '';
-        if (editFields && editFields.classList.contains('hidden')) {
-          summaryCard.classList.remove('hidden');
-        } else {
-          summaryCard.classList.add('hidden');
-          if (concluirBtn) {
-            const productSelect = row.querySelector('select[name$="-product"]');
-            if (productSelect && productSelect.value) concluirBtn.classList.remove('hidden');
-          }
-        }
-      }
-      if (titleEl) titleEl.style.textDecoration = '';
+      if (label) label.textContent = `#${n}`;
     });
   }
 
@@ -815,7 +756,6 @@
   }
 
   function focusEmptyRow(row) {
-    window.toggleItemForm(row, true);
     const input = row.querySelector('.product-search-input');
     if (input) {
       input.classList.add('border-rose-400');
@@ -865,11 +805,15 @@
         renumberItems();
       }
     });
-    // Update summary preview dynamically when typing description or value
-    container.addEventListener('input', function (event) {
-      if (event.target.matches('input[name$="-description"]') || event.target.matches('input[name$="-value"]')) {
-        const row = event.target.closest('.item-form');
-        if (row) updateSummaryPreview(row);
+    // Photo toggle: show/hide the photo upload row
+    container.addEventListener('click', function (event) {
+      const toggle = event.target.closest('.btn-photo-toggle');
+      if (!toggle) return;
+      const itemRow = toggle.closest('.item-form');
+      if (!itemRow) return;
+      const photoRow = itemRow.nextElementSibling;
+      if (photoRow && photoRow.classList.contains('item-photo-row')) {
+        photoRow.classList.toggle('hidden');
       }
     });
   }
@@ -1343,12 +1287,21 @@
     const subtotalEl = document.getElementById('subtotal-display');
     const discountEl = document.getElementById('discount-display');
     const totalFinalEl = document.getElementById('total-final-display');
-    const penaltyEl = document.getElementById('penalty-display');
+    const penaltyInput = document.getElementById('id_penalty_value');
+    let penaltyVal = 0;
+    if (penaltyInput && penaltyInput.value) {
+      penaltyVal = parseBRDecimal(penaltyInput.value);
+    }
 
     if (subtotalEl) subtotalEl.textContent = `R$ ${formatMoneyBR(subtotal)}`;
     if (discountEl) discountEl.textContent = isCashDiscount ? `- R$ ${formatMoneyBR(discount)}` : `R$ 0,00`;
     if (totalFinalEl) totalFinalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
-    if (penaltyEl) penaltyEl.textContent = `R$ ${formatMoneyBR(subtotal * 3.5)}`; // Multa reposição estimada
+    if (penaltyEl) penaltyEl.textContent = penaltyVal > 0 ? `R$ ${formatMoneyBR(penaltyVal)}` : (subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}` : `R$ 0,00`);
+  }
+
+  const penaltyInput = document.getElementById('id_penalty_value');
+  if (penaltyInput) {
+    penaltyInput.addEventListener('input', updateFinancialTotals);
   }
 
   if (container) {

@@ -77,7 +77,7 @@ class RentalFooterUITests(TestCase):
             'grid',
             'w-full',
             'min-w-0',
-            'grid-cols-2',
+            'grid-cols-1',
             'sm:flex',
             'sm:w-auto',
         }.issubset(button_group_classes))
