@@ -1,11 +1,17 @@
-from datetime import date as date_cls
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
 from core.ui import BRMoneyField, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
 
 from .models import CashAccount, FinancialMovement, Payment
+
+
+def _reject_future_date(value, label):
+    if value > timezone.localdate():
+        raise forms.ValidationError(f'A {label} não pode estar no futuro.')
+    return value
 
 
 class GenerateReceivablesForm(forms.Form):
@@ -33,6 +39,12 @@ class PaymentForm(forms.Form):
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
     )
+
+    def clean_payment_date(self):
+        return _reject_future_date(
+            self.cleaned_data['payment_date'],
+            'data do recebimento',
+        )
 
 
 class ReceivablePayForm(forms.Form):
@@ -68,6 +80,12 @@ class ReceivablePayForm(forms.Form):
         label='Confirmar recebimento acima do saldo', required=False,
     )
 
+    def clean_payment_date(self):
+        return _reject_future_date(
+            self.cleaned_data['payment_date'],
+            'data do recebimento',
+        )
+
 
 class ReversalForm(forms.Form):
     """Reversal reason form (R5.09)."""
@@ -84,9 +102,15 @@ class ManualMovementForm(forms.Form):
     date = forms.DateField(
         label='Data',
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
-        initial=date_cls.today,
+        initial=timezone.localdate,
         input_formats=DATE_INPUT_FORMATS,
     )
+
+    def clean_date(self):
+        return _reject_future_date(
+            self.cleaned_data['date'],
+            'data do movimento',
+        )
     account = forms.ModelChoiceField(
         label='Conta', queryset=CashAccount.objects.filter(active=True),
         widget=forms.Select(attrs={'class': INPUT_CLASS}),
@@ -118,17 +142,21 @@ class ManualMovementForm(forms.Form):
             self.cleaned_data['customer'] = None
             return customer_name
 
-        customers = Customer.objects.filter(name_search=_normalize_name(customer_name))
-        if not customers.exists():
+        customers = list(
+            Customer.objects.filter(
+                name_search=_normalize_name(customer_name),
+            )[:2]
+        )
+        if not customers:
             raise forms.ValidationError(
                 'Cliente não encontrado. Informe o nome completo cadastrado ou deixe o campo em branco.'
             )
-        if customers.count() > 1:
+        if len(customers) > 1:
             raise forms.ValidationError(
                 'Há mais de um cliente com este nome. Deixe o campo em branco e registre o vínculo depois.'
             )
 
-        self.cleaned_data['customer'] = customers.get()
+        self.cleaned_data['customer'] = customers[0]
         return customer_name
 
 
@@ -153,3 +181,9 @@ class MultiPayForm(forms.Form):
         label='Observações', required=False,
         widget=forms.Textarea(attrs={'class': INPUT_CLASS, 'rows': 2}),
     )
+
+    def clean_payment_date(self):
+        return _reject_future_date(
+            self.cleaned_data['payment_date'],
+            'data do recebimento',
+        )

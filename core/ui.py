@@ -186,4 +186,4 @@ def configure_br_decimal_field(field, *, currency=False):
 
     widget_class = BRMoneyInput if currency else BRDecimalInput
     if not isinstance(field.widget, widget_class):
-        field.widget = widget_class()
+        field.widget = widget_class(attrs=field.widget.attrs.copy())

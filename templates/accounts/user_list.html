@@ -14,13 +14,14 @@
 
   <div class="mt-4 table-shell">
     <table class="data-table">
+      <caption class="sr-only">Usuários cadastrados e permissões liberadas</caption>
       <thead>
         <tr>
-          <th>E-mail</th>
-          <th>Nome</th>
-          <th>Equipe</th>
-          <th>Módulos liberados</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">E-mail</th>
+          <th scope="col">Nome</th>
+          <th scope="col">Equipe</th>
+          <th scope="col">Módulos liberados</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -31,7 +32,7 @@
             <td>{{ user.is_staff|yesno:'Sim,Não' }}</td>
             <td>{% if user.is_superuser %}Todos{% else %}{{ user.allowed_modules }}{% endif %}</td>
             <td class="text-right">
-              <a href="{% url 'user_permissions' user.pk %}" class="text-link">Permissões</a>
+              <a href="{% url 'user_permissions' user.pk %}" class="text-link inline-flex min-h-11 items-center">Permissões</a>
             </td>
           </tr>
         {% empty %}

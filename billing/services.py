@@ -23,7 +23,7 @@ def days_overdue(receivable, on_date=None):
     """Whole days the receivable is past due (0 if paid or not yet due)."""
     if receivable.is_paid:
         return 0
-    on_date = on_date or date_cls.today()
+    on_date = on_date or timezone.localdate()
     return max(0, (on_date - receivable.due_date).days)
 
 
@@ -328,6 +328,12 @@ def register_payment(receivable, amount, payment_date, method='cash',
     amount = Decimal(str(amount))
     interest_amount = Decimal(str(interest_amount or 0))
     discount_amount = Decimal(str(discount_amount or 0))
+    if amount <= 0:
+        raise ValueError('O valor recebido deve ser maior que zero.')
+    if method not in Payment.Method.values:
+        raise ValueError('A forma de recebimento informada é inválida.')
+    if payment_date > timezone.localdate():
+        raise ValueError('A data do recebimento não pode estar no futuro.')
 
     with transaction.atomic():
         locked_receivable = (
@@ -335,6 +341,8 @@ def register_payment(receivable, amount, payment_date, method='cash',
             .select_related('rental__customer')
             .get(pk=receivable.pk)
         )
+        if locked_receivable.written_off_at is not None:
+            raise ValueError('Não é possível receber um título baixado.')
         payment = Payment.objects.create(
             receivable=locked_receivable,
             customer=locked_receivable.rental.customer,
@@ -369,7 +377,10 @@ def register_payment(receivable, amount, payment_date, method='cash',
 
 def reverse_payment(payment, reason, user=None):
     """Create reversal Payment (negative amount) and FinancialMovement outflow (R5.09)."""
-    today = date_cls.today()
+    reason = (reason or '').strip()
+    if not reason:
+        raise ValueError('Informe o motivo do estorno.')
+    today = timezone.localdate()
     with transaction.atomic():
         locked_payment = (
             Payment.objects.select_for_update()
@@ -477,7 +488,7 @@ def compute_moratoria(receivable, on_date=None, company=None):
     """
     if receivable.is_paid:
         return Decimal('0.00')
-    on_date = on_date or date_cls.today()
+    on_date = on_date or timezone.localdate()
     if on_date <= receivable.due_date:
         return Decimal('0.00')
     company = company or Company.load()
@@ -572,16 +583,15 @@ def reconcile_financial():
     inconsistent_count = inconsistent_qs.count()
     inconsistent_balances = []
     for rec in inconsistent_qs[:100]:
-        if abs(rec.paid_amount - rec.payment_sum) > Decimal('0.01'):
-            inconsistent_balances.append({
-                'id': rec.pk,
-                'rental_number': rec.rental.number if rec.rental_id else None,
-                'due_date': rec.due_date,
-                'amount': rec.amount,
-                'paid_amount_stored': rec.paid_amount,
-                'payment_sum': rec.payment_sum,
-                'diff': rec.paid_amount - rec.payment_sum,
-            })
+        inconsistent_balances.append({
+            'id': rec.pk,
+            'rental_number': rec.rental.number if rec.rental_id else None,
+            'due_date': rec.due_date,
+            'amount': rec.amount,
+            'paid_amount_stored': rec.paid_amount,
+            'payment_sum': rec.payment_sum,
+            'diff': rec.paid_amount - rec.payment_sum,
+        })
 
     # Divergence 3: payments without a corresponding FinancialMovement
     payments_without_movement = (
@@ -617,7 +627,7 @@ def financial_kpis(today=None):
     from django.db.models import Sum
     from .models import FinancialMovement, Payment, Receivable
 
-    today = today or date_cls.today()
+    today = today or timezone.localdate()
     week_end = today + timedelta(days=7)
     month_start = today.replace(day=1)
 

@@ -15,7 +15,6 @@ Options:
 
 import json
 import re
-import shutil
 import unicodedata
 from collections import defaultdict
 from datetime import date, datetime
@@ -23,6 +22,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.conf import settings
+from django.core.management.color import no_style
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
@@ -30,8 +30,10 @@ from django.utils import timezone
 from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
+from core.management.commands.golive_backup import _backup_sqlite
 from customers.models import Customer
 from movements.models import Pickup, Return
+from notifications.models import CustomerMessage
 from rentals.models import Rental, RentalItem
 
 
@@ -71,6 +73,7 @@ ACCESS_TO_SQLITE = {
 
 # All business models in safe deletion order (children first).
 BUSINESS_MODELS = (
+    CustomerMessage,
     FinancialMovement,
     Payment,
     Return,
@@ -271,6 +274,9 @@ class Command(BaseCommand):
         self.start_time = self.now
         self.summary = {}
 
+        if self.batch_size <= 0:
+            raise CommandError('--batch-size deve ser maior que zero.')
+
         if not self.export_dir.exists():
             raise CommandError(f'Export dir not found: {self.export_dir}')
 
@@ -299,6 +305,7 @@ class Command(BaseCommand):
 
                 tables = {table: list(self._read_rows(table)) for table in TABLES}
                 self._import_normalized(tables, options)
+                self._reset_sequences()
                 self._write_audit_rows(options)
 
                 if self.dry_run:
@@ -359,7 +366,7 @@ class Command(BaseCommand):
         backup_dir.mkdir(parents=True, exist_ok=True)
         stamp = timezone.localtime(self.now).strftime('%Y%m%d-%H%M%S')
         target = backup_dir / f'{source.stem}.before-legacy-{stamp}{source.suffix}'
-        shutil.copy2(source, target)
+        _backup_sqlite(source, target)
         self.summary['backup'] = str(target)
         self.stdout.write(f'Backup: {target}')
 
@@ -459,6 +466,18 @@ class Command(BaseCommand):
         if not objects:
             return
         model.objects.bulk_create(objects, batch_size=self.batch_size)
+
+    def _reset_sequences(self):
+        """Advance database sequences after importing explicit legacy IDs."""
+        statements = connection.ops.sequence_reset_sql(
+            no_style(),
+            BUSINESS_MODELS,
+        )
+        if statements:
+            with connection.cursor() as cursor:
+                for statement in statements:
+                    cursor.execute(statement)
+        self.summary['sequences_reset'] = len(statements)
 
     def _import_normalized(self, tables, options):
         # Pre-flight: if --no-placeholders, check for missing references first.
@@ -912,6 +931,7 @@ class Command(BaseCommand):
     def _load_movements(self, tables, rental_by_number):
         pickups = []
         returns = []
+        suspicious_date_count = 0
         groups = defaultdict(list)
         for row in tables['locado']:
             number = as_int(row.get('locação'))
@@ -921,8 +941,13 @@ class Command(BaseCommand):
         for number, rows in groups.items():
             rental = rental_by_number[number]
             if rental.status in {Rental.Status.PICKED_UP, Rental.Status.RETURNED}:
-                pickup_dates = [as_date(row.get('retirada')) for row in rows]
-                valid_pickup_dates = [d for d in pickup_dates if d is not None]
+                valid_pickup_dates = []
+                for row in rows:
+                    pickup_date, suspicious = safe_date(row.get('retirada'))
+                    if suspicious:
+                        suspicious_date_count += 1
+                    elif pickup_date is not None:
+                        valid_pickup_dates.append(pickup_date)
                 if valid_pickup_dates:
                     pickups.append(
                         Pickup(
@@ -934,8 +959,13 @@ class Command(BaseCommand):
                     )
 
             if rental.status == Rental.Status.RETURNED:
-                actual_dates = [as_date(row.get('dev_efetiva')) for row in rows]
-                valid_actual_dates = [d for d in actual_dates if d is not None]
+                valid_actual_dates = []
+                for row in rows:
+                    actual_date, suspicious = safe_date(row.get('dev_efetiva'))
+                    if suspicious:
+                        suspicious_date_count += 1
+                    elif actual_date is not None:
+                        valid_actual_dates.append(actual_date)
                 if not valid_actual_dates:
                     continue
                 actual_date = max(valid_actual_dates)
@@ -955,6 +985,7 @@ class Command(BaseCommand):
         self._bulk_create(Return, returns)
         self.summary['pickups'] = len(pickups)
         self.summary['returns'] = len(returns)
+        self.summary['movement_dates_skipped_suspicious'] = suspicious_date_count
 
     # -----------------------------------------------------------------------
     # Receivables (R4.10)

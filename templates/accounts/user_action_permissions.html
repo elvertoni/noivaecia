@@ -16,18 +16,20 @@
   {% else %}
     <form method="post" class="panel-spacious space-y-4">
       {% csrf_token %}
-      <h2 class="section-title">Ações disponíveis</h2>
-      <div class="space-y-3">
-        {% for action in actions %}
-          <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-brand-300" for="action-permission-{{ action.key }}">
-            <input type="checkbox" name="actions" id="action-permission-{{ action.key }}" value="{{ action.key }}"
-                   {% if action.allowed %}checked{% endif %}
-                   class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
-            <span class="text-sm text-app-ink">{{ action.label }}</span>
-            <span class="text-xs text-app-muted font-mono ml-auto">{{ action.key }}</span>
-          </label>
-        {% endfor %}
-      </div>
+      <fieldset>
+        <legend class="section-title">Ações disponíveis</legend>
+        <div class="mt-4 space-y-3">
+          {% for action in actions %}
+            <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-brand-300" for="action-permission-{{ action.key }}">
+              <input type="checkbox" name="actions" id="action-permission-{{ action.key }}" value="{{ action.key }}"
+                     {% if action.allowed %}checked{% endif %}
+                     class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+              <span class="text-sm text-app-ink">{{ action.label }}</span>
+              <span class="ml-auto font-mono text-xs text-app-muted">{{ action.key }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Salvar permissões</button>
         <a href="{% url 'user_permissions' target_user.pk %}" class="btn btn-secondary">Voltar</a>

@@ -112,12 +112,15 @@ class SendTextTests(SimpleTestCase):
             code=500,
             msg='Internal Server Error',
             hdrs=None,
-            fp=io.BytesIO(b'{"error": "boom"}'),
+            fp=io.BytesIO(
+                f'{{"error": "{FAKE_SETTINGS["EVOLUTION_API_KEY"]}"}}'.encode()
+            ),
         )
         with mock.patch('urllib.request.urlopen', side_effect=error):
             with self.assertRaises(EvolutionError) as ctx:
                 send_text('5543999999999', 'olá')
         self.assertNotIn(FAKE_SETTINGS['EVOLUTION_API_KEY'], str(ctx.exception))
+        self.assertIn('[redacted]', str(ctx.exception))
 
 
 class NotConfiguredTests(SimpleTestCase):

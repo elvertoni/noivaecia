@@ -16,7 +16,7 @@
     <form id="rental-form" method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
       {% if form.non_field_errors %}
-        <div class="alert alert-error" role="alert">{{ form.non_field_errors }}</div>
+        <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
       {% endif %}
 
       <!-- Customer search (R7.02) -->
@@ -217,7 +217,7 @@
               <p class="text-[10px] text-app-muted">Apenas referência visual, não altera o valor salvo</p>
             </div>
             <div>
-              <p class="text-xs font-medium text-app-muted">Multa de reposição</p>
+              <p class="text-xs font-medium text-app-muted">Multa diária por atraso</p>
               <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">
@@ -458,6 +458,7 @@
   const productSearchUrl = "{% url 'catalog:product_search' %}";
   const availabilityUrl = "{% url 'catalog:availability_json' %}";
   const productBrowseUrl = "{% url 'catalog:product_browse' %}";
+  const currentRentalId = "{{ form.instance.pk|default:'' }}";
 
   // Reassigned by the modal controller below; no-op when the picker is absent.
   let openBrowse = function () {};
@@ -956,6 +957,7 @@
       pickup_date: pickupDate,
       return_date: returnDate,
     });
+    if (currentRentalId) params.set('exclude_rental_id', currentRentalId);
 
     fetch(`${availabilityUrl}?${params.toString()}`, {
       signal: row._availabilityController.signal,
@@ -1131,6 +1133,7 @@
       if (state.q) params.set('q', state.q);
       if (state.pickupDate) params.set('pickup_date', state.pickupDate);
       if (state.returnDate) params.set('return_date', state.returnDate);
+      if (currentRentalId) params.set('exclude_rental_id', currentRentalId);
       if (state.empty) params.set('empty', '1');
       params.set('page', String(state.page));
 
@@ -1287,6 +1290,7 @@
     const subtotalEl = document.getElementById('subtotal-display');
     const discountEl = document.getElementById('discount-display');
     const totalFinalEl = document.getElementById('total-final-display');
+    const penaltyEl = document.getElementById('penalty-display');
     const penaltyInput = document.getElementById('id_penalty_value');
     let penaltyVal = 0;
     if (penaltyInput && penaltyInput.value) {
@@ -1296,7 +1300,7 @@
     if (subtotalEl) subtotalEl.textContent = `R$ ${formatMoneyBR(subtotal)}`;
     if (discountEl) discountEl.textContent = isCashDiscount ? `- R$ ${formatMoneyBR(discount)}` : `R$ 0,00`;
     if (totalFinalEl) totalFinalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
-    if (penaltyEl) penaltyEl.textContent = penaltyVal > 0 ? `R$ ${formatMoneyBR(penaltyVal)}` : (subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}` : `R$ 0,00`);
+    if (penaltyEl) penaltyEl.textContent = `R$ ${formatMoneyBR(penaltyVal)}`;
   }
 
   const penaltyInput = document.getElementById('id_penalty_value');

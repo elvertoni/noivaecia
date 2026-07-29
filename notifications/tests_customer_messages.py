@@ -236,6 +236,29 @@ class PickupReminderQueueTests(TestCase):
         names = [entry['customer'].name for entry in queue]
         self.assertEqual(names, ['Alice', 'Zilda'])
 
+    def test_queue_does_not_query_items_once_per_rental(self):
+        first = _make_customer(name='Alice')
+        second = _make_customer(name='Zilda')
+        _make_rental(
+            181,
+            first,
+            Rental.Status.PENDING,
+            pickup_date=TODAY + timedelta(days=1),
+            return_date=TODAY + timedelta(days=7),
+        )
+        _make_rental(
+            182,
+            second,
+            Rental.Status.PENDING,
+            pickup_date=TODAY + timedelta(days=1),
+            return_date=TODAY + timedelta(days=7),
+        )
+
+        with self.assertNumQueries(1):
+            queue = pickup_reminder_queue(TODAY)
+
+        self.assertEqual(len(queue), 2)
+
     def test_defaults_to_localdate_when_today_omitted(self):
         customer = _make_customer(name='Sem Today')
         from django.utils import timezone as dj_timezone
@@ -348,6 +371,19 @@ class DispatchCustomerMessageTests(TestCase):
         self.assertIsNotNone(record.sent_at)
         self.assertEqual(record.rental, self.rental)
         self.assertEqual(record.customer, self.customer)
+
+    @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID-LOCK')
+    def test_dispatch_locks_rental_before_idempotency_check(self, send_text):
+        with mock.patch(
+            f'{CMD}.Rental.objects.select_for_update',
+            wraps=Rental.objects.select_for_update,
+        ) as select_for_update:
+            dispatch_customer_message(
+                self.rental,
+                CustomerMessage.Kind.PICKUP_REMINDER,
+            )
+
+        select_for_update.assert_called_once_with()
 
     @mock.patch(f'{CMD}.evolution.send_text', side_effect=evolution.EvolutionError('falha na api'))
     def test_evolution_error_creates_failed_record(self, send_text):

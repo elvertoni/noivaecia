@@ -13,7 +13,7 @@
         Cor: {{ product.color|default:'—' }} · Tamanho: {{ product.size|default:'—' }} · Valor sugerido: R$ {{ product.value|brl }}
       </p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="{% url 'catalog:product_update' product.pk %}" class="btn btn-secondary">Editar</a>
       <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -57,14 +57,15 @@
     {% if rental_items %}
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Últimas locações do produto {{ product }}</caption>
           <thead>
             <tr>
-              <th>Locação</th>
-              <th>Cliente</th>
-              <th>Retirada</th>
-              <th>Retorno</th>
-              <th>Situação</th>
-              <th class="text-right">Valor cobrado</th>
+              <th scope="col">Locação</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Retirada</th>
+              <th scope="col">Devolução</th>
+              <th scope="col">Situação</th>
+              <th scope="col" class="text-right">Valor cobrado</th>
             </tr>
           </thead>
           <tbody>

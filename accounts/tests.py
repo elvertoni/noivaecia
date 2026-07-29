@@ -4,6 +4,7 @@ from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from accounts.forms import EmailUserCreationForm
 from accounts.models import ActionPermission, ModulePermission
 
 User = get_user_model()
@@ -16,6 +17,13 @@ class UserModelTests(TestCase):
         self.assertTrue(user.check_password('Senha12345'))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
+
+    def test_create_user_normalizes_email_case(self):
+        user = User.objects.create_user(
+            email='Ana@Example.COM',
+            password='Senha12345',
+        )
+        self.assertEqual(user.email, 'ana@example.com')
 
     def test_create_user_without_email_raises(self):
         with self.assertRaises(ValueError):
@@ -39,6 +47,19 @@ class UserModelTests(TestCase):
         self.assertFalse(user.has_module('customers'))
         ModulePermission.objects.create(user=user, module_key='customers', allowed=True)
         self.assertTrue(user.has_module('customers'))
+
+    def test_module_permission_checks_share_one_query(self):
+        user = User.objects.create_user(email='cache@b.com', password='Senha12345')
+        ModulePermission.objects.create(
+            user=user,
+            module_key='customers',
+            allowed=True,
+        )
+
+        with self.assertNumQueries(1):
+            self.assertTrue(user.has_module('customers'))
+            self.assertFalse(user.has_module('billing'))
+            self.assertFalse(user.has_module('reports'))
 
     def test_superuser_has_all_modules(self):
         admin = User.objects.create_superuser(email='s@b.com', password='Senha12345')
@@ -68,6 +89,21 @@ class AuthFlowTests(TestCase):
         self.assertTrue(user.has_module('customers'))
         self.assertTrue(user.has_module('rentals'))
         self.assertFalse(user.has_module('maintenance'))
+
+    def test_signup_rejects_email_that_differs_only_by_case(self):
+        User.objects.create_user(
+            email='existente@b.com',
+            password='Senha12345',
+        )
+        form = EmailUserCreationForm(data={
+            'email': 'EXISTENTE@B.COM',
+            'first_name': 'Outra',
+            'password1': 'Abcd!2345x',
+            'password2': 'Abcd!2345x',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('Já existe um usuário', form.errors['email'][0])
 
     @override_settings(USER_CREATOR_EMAILS=['ana@noivas.com'])
     def test_configured_creator_email_can_manage_users(self):
@@ -156,6 +192,18 @@ class ActionPermissionTests(TestCase):
             user=self.user, action_key='customers.delete', allowed=True
         )
         self.assertTrue(self.user.has_action('customers.delete'))
+
+    def test_action_permission_checks_share_one_query(self):
+        ActionPermission.objects.create(
+            user=self.user,
+            action_key='customers.delete',
+            allowed=True,
+        )
+
+        with self.assertNumQueries(1):
+            self.assertTrue(self.user.has_action('customers.delete'))
+            self.assertFalse(self.user.has_action('billing.receive'))
+            self.assertFalse(self.user.has_action('reports.export'))
 
     def test_superuser_has_all_actions(self):
         admin = User.objects.create_superuser(email='su@b.com', password='Senha12345')

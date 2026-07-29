@@ -29,6 +29,7 @@
       <a href="{% url 'customers:update' customer.pk %}" class="btn btn-secondary">Editar</a>
       <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline">
         {% csrf_token %}
+        <input type="hidden" name="is_active" value="{% if customer.is_active %}0{% else %}1{% endif %}">
         <button type="submit" class="btn btn-secondary">
           {% if customer.is_active %}Inativar{% else %}Ativar{% endif %}
         </button>
@@ -118,15 +119,16 @@
     {% if rentals %}
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Locações de {{ customer.name }}</caption>
           <thead>
             <tr>
-              <th>Nº</th>
-              <th>Retirada</th>
-              <th>Retorno</th>
-              <th>Situação</th>
-              <th>Itens</th>
-              <th class="text-right">Valor</th>
-              <th class="text-right">Ações</th>
+              <th scope="col">Nº</th>
+              <th scope="col">Retirada</th>
+              <th scope="col">Retorno</th>
+              <th scope="col">Situação</th>
+              <th scope="col">Itens</th>
+              <th scope="col" class="text-right">Valor</th>
+              <th scope="col" class="text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -182,14 +184,15 @@
     {% if receivables %}
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Recebimentos de {{ customer.name }}</caption>
           <thead>
             <tr>
-              <th>Vencimento</th>
-              <th>Locação</th>
-              <th class="text-right">Valor</th>
-              <th class="text-right">Recebido</th>
-              <th class="text-right">Saldo</th>
-              <th>Situação</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col">Locação</th>
+              <th scope="col" class="text-right">Valor</th>
+              <th scope="col" class="text-right">Recebido</th>
+              <th scope="col" class="text-right">Saldo</th>
+              <th scope="col">Situação</th>
             </tr>
           </thead>
           <tbody>
@@ -225,13 +228,14 @@
     {% if payments %}
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Recebimentos recentes de {{ customer.name }}</caption>
           <thead>
             <tr>
-              <th>Data</th>
-              <th>Locação</th>
-              <th>Forma</th>
-              <th class="text-right">Valor</th>
-              <th class="text-right">Juros</th>
+              <th scope="col">Data</th>
+              <th scope="col">Locação</th>
+              <th scope="col">Forma</th>
+              <th scope="col" class="text-right">Valor</th>
+              <th scope="col" class="text-right">Juros</th>
             </tr>
           </thead>
           <tbody>

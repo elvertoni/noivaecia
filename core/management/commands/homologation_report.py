@@ -17,6 +17,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.utils import timezone
 
 from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from billing.services import reconcile_financial
@@ -46,9 +47,8 @@ _DATE_SCAN_BATCH_SIZE = 1000
 
 def _brl(value):
     """Format Decimal/float as Brazilian currency string."""
-    if value is None:
-        value = Decimal('0')
-    return f'R$ {value:,.2f}'
+    from core.templatetags.core_tags import brl
+    return f'R$ {brl(Decimal("0") if value is None else value)}'
 
 
 def _load_manifest(export_dir: Path):
@@ -361,7 +361,7 @@ class Command(BaseCommand):
         output_dir = Path(options['output_dir'])
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        now = datetime.now()
+        now = timezone.localtime()
         timestamp_str = now.strftime('%Y-%m-%d %H:%M:%S')
         filename_ts = now.strftime('%Y-%m-%d-%H-%M-%S')
         report_path = output_dir / f'{filename_ts}-report.md'

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Locações · Noivas &amp; Cia{% endblock %}
 
@@ -44,15 +45,16 @@
 
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Locações cadastradas</caption>
       <thead>
         <tr>
-          <th>Número</th>
-          <th>Cliente</th>
-          <th>Retirada</th>
-          <th>Retorno</th>
-          <th class="text-right">Total</th>
-          <th>Situação</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Número</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Retirada</th>
+          <th scope="col">Devolução</th>
+          <th scope="col" class="text-right">Total</th>
+          <th scope="col">Situação</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -62,7 +64,7 @@
             <td>{{ rental.customer.name }}</td>
             <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
             <td>{{ rental.return_date|date:'d/m/Y' }}</td>
-            <td class="text-right whitespace-nowrap">R$ {{ rental.total_value }}</td>
+            <td class="text-right whitespace-nowrap">R$ {{ rental.total_value|brl }}</td>
             <td>
               {% include 'includes/rental_status_badge.html' %}
             </td>

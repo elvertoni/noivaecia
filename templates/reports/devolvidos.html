@@ -8,8 +8,10 @@
       <h1 class="page-title">Devolvidos</h1>
       <p class="page-description">Locações com devolução efetiva registrada.</p>
     </div>
-    <div class="flex gap-2 print:hidden">
+    <div class="flex flex-wrap gap-2 print:hidden">
+      {% if request.user|has_action:'reports.export' %}
       <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
+      {% endif %}
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -43,14 +45,15 @@
   </form>
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Locações com devolução registrada</caption>
       <thead>
         <tr>
-          <th>Locação</th>
-          <th>Cliente</th>
-          <th>Retirada</th>
-          <th>Devolução efetiva</th>
-          <th>Dias de uso</th>
-          <th class="text-right">Total</th>
+          <th scope="col">Locação</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Retirada</th>
+          <th scope="col">Devolução efetiva</th>
+          <th scope="col">Dias de uso</th>
+          <th scope="col" class="text-right">Total</th>
         </tr>
       </thead>
       <tbody>

@@ -56,11 +56,14 @@ def br_date_text(value):
 @register.filter
 def render_field(field):
     """Render a bound field with shared accessibility attributes."""
-    described_by = []
+    described_by = (
+        field.field.widget.attrs.get('aria-describedby', '').split()
+    )
     if field.help_text:
         described_by.append(f'{field.auto_id}-help')
     if field.errors:
         described_by.append(f'{field.auto_id}-error')
+    described_by = list(dict.fromkeys(described_by))
 
     attrs = {}
     if field.errors:

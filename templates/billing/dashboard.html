@@ -13,7 +13,9 @@
     </div>
     <div class="flex gap-2">
       <a href="{% url 'billing:receivables' %}" class="btn btn-secondary">Títulos</a>
-      <a href="{% url 'billing:customer_receivables_search' %}" class="btn btn-primary">Receber por cliente</a>
+      {% if request.user|has_action:'billing.receive' %}
+        <a href="{% url 'billing:customer_receivables_search' %}" class="btn btn-primary">Receber por cliente</a>
+      {% endif %}
     </div>
   </div>
 
@@ -67,15 +69,19 @@
     <a href="{% url 'billing:receivables' %}?date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}&status=open" class="module-tile">
       <span class="module-tile-label">Vencem hoje</span>
     </a>
-    <a href="{% url 'billing:customer_receivables_search' %}" class="module-tile">
-      <span class="module-tile-label">Receber por cliente</span>
-    </a>
+    {% if request.user|has_action:'billing.receive' %}
+      <a href="{% url 'billing:customer_receivables_search' %}" class="module-tile">
+        <span class="module-tile-label">Receber por cliente</span>
+      </a>
+    {% endif %}
     <a href="{% url 'billing:cash_movements' %}" class="module-tile">
       <span class="module-tile-label">Caixa</span>
     </a>
-    <a href="{% url 'billing:new_movement' %}" class="module-tile">
-      <span class="module-tile-label">Lançamento manual</span>
-    </a>
+    {% if request.user|has_action:'billing.cash' %}
+      <a href="{% url 'billing:new_movement' %}" class="module-tile">
+        <span class="module-tile-label">Lançamento manual</span>
+      </a>
+    {% endif %}
     <a href="{% url 'billing:cash_report' %}" class="module-tile">
       <span class="module-tile-label">Relatório de caixa</span>
     </a>
@@ -90,14 +96,15 @@
     <h2 class="section-title mb-3">Movimentos recentes</h2>
     <div class="table-shell">
       <table class="data-table">
+        <caption class="sr-only">Movimentos financeiros recentes</caption>
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Conta</th>
-            <th>Histórico</th>
-            <th>Cliente</th>
-            <th>Direção</th>
-            <th class="text-right">Valor</th>
+            <th scope="col">Data</th>
+            <th scope="col">Conta</th>
+            <th scope="col">Histórico</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Direção</th>
+            <th scope="col" class="text-right">Valor</th>
           </tr>
         </thead>
         <tbody>

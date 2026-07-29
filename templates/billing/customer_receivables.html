@@ -18,7 +18,7 @@
 
   <!-- Search -->
   <form method="get" action="{% url 'billing:customer_receivables_search' %}" class="panel p-4">
-    <div class="flex gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row">
       <div class="field-group flex-1">
         <label class="field-label" for="customer-receivables-search">Buscar cliente</label>
         <input type="text" name="q" id="customer-receivables-search" value="{{ q }}" class="field-input" placeholder="Nome do cliente" autofocus>
@@ -33,7 +33,8 @@
   {% if customer_results %}
     <div class="table-shell">
       <table class="data-table">
-        <thead><tr><th>Cliente</th><th>Cidade</th><th class="text-right">Ações</th></tr></thead>
+        <caption class="sr-only">Clientes encontrados</caption>
+        <thead><tr><th scope="col">Cliente</th><th scope="col">Cidade</th><th scope="col" class="text-right">Ações</th></tr></thead>
         <tbody>
           {% for c in customer_results %}
             <tr>
@@ -71,6 +72,7 @@
       </div>
 
       <!-- Multi-pay form -->
+      {% if request.user|has_action:'billing.receive' %}
       <div class="panel p-4">
         <h2 class="section-title mb-3">Receber títulos</h2>
         <form method="post" action="{% url 'billing:multi_pay' customer.pk %}">
@@ -106,20 +108,22 @@
           </div>
         </form>
       </div>
+      {% endif %}
 
       <!-- Individual receivables table -->
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Títulos em aberto de {{ customer.name }}</caption>
           <thead>
             <tr>
-              <th>Vencimento</th>
-              <th>Locação</th>
-              <th class="text-right">Valor</th>
-              <th class="text-right">Saldo</th>
-              <th class="text-right">Juros</th>
-              <th class="text-right">Total</th>
-              <th class="text-right">Atraso</th>
-              <th class="text-right">Ações</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col">Locação</th>
+              <th scope="col" class="text-right">Valor</th>
+              <th scope="col" class="text-right">Saldo</th>
+              <th scope="col" class="text-right">Juros</th>
+              <th scope="col" class="text-right">Total</th>
+              <th scope="col" class="text-right">Atraso</th>
+              <th scope="col" class="text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -137,7 +141,11 @@
                   {% else %}—{% endif %}
                 </td>
                 <td class="text-right">
-                  <a href="{% url 'billing:pay_receivable' row.obj.pk %}?next={{ request.path }}" class="text-link">Receber</a>
+                  {% if request.user|has_action:'billing.receive' %}
+                    <a href="{% url 'billing:pay_receivable' row.obj.pk %}?next={{ request.path }}" class="text-link">Receber</a>
+                  {% else %}
+                    <span class="text-app-muted">—</span>
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}

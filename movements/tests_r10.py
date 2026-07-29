@@ -4,11 +4,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
-from billing.models import CashAccount, Receivable
+from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
@@ -94,6 +95,18 @@ class PickupStatusUpdateTests(TestCase):
         url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
         self.client.post(url, {'pickup_date': TODAY.isoformat()})
         self.assertTrue(Pickup.objects.filter(rental=self.rental).exists())
+
+    def test_cancelled_rental_cannot_be_picked_up_by_direct_url(self):
+        self.rental.status = Rental.Status.CANCELLED
+        self.rental.save(update_fields=['status', 'updated_at'])
+        url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
+
+        response = self.client.post(url, {'pickup_date': TODAY.isoformat()})
+
+        self.assertEqual(response.status_code, 302)
+        self.rental.refresh_from_db()
+        self.assertEqual(self.rental.status, Rental.Status.CANCELLED)
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
 
 
 # ── R10.03 ReturnListView ─────────────────────────────────────────────────────
@@ -286,6 +299,31 @@ class ReturnPenaltyReceivableTests(TestCase):
         self.client.post(url, {'return_date': TODAY.isoformat()})
         after_count = Receivable.objects.filter(rental=self.rental).count()
         self.assertEqual(after_count, before_count)
+
+    def test_payment_can_settle_penalty_created_by_the_return(self):
+        _make_cash_account()
+        url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
+
+        response = self.client.post(url, {
+            'return_date': TODAY.isoformat(),
+            'payment_amount': '100,00',
+            'payment_method': 'cash',
+            'payment_date': TODAY.isoformat(),
+        })
+
+        self.assertEqual(response.status_code, 302)
+        penalty = Receivable.objects.get(
+            rental=self.rental,
+            legacy_notes='Multa de atraso na devolução',
+        )
+        self.assertEqual(penalty.amount, Decimal('100'))
+        self.assertEqual(penalty.balance, Decimal('0'))
+        self.assertEqual(
+            Payment.objects.filter(receivable=penalty).aggregate(
+                total=Sum('amount'),
+            )['total'],
+            Decimal('100'),
+        )
 
 
 # ── R10.07 SettleReturnsView ──────────────────────────────────────────────────

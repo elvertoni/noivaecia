@@ -1,5 +1,4 @@
 import csv
-from datetime import date as date_cls
 from decimal import Decimal
 
 from django.contrib import messages
@@ -7,6 +6,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import FormView, ListView, TemplateView, View
 
@@ -92,7 +92,7 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
             qs = qs.filter(balance__lte=0)
 
         if self.request.GET.get('overdue'):
-            qs = qs.filter(due_date__lt=date_cls.today(), balance__gt=0)
+            qs = qs.filter(due_date__lt=timezone.localdate(), balance__gt=0)
 
         date_from = parse_br_date(self.request.GET.get('date_from'))
         date_to = parse_br_date(self.request.GET.get('date_to'))
@@ -123,7 +123,7 @@ class GlobalReceivableListView(BillingAccessMixin, ListView):
         ]
         context['rows'] = rows
         context['filters'] = _filters_for_display(self.request)
-        context['today'] = date_cls.today()
+        context['today'] = timezone.localdate()
         return context
 
 class CustomerReceivableView(BillingAccessMixin, TemplateView):
@@ -170,7 +170,9 @@ class CustomerReceivableView(BillingAccessMixin, TemplateView):
             'total_balance': total_balance,
             'total_with_interest': total_with_int,
             'q': q,
-            'multi_pay_form': MultiPayForm(initial={'payment_date': date_cls.today()}),
+            'multi_pay_form': MultiPayForm(
+                initial={'payment_date': timezone.localdate()},
+            ),
         })
         return context
 
@@ -194,7 +196,7 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         breakdown = interest_breakdown(self.receivable, company=company)
         return {
             'amount': breakdown['total_with_interest'],
-            'payment_date': date_cls.today(),
+            'payment_date': timezone.localdate(),
             'interest_amount': breakdown['interest'],
         }
 
@@ -254,7 +256,7 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_initial(self):
-        return {'payment_date': date_cls.today()}
+        return {'payment_date': timezone.localdate()}
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -356,11 +358,15 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        reverse_payment(
-            self.payment,
-            reason=form.cleaned_data['reason'],
-            user=self.request.user,
-        )
+        try:
+            reverse_payment(
+                self.payment,
+                reason=form.cleaned_data['reason'],
+                user=self.request.user,
+            )
+        except ValueError as exc:
+            messages.error(self.request, str(exc))
+            return redirect('billing:receivables')
         messages.success(self.request, 'Estorno registrado com sucesso.')
         if self.payment.customer_id:
             return redirect('billing:customer_receivables', pk=self.payment.customer_id)
@@ -414,7 +420,7 @@ class CashMovementListView(BillingAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Totals across full queryset (not just current page)
-        qs = self.get_queryset()
+        qs = self.object_list
         inflow = qs.filter(direction=FinancialMovement.Direction.INFLOW).aggregate(
             v=Sum('amount')
         )['v'] or Decimal('0')
@@ -446,25 +452,26 @@ class ManualCashMovementView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        movement = FinancialMovement.objects.create(
-            date=form.cleaned_data['date'],
-            account=form.cleaned_data['account'],
-            direction=form.cleaned_data['direction'],
-            amount=form.cleaned_data['amount'],
-            description=form.cleaned_data['description'],
-            source=FinancialMovement.Source.MANUAL,
-            customer=form.cleaned_data.get('customer'),
-            created_by=self.request.user,
-        )
         from core.models import AuditLog
-        AuditLog.objects.create(
-            user=self.request.user,
-            action='cash_manual',
-            model_name='FinancialMovement',
-            object_id=str(movement.pk),
-            object_repr=str(movement),
-            reason=f'Lançamento manual: {movement.description or ""}',
-        )
+        with transaction.atomic():
+            movement = FinancialMovement.objects.create(
+                date=form.cleaned_data['date'],
+                account=form.cleaned_data['account'],
+                direction=form.cleaned_data['direction'],
+                amount=form.cleaned_data['amount'],
+                description=form.cleaned_data['description'],
+                source=FinancialMovement.Source.MANUAL,
+                customer=form.cleaned_data.get('customer'),
+                created_by=self.request.user,
+            )
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='cash_manual',
+                model_name='FinancialMovement',
+                object_id=str(movement.pk),
+                object_repr=str(movement),
+                reason=f'Lançamento manual: {movement.description or ""}',
+            )
         messages.success(self.request, 'Movimento registrado com sucesso.')
         return redirect('billing:cash_movements')
 
@@ -505,13 +512,13 @@ class PaymentReportView(BillingAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        qs = self.get_queryset()
+        qs = self.object_list
         total = qs.aggregate(v=Sum('amount'))['v'] or Decimal('0')
         context.update({
             'total_received': total,
             'methods': Payment.Method.choices,
             'filters': _filters_for_display(self.request),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
         })
         return context
 
@@ -523,7 +530,7 @@ class CashMovementReportView(BillingAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        today = date_cls.today()
+        today = timezone.localdate()
         invalid_dates = _has_invalid_date_filter(self.request)
         date_from = parse_br_date(self.request.GET.get('date_from')) or today.replace(day=1)
         date_to = parse_br_date(self.request.GET.get('date_to')) or today
@@ -546,15 +553,20 @@ class CashMovementReportView(BillingAccessMixin, TemplateView):
         )['v'] or Decimal('0')
 
         # Breakdown by source
+        grouped = {
+            (row['source'], row['direction']): row['total']
+            for row in qs.values('source', 'direction').annotate(total=Sum('amount'))
+        }
         source_breakdown = []
         for source_code, source_label in FinancialMovement.Source.choices:
-            src_qs = qs.filter(source=source_code)
-            src_in = src_qs.filter(direction=FinancialMovement.Direction.INFLOW).aggregate(
-                v=Sum('amount')
-            )['v'] or Decimal('0')
-            src_out = src_qs.filter(direction=FinancialMovement.Direction.OUTFLOW).aggregate(
-                v=Sum('amount')
-            )['v'] or Decimal('0')
+            src_in = grouped.get(
+                (source_code, FinancialMovement.Direction.INFLOW),
+                Decimal('0'),
+            )
+            src_out = grouped.get(
+                (source_code, FinancialMovement.Direction.OUTFLOW),
+                Decimal('0'),
+            )
             if src_in or src_out:
                 source_breakdown.append({
                     'source': source_label,
@@ -588,12 +600,19 @@ class ReconciliationView(BillingAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['recon'] = reconcile_financial()
-        context['today'] = date_cls.today()
+        context['today'] = timezone.localdate()
         return context
 
 
-class ReconciliationExportView(BillingAccessMixin, View):
+class ReconciliationExportView(
+    BillingAccessMixin,
+    ActionRequiredMixin,
+    View,
+):
     """Export reconciliation divergences as CSV (R6.06)."""
+
+    action_key = 'reports.export'
+    action_methods = ('GET', 'HEAD')
 
     def get(self, request, *args, **kwargs):
         recon = reconcile_financial()
@@ -650,9 +669,14 @@ class ReceivableListView(BillingAccessMixin, ListView):
         return context
 
 
-class GenerateReceivablesView(BillingAccessMixin, FormView):
+class GenerateReceivablesView(
+    BillingAccessMixin,
+    ActionRequiredMixin,
+    FormView,
+):
     """Generate installments for a rental (RF-19 / 8.1.3)."""
 
+    action_key = 'billing.receive'
     form_class = GenerateReceivablesForm
     template_name = 'billing/receivable_list.html'
 
@@ -720,6 +744,13 @@ class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
+        expected_total = total_with_interest(self.receivable)
+        if form.cleaned_data['value'] > expected_total:
+            form.add_error(
+                'value',
+                'O valor informado é maior que o saldo total deste título.',
+            )
+            return self.form_invalid(form)
         register_payment(
             receivable=self.receivable,
             amount=form.cleaned_data['value'],

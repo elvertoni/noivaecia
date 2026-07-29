@@ -11,7 +11,9 @@
       <h1 class="page-title">Movimentação de Caixa</h1>
       <p class="page-description">Entradas e saídas por período</p>
     </div>
-    <a href="{% url 'billing:new_movement' %}" class="btn btn-primary">+ Lançamento manual</a>
+    {% if request.user|has_action:'billing.cash' %}
+      <a href="{% url 'billing:new_movement' %}" class="btn btn-primary">+ Lançamento manual</a>
+    {% endif %}
   </div>
 
   <!-- Filters -->
@@ -84,15 +86,16 @@
   {% if movements %}
     <div class="table-shell">
       <table class="data-table">
+        <caption class="sr-only">Movimentos de caixa filtrados</caption>
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Conta</th>
-            <th>Origem</th>
-            <th>Histórico</th>
-            <th>Cliente</th>
-            <th>Direção</th>
-            <th class="text-right">Valor</th>
+            <th scope="col">Data</th>
+            <th scope="col">Conta</th>
+            <th scope="col">Origem</th>
+            <th scope="col">Histórico</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Direção</th>
+            <th scope="col" class="text-right">Valor</th>
           </tr>
         </thead>
         <tbody>

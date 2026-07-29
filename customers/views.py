@@ -3,7 +3,9 @@ import re
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Prefetch, Q
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -138,30 +140,42 @@ class CustomerDeleteView(ModuleAccessMixin, ActionRequiredMixin, DeleteView):
     success_url = reverse_lazy('customers:list')
 
     def form_valid(self, form):
-        customer = self.get_object()
-        has_rentals = customer.rentals.exists()
-        has_receivables = False
-        if not has_rentals:
-            from billing.models import Receivable
-            has_receivables = Receivable.objects.filter(rental__customer=customer).exists()
-        if has_rentals or has_receivables:
+        customer = self.object
+        has_protected_history = (
+            customer.rentals.exists()
+            or customer.payments.exists()
+            or customer.whatsapp_messages.exists()
+        )
+        if has_protected_history:
             messages.error(
                 self.request,
-                'Cliente possui histórico de locações ou recebimentos e não pode ser excluído. '
-                'Use a inativação.',
+                'Cliente possui histórico de locações, recebimentos ou mensagens '
+                'e não pode ser excluído. Use a inativação.',
             )
             return redirect('customers:detail', pk=customer.pk)
         from core.models import AuditLog
-        AuditLog.objects.create(
-            user=self.request.user,
-            action='customer_delete',
-            model_name='Customer',
-            object_id=str(customer.pk),
-            object_repr=str(customer),
-            reason='Exclusão física de cliente.',
-        )
+
+        try:
+            with transaction.atomic():
+                AuditLog.objects.create(
+                    user=self.request.user,
+                    action='customer_delete',
+                    model_name='Customer',
+                    object_id=str(customer.pk),
+                    object_repr=str(customer),
+                    reason='Exclusão física de cliente.',
+                )
+                response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                'Cliente possui histórico protegido e não pode ser excluído. '
+                'Use a inativação.',
+            )
+            return redirect('customers:detail', pk=customer.pk)
+
         messages.success(self.request, 'Cliente excluído com sucesso.')
-        return super().form_valid(form)
+        return response
 
 
 class CustomerDeactivateView(ModuleAccessMixin, View):
@@ -169,7 +183,12 @@ class CustomerDeactivateView(ModuleAccessMixin, View):
 
     def post(self, request, pk):
         customer = get_object_or_404(Customer, pk=pk)
-        customer.is_active = not customer.is_active
+        requested_state = request.POST.get('is_active')
+        if requested_state not in ('0', '1'):
+            messages.error(request, 'Informe se o cliente deve ficar ativo ou inativo.')
+            return redirect('customers:detail', pk=pk)
+
+        customer.is_active = requested_state == '1'
         customer.save(update_fields=['is_active', 'updated_at'])
         verb = 'ativado' if customer.is_active else 'inativado'
         messages.success(request, f'Cliente {verb} com sucesso.')
@@ -296,17 +315,21 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         return ctx
 
 
-class CustomerSearchView(View):
+class CustomerSearchView(ModuleAccessMixin, View):
     """JSON quick-search for customer picker in rental form (R7.02).
 
     Returns up to 15 matches for query ``q`` across name, CPF, RG, phones and legacy_id.
-    Requires any authenticated user (rental module access checked client-side).
+    Requires access to either Customers or Rentals because the endpoint returns
+    personally identifiable data and is used by the rental customer picker.
     """
 
+    module_key = None
+
+    def has_module_permission(self):
+        user = self.request.user
+        return user.has_module('customers') or user.has_module('rentals')
+
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            from django.contrib.auth.views import redirect_to_login
-            return redirect_to_login(request.get_full_path())
         q = request.GET.get('q', '').strip()
         if len(q) < 2:
             return JsonResponse({'results': []})

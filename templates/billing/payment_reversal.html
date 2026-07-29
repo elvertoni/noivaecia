@@ -31,7 +31,9 @@
       {% endfor %}
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-danger">Confirmar estorno</button>
+        {% if request.user|has_action:'billing.reverse' %}
+          <button type="submit" class="btn btn-danger">Confirmar estorno</button>
+        {% endif %}
         {% if payment.customer_id %}
           <a href="{% url 'billing:customer_receivables' payment.customer_id %}" class="btn btn-secondary">Cancelar</a>
         {% else %}

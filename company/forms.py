@@ -1,7 +1,10 @@
 import re
+from decimal import Decimal
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+from django.db.models import Max
 
 from core.ui import INPUT_CLASS, configure_br_decimal_field
 
@@ -11,6 +14,13 @@ WHATSAPP_NUMBER_RE = re.compile(r'^55\d{10,11}$')
 WHATSAPP_NUMBER_SPLIT_RE = re.compile(r'[,;\n]+')
 WHATSAPP_NUMBER_START_RE = re.compile(
     r'(?<!^)\s+(?=(?:\+?55\d{10,11}\b|\+?55[\s(]))'
+)
+NON_NEGATIVE_RATE_FIELDS = (
+    'daily_interest_rate',
+    'late_fee_rate',
+    'monthly_interest_rate',
+    'damage_penalty_rate',
+    'loss_penalty_rate',
 )
 
 
@@ -59,7 +69,15 @@ class CompanyForm(forms.ModelForm):
         for name, field in self.fields.items():
             if isinstance(field, forms.DecimalField):
                 configure_br_decimal_field(field)
+                if name in NON_NEGATIVE_RATE_FIELDS:
+                    field.min_value = Decimal('0')
+                    field.validators.append(MinValueValidator(Decimal('0')))
+                    field.widget.attrs['min'] = '0'
             if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = (
+                    'h-4 w-4 rounded border-slate-300 accent-brand-700 '
+                    'focus:ring-brand-300'
+                )
                 continue
             field.widget.attrs['class'] = INPUT_CLASS
 
@@ -114,6 +132,20 @@ class CompanyForm(forms.ModelForm):
                 'Informe cada número com DDI 55, ex: 5543999998888.'
             )
         return '\n'.join(numbers)
+
+    def clean_last_rental_number(self):
+        value = self.cleaned_data['last_rental_number']
+        from rentals.models import Rental
+
+        highest_rental_number = (
+            Rental.objects.aggregate(number=Max('number'))['number'] or 0
+        )
+        if value < highest_rental_number:
+            raise ValidationError(
+                'A última locação não pode ser menor que o maior contrato '
+                f'existente (#{highest_rental_number}).'
+            )
+        return value
 
     def clean(self):
         cleaned_data = super().clean()

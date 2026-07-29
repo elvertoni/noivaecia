@@ -126,3 +126,18 @@ class RentalFooterUITests(TestCase):
             'w-full',
             'sm:w-auto',
         }.issubset(self.classes_for('add-item')))
+
+    def test_totals_script_defines_and_updates_daily_penalty(self):
+        self.assertContains(
+            self.response,
+            "const penaltyEl = document.getElementById('penalty-display');",
+        )
+        self.assertContains(
+            self.response,
+            'penaltyEl.textContent = `R$ ${formatMoneyBR(penaltyVal)}`',
+        )
+        self.assertNotContains(
+            self.response,
+            'subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}`',
+        )
+        self.assertContains(self.response, 'Multa diária por atraso')

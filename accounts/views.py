@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -28,8 +29,9 @@ class SignupView(UserManagementRequiredMixin, CreateView):
     success_url = reverse_lazy('user_list')
 
     def form_valid(self, form):
-        self.object = form.save()
-        form.save_module_permissions(self.object)
+        with transaction.atomic():
+            self.object = form.save()
+            form.save_module_permissions(self.object)
         messages.success(self.request, 'Usuário criado com sucesso.')
         return redirect(self.get_success_url())
 
@@ -61,7 +63,7 @@ class UserPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListVi
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return User.objects.all()
+        return User.objects.none()
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -79,12 +81,13 @@ class UserPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListVi
     def post(self, request, *args, **kwargs):
         user = get_object_or_404(User, pk=kwargs['pk'])
         selected = set(request.POST.getlist('modules'))
-        for key, _ in MODULES:
-            ModulePermission.objects.update_or_create(
-                user=user,
-                module_key=key,
-                defaults={'allowed': key in selected},
-            )
+        with transaction.atomic():
+            for key, _ in MODULES:
+                ModulePermission.objects.update_or_create(
+                    user=user,
+                    module_key=key,
+                    defaults={'allowed': key in selected},
+                )
         messages.success(request, 'Permissões atualizadas.')
         return redirect('user_permissions', pk=user.pk)
 
@@ -99,7 +102,7 @@ class UserActionPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, 
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return User.objects.all()
+        return User.objects.none()
 
     def get_context_data(self, **kwargs):
         from core.actions import ACTIONS
@@ -119,11 +122,12 @@ class UserActionPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, 
         from core.actions import ACTION_KEYS
         user = get_object_or_404(User, pk=kwargs['pk'])
         selected = set(request.POST.getlist('actions'))
-        for key in ACTION_KEYS:
-            ActionPermission.objects.update_or_create(
-                user=user,
-                action_key=key,
-                defaults={'allowed': key in selected},
-            )
+        with transaction.atomic():
+            for key in ACTION_KEYS:
+                ActionPermission.objects.update_or_create(
+                    user=user,
+                    action_key=key,
+                    defaults={'allowed': key in selected},
+                )
         messages.success(request, 'Permissões de ação atualizadas.')
         return redirect('user_action_permissions', pk=user.pk)

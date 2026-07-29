@@ -22,7 +22,7 @@
         <h2 class="text-lg font-semibold text-app-ink">Conexão da Evolution API</h2>
         <p class="text-sm text-slate-600">Use este QR Code para conectar o WhatsApp sem abrir o painel externo da Evolution.</p>
       </div>
-      <div class="flex shrink-0 items-center gap-2">
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
         {% if evolution_connection_state %}
           {% if evolution_connection_state == 'open' %}
             <span class="badge badge-success">Conectado</span>
@@ -90,14 +90,15 @@
 
         <div class="table-shell hidden md:block">
           <table class="data-table">
+            <caption class="sr-only">Avisos de retirada disponíveis para envio</caption>
             <thead>
               <tr>
-                <th class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="pickup-checkbox" aria-label="Selecionar todos"></th>
-                <th>Cliente</th>
-                <th>Locação</th>
-                <th>Retirada</th>
-                <th>Telefone</th>
-                <th>Prévia</th>
+                <th scope="col" class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="pickup-checkbox" aria-label="Selecionar todos os avisos de retirada"></th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Locação</th>
+                <th scope="col">Retirada</th>
+                <th scope="col">Telefone</th>
+                <th scope="col">Prévia</th>
               </tr>
             </thead>
             <tbody>
@@ -136,7 +137,7 @@
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-          <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
+          <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
         </div>
       </form>
     {% else %}
@@ -159,14 +160,15 @@
 
         <div class="table-shell hidden md:block">
           <table class="data-table">
+            <caption class="sr-only">Avisos de devolução disponíveis para envio</caption>
             <thead>
               <tr>
-                <th class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="return-checkbox" aria-label="Selecionar todos"></th>
-                <th>Cliente</th>
-                <th>Locação</th>
-                <th>Devolução</th>
-                <th>Telefone</th>
-                <th>Prévia</th>
+                <th scope="col" class="w-8"><input type="checkbox" class="select-all-checkbox" data-target="return-checkbox" aria-label="Selecionar todos os avisos de devolução"></th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Locação</th>
+                <th scope="col">Devolução</th>
+                <th scope="col">Telefone</th>
+                <th scope="col">Prévia</th>
               </tr>
             </thead>
             <tbody>
@@ -205,7 +207,7 @@
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-          <button type="submit" name="send_all" value="1" class="btn btn-secondary">Enviar todos</button>
+          <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
         </div>
       </form>
     {% else %}
@@ -219,13 +221,14 @@
 
     <div class="table-shell hidden md:block">
       <table class="data-table">
+        <caption class="sr-only">Histórico recente de avisos por WhatsApp</caption>
         <thead>
           <tr>
-            <th>Cliente</th>
-            <th>Locação</th>
-            <th>Tipo</th>
-            <th>Situação</th>
-            <th>Quando</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Locação</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Situação</th>
+            <th scope="col">Quando</th>
           </tr>
         </thead>
         <tbody>

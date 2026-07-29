@@ -1,10 +1,12 @@
 from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase
 
 from core.management.commands.homologation_report import (
+    _brl,
     _check_table_exists,
     _find_suspicious_dates,
     _suspicious_locado,
@@ -13,6 +15,9 @@ from core.management.commands.homologation_report import (
 
 
 class TableExistenceTests(SimpleTestCase):
+    def test_currency_uses_brazilian_separators(self):
+        self.assertEqual(_brl(Decimal('1234.56')), 'R$ 1.234,56')
+
     def test_uses_django_database_introspection(self):
         cursor = object()
 

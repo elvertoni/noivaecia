@@ -13,6 +13,7 @@ import urllib.request
 from django.conf import settings
 
 REQUEST_TIMEOUT = 15
+MAX_ERROR_BODY_LENGTH = 500
 
 
 class EvolutionError(Exception):
@@ -33,7 +34,7 @@ def _request(method, path, body=None):
     """Perform an HTTP request against the Evolution API and return the
     parsed JSON response body. Raises ``EvolutionError`` on any failure."""
     api_url, instance = _require_config()
-    url = f'{api_url}{path.format(instance=instance)}'
+    url = f'{api_url.rstrip("/")}{path.format(instance=instance)}'
 
     data = None
     headers = {'apikey': getattr(settings, 'EVOLUTION_API_KEY', '')}
@@ -47,6 +48,11 @@ def _request(method, path, body=None):
             raw = response.read()
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode('utf-8', errors='replace')
+        api_key = getattr(settings, 'EVOLUTION_API_KEY', '')
+        if api_key:
+            error_body = error_body.replace(api_key, '[redacted]')
+        if len(error_body) > MAX_ERROR_BODY_LENGTH:
+            error_body = f'{error_body[:MAX_ERROR_BODY_LENGTH]}…'
         raise EvolutionError(
             f'Evolution API retornou erro HTTP {exc.code}: {error_body}'
         ) from exc

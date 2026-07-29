@@ -6,10 +6,12 @@
   <div class="page-header print:hidden">
     <div>
       <h1 class="page-title">Atrasados / Não Devolvidos</h1>
-      <p class="page-description">Locações retiradas com retorno vencido em {{ today|date:'d/m/Y' }}.</p>
+      <p class="page-description">Locações retiradas com devolução vencida em {{ today|date:'d/m/Y' }}.</p>
     </div>
-    <div class="flex gap-2 print:hidden">
+    <div class="flex flex-wrap gap-2 print:hidden">
+      {% if request.user|has_action:'reports.export' %}
       <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
+      {% endif %}
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -35,13 +37,14 @@
   </form>
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Locações com devolução em atraso</caption>
       <thead>
         <tr>
-          <th>Locação</th>
-          <th>Cliente</th>
-          <th>Retorno previsto</th>
-          <th class="text-right">Dias de atraso</th>
-          <th class="text-right">Total</th>
+          <th scope="col">Locação</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Devolução prevista</th>
+          <th scope="col" class="text-right">Dias de atraso</th>
+          <th scope="col" class="text-right">Total</th>
         </tr>
       </thead>
       <tbody>

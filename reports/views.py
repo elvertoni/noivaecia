@@ -1,9 +1,10 @@
 """Reports module - isolated per-type services (R11.01)."""
 import csv
-from datetime import date as date_cls
+from decimal import Decimal
 
 from django.contrib import messages
 from django.http import StreamingHttpResponse
+from django.utils import timezone
 from django.views.generic import TemplateView
 
 from core.mixins import ModuleAccessMixin
@@ -39,6 +40,19 @@ def _fmt_date(value):
     return value.strftime('%d/%m/%Y') if value else '—'
 
 
+def _fmt_decimal(value):
+    return format(value if value is not None else Decimal('0'), '.2f').replace('.', ',')
+
+
+def _safe_csv_cell(value):
+    """Prevent spreadsheet formula execution in user-controlled CSV cells."""
+    if not isinstance(value, str):
+        return value
+    if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')):
+        return f"'{value}"
+    return value
+
+
 class _BaseReportView(ReportsAccessMixin, TemplateView):
     """Base with common filter param helpers and CSV export (R11.09/R11.10)."""
     csv_filename = 'relatorio.csv'
@@ -68,7 +82,7 @@ class _BaseReportView(ReportsAccessMixin, TemplateView):
             yield '\ufeff'
             yield writer.writerow(headers)
             for row in rows:
-                yield writer.writerow(row)
+                yield writer.writerow(_safe_csv_cell(value) for value in row)
 
         response = StreamingHttpResponse(stream(), content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{self.csv_filename}"'
@@ -96,7 +110,7 @@ class ARetirarReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Retirada', 'Retorno previsto', 'Total']
+        headers = ['Locação', 'Cliente', 'Retirada', 'Devolução prevista', 'Total']
 
         def rows():
             for rental in self._get_data(max_results=self._limit_for_export()):
@@ -105,7 +119,7 @@ class ARetirarReportView(_BaseReportView):
                     rental.customer.name,
                     _fmt_date(rental.pickup_date),
                     _fmt_date(rental.return_date),
-                    str(rental.total_value),
+                    _fmt_decimal(rental.total_value),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -119,7 +133,7 @@ class ARetirarReportView(_BaseReportView):
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
             'report_limit': self.report_limit,
         })
         return ctx
@@ -143,7 +157,7 @@ class RetiradosReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Retirada', 'Retorno previsto', 'Total']
+        headers = ['Locação', 'Cliente', 'Retirada', 'Devolução prevista', 'Total']
 
         def rows():
             for rental in self._get_data(max_results=self._limit_for_export()):
@@ -153,7 +167,7 @@ class RetiradosReportView(_BaseReportView):
                     rental.customer.name,
                     _fmt_date(pickup),
                     _fmt_date(rental.return_date),
-                    str(rental.total_value),
+                    _fmt_decimal(rental.total_value),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -167,7 +181,7 @@ class RetiradosReportView(_BaseReportView):
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
             'report_limit': self.report_limit,
         })
         return ctx
@@ -206,7 +220,7 @@ class DevolvidosReportView(_BaseReportView):
                     rental.customer.name,
                     _fmt_date(pickup),
                     _fmt_date(returned),
-                    str(rental.total_value),
+                    _fmt_decimal(rental.total_value),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -242,7 +256,7 @@ class AtrasadosReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Retorno previsto', 'Dias de atraso', 'Total']
+        headers = ['Locação', 'Cliente', 'Devolução prevista', 'Dias de atraso', 'Total']
 
         def rows():
             for entry in self._get_data(max_results=self._limit_for_export()):
@@ -252,7 +266,7 @@ class AtrasadosReportView(_BaseReportView):
                     rental.customer.name,
                     _fmt_date(rental.return_date),
                     entry['days_late'],
-                    str(rental.total_value),
+                    _fmt_decimal(rental.total_value),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -264,7 +278,7 @@ class AtrasadosReportView(_BaseReportView):
             'customer': self._p('customer'),
             'prefix': self._p('prefix'),
             'code': self._p('code'),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
             'report_limit': self.report_limit,
         })
         return ctx
@@ -288,7 +302,7 @@ class LocacoesReportView(_BaseReportView):
         )
 
     def _export_csv(self):
-        headers = ['Locação', 'Cliente', 'Retirada', 'Retorno previsto', 'Status', 'Total']
+        headers = ['Locação', 'Cliente', 'Retirada', 'Devolução prevista', 'Status', 'Total']
 
         def rows():
             for rental in self._get_data(max_results=self._limit_for_export()):
@@ -298,7 +312,7 @@ class LocacoesReportView(_BaseReportView):
                     _fmt_date(rental.pickup_date),
                     _fmt_date(rental.return_date),
                     rental.get_status_display(),
-                    str(rental.total_value),
+                    _fmt_decimal(rental.total_value),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -346,9 +360,9 @@ class ContasVencimentoReportView(_BaseReportView):
                     _fmt_date(receivable.due_date),
                     f'#{receivable.rental.number}',
                     receivable.rental.customer.name,
-                    str(receivable.amount),
-                    str(receivable.paid_amount),
-                    str(receivable.balance),
+                    _fmt_decimal(receivable.amount),
+                    _fmt_decimal(receivable.paid_amount),
+                    _fmt_decimal(receivable.balance),
                 ]
 
         return self._csv_response(rows(), headers)
@@ -363,7 +377,7 @@ class ContasVencimentoReportView(_BaseReportView):
             'date_to': self._date_input('date_to'),
             'customer': self._p('customer'),
             'overdue': self._p('overdue'),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
             'report_limit': self.report_limit,
         })
         return ctx
@@ -395,9 +409,9 @@ class ContasClienteReportView(_BaseReportView):
                         group['customer'].name,
                         f'#{receivable.rental.number}',
                         _fmt_date(receivable.due_date),
-                        str(receivable.amount),
-                        str(receivable.paid_amount),
-                        str(receivable.balance),
+                        _fmt_decimal(receivable.amount),
+                        _fmt_decimal(receivable.paid_amount),
+                        _fmt_decimal(receivable.balance),
                     ]
 
         return self._csv_response(rows(), headers)

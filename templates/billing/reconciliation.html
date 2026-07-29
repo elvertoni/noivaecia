@@ -11,9 +11,11 @@
       <h1 class="page-title">Reconciliação financeira</h1>
       <p class="page-description">Comparação entre títulos, recebimentos e movimentos · {{ today|date:'d/m/Y' }}</p>
     </div>
-    <div class="flex gap-2">
-      <a href="{% url 'billing:reconciliation_export' %}" class="btn btn-secondary">Exportar CSV</a>
-    </div>
+    {% if request.user|has_action:'reports.export' %}
+      <div class="flex gap-2">
+        <a href="{% url 'billing:reconciliation_export' %}" class="btn btn-secondary">Exportar CSV</a>
+      </div>
+    {% endif %}
   </div>
 
   <!-- Aggregates -->
@@ -78,15 +80,16 @@
       <p class="text-sm text-app-muted mb-3">Recebíveis onde o saldo armazenado diverge da soma dos recebimentos registrados.</p>
       <div class="table-shell">
         <table class="data-table">
+          <caption class="sr-only">Títulos com saldo financeiro inconsistente</caption>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Locação</th>
-              <th>Vencimento</th>
-              <th class="text-right">Valor</th>
-              <th class="text-right">Recebido armazenado</th>
-              <th class="text-right">Soma recebimentos</th>
-              <th class="text-right">Diferença</th>
+              <th scope="col">#</th>
+              <th scope="col">Locação</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col" class="text-right">Valor</th>
+              <th scope="col" class="text-right">Recebido armazenado</th>
+              <th scope="col" class="text-right">Soma recebimentos</th>
+              <th scope="col" class="text-right">Diferença</th>
             </tr>
           </thead>
           <tbody>

@@ -40,15 +40,16 @@
   {# Table #}
   <div class="table-shell hidden md:block">
     <table class="data-table">
+      <caption class="sr-only">Locações pendentes de retirada</caption>
       <thead>
         <tr>
-          <th>Locação</th>
-          <th>Cliente</th>
-          <th>Retirada</th>
-          <th>Retorno previsto</th>
-          <th>Itens</th>
-          <th class="text-right">Total</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Locação</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Retirada</th>
+          <th scope="col">Devolução prevista</th>
+          <th scope="col">Itens</th>
+          <th scope="col" class="text-right">Total</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -118,7 +119,7 @@
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-medium text-slate-600">Retorno</dt>
+            <dt class="text-xs font-medium text-slate-600">Devolução prevista</dt>
             <dd class="mt-1 text-slate-900">{{ rental.return_date|date:'d/m/Y' }}</dd>
           </div>
           <div class="col-span-2">

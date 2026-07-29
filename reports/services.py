@@ -1,9 +1,9 @@
 """Isolated query services for each report type (R11.01)."""
-from datetime import date as date_cls
 from decimal import Decimal
 
 from django.db.models import Prefetch
 from django.db.models import Q, Sum
+from django.utils import timezone
 
 from billing.models import Receivable
 from customers.models import _normalize_name
@@ -101,7 +101,7 @@ def report_devolvidos(date_from='', date_to='', customer='', prefix='', code='',
 
 def report_atrasados(customer='', prefix='', code='', max_results=DEFAULT_REPORT_LIMIT):
     """Picked-up rentals past return date (R11.05)."""
-    today = date_cls.today()
+    today = timezone.localdate()
     qs = _rental_base(Rental.Status.PICKED_UP).filter(return_date__lt=today)
     qs = _apply_rental_filters(qs, customer=customer, prefix=prefix, code=code, max_results=max_results)
     rows = []
@@ -132,7 +132,7 @@ def report_contas_vencimento(
     max_results=DEFAULT_REPORT_LIMIT,
 ):
     """Open receivables by due date — equiv. receber.rpt (R11.07)."""
-    today = date_cls.today()
+    today = timezone.localdate()
     qs = (
         Receivable.objects.filter(balance__gt=0)
         .select_related('rental__customer')

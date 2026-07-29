@@ -24,6 +24,7 @@ from django.utils import timezone
 from billing.models import FinancialMovement, Payment
 from core.models import AuditLog
 from customers.models import Customer
+from notifications.models import CustomerMessage
 from rentals.models import Rental
 
 
@@ -36,7 +37,7 @@ MERGED_MARKER = 'Mesclado no cliente #'
 # Contact fields copied from losers when empty on the winner.
 FILL_FIELDS = (
     'address', 'district', 'city', 'state', 'rg',
-    'phone_home', 'phone_mobile', 'phone_work',
+    'phone_home', 'alternate_phone_contact', 'phone_mobile', 'phone_work',
 )
 
 
@@ -102,7 +103,7 @@ class Command(BaseCommand):
         )
 
         merged = skipped_invalid = already_done = 0
-        total_rentals = total_payments = total_movements = 0
+        total_rentals = total_payments = total_movements = total_messages = 0
 
         for group in in_scope:
             cpf = group['cpf']
@@ -143,14 +144,17 @@ class Command(BaseCommand):
             rentals_n = Rental.objects.filter(customer_id__in=loser_ids).count()
             payments_n = Payment.objects.filter(customer_id__in=loser_ids).count()
             movements_n = FinancialMovement.objects.filter(customer_id__in=loser_ids).count()
+            messages_n = CustomerMessage.objects.filter(customer_id__in=loser_ids).count()
             self.stdout.write(
                 f'  CPF {cpf} [{group["tier"]}]: vencedor #{winner_id}, '
                 f'perdedores {loser_ids} — {rentals_n} locações, '
-                f'{payments_n} pagamentos, {movements_n} movimentos'
+                f'{payments_n} pagamentos, {movements_n} movimentos, '
+                f'{messages_n} avisos'
             )
             total_rentals += rentals_n
             total_payments += payments_n
             total_movements += movements_n
+            total_messages += messages_n
 
             if not apply_changes:
                 merged += 1
@@ -161,7 +165,7 @@ class Command(BaseCommand):
                 locked_losers = list(
                     Customer.objects.select_for_update().filter(pk__in=loser_ids)
                 )
-                today = timezone.now().date().isoformat()
+                today = timezone.localdate().isoformat()
 
                 for loser in locked_losers:
                     for field in FILL_FIELDS:
@@ -174,6 +178,7 @@ class Command(BaseCommand):
                     Rental.objects.filter(customer=loser).update(customer=winner)
                     Payment.objects.filter(customer=loser).update(customer=winner)
                     FinancialMovement.objects.filter(customer=loser).update(customer=winner)
+                    CustomerMessage.objects.filter(customer=loser).update(customer=winner)
                     loser.is_active = False
                     loser.legacy_notes = (
                         f'{loser.legacy_notes}\n{MERGED_MARKER}{winner.pk} em {today} '
@@ -201,6 +206,7 @@ class Command(BaseCommand):
                         'rentals_moved': rentals_n,
                         'payments_moved': payments_n,
                         'movements_moved': movements_n,
+                        'messages_moved': messages_n,
                     },
                 )
             merged += 1
@@ -209,7 +215,7 @@ class Command(BaseCommand):
             f'Grupos processados: {merged} · já mesclados: {already_done} · '
             f'inválidos pulados: {skipped_invalid} · '
             f'locações: {total_rentals} · pagamentos: {total_payments} · '
-            f'movimentos: {total_movements}'
+            f'movimentos: {total_movements} · avisos: {total_messages}'
         )
         if apply_changes:
             self.stdout.write(self.style.SUCCESS(summary))

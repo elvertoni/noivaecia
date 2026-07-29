@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
+from accounts.models import ActionPermission
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
@@ -494,6 +495,11 @@ class CategoryMergeViewTests(TestCase):
     def setUp(self):
         self.cat_a, self.cat_b, self.p1, self.p2, self.p3, self.p4 = _make_catalog()
         self.user = _make_user()
+        ActionPermission.objects.create(
+            user=self.user,
+            action_key='catalog.delete',
+            allowed=True,
+        )
         self.client.force_login(self.user)
         self.url = reverse('catalog:category_merge')
 
@@ -531,6 +537,21 @@ class CategoryMergeViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         form = response.context['form']
         self.assertFalse(form.is_valid())
+
+    def test_post_requires_catalog_delete_action(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='catalog.delete',
+        ).update(allowed=False)
+
+        response = self.client.post(self.url, {
+            'source': self.cat_b.pk,
+            'target': self.cat_a.pk,
+            'confirmed': '1',
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Category.objects.filter(pk=self.cat_b.pk).exists())
 
 
 # ── R8.07 Product value suggestion ────────────────────────────────────────────

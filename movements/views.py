@@ -1,4 +1,3 @@
-from datetime import date as date_cls
 from decimal import Decimal
 
 from django.contrib import messages
@@ -7,6 +6,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views.generic import CreateView, ListView, TemplateView
 
 from catalog.availability import find_upcoming_pickups
@@ -16,12 +16,17 @@ from customers.models import _normalize_name
 from rentals.models import Rental
 
 from .forms import PickupForm, ReturnForm
-from .models import Return
+from .models import Pickup, Return
 from .services import compute_days_late, compute_penalty
 
 
 class MovementsAccessMixin(ModuleAccessMixin):
     module_key = 'movements'
+
+
+def _format_brl(value):
+    formatted = f'{Decimal(value):,.2f}'.replace(',', '_')
+    return formatted.replace('.', ',').replace('_', '.')
 
 
 def _has_invalid_date_filter(request):
@@ -42,6 +47,12 @@ class PickupCreateView(MovementsAccessMixin, CreateView):
         if hasattr(self.rental, 'pickup'):
             messages.info(request, 'Esta locação já teve a retirada registrada.')
             return redirect('rentals:detail', pk=self.rental.pk)
+        if self.rental.status != Rental.Status.PENDING:
+            messages.error(
+                request,
+                'A retirada só pode ser registrada em uma locação pendente.',
+            )
+            return redirect('rentals:detail', pk=self.rental.pk)
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -50,12 +61,22 @@ class PickupCreateView(MovementsAccessMixin, CreateView):
         return context
 
     def form_valid(self, form):
-        form.instance.rental = self.rental
-        self.object = form.save()
-        self.rental.status = Rental.Status.PICKED_UP
-        self.rental.save(update_fields=['status', 'updated_at'])
+        with transaction.atomic():
+            rental = Rental.objects.select_for_update().get(pk=self.rental.pk)
+            if (
+                rental.status != Rental.Status.PENDING
+                or Pickup.objects.filter(rental=rental).exists()
+            ):
+                messages.info(
+                    self.request,
+                    'Esta locação não está mais disponível para registrar retirada.',
+                )
+                return redirect('rentals:detail', pk=rental.pk)
+            form.instance.rental = rental
+            self.object = form.save()
+        self.rental = rental
         messages.success(self.request, 'Retirada registrada com sucesso.')
-        return redirect('rentals:detail', pk=self.rental.pk)
+        return redirect('rentals:detail', pk=rental.pk)
 
 
 class ReturnCreateView(MovementsAccessMixin, CreateView):
@@ -74,6 +95,15 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
         if hasattr(self.rental, 'return_record'):
             messages.info(request, 'Esta locação já teve a devolução registrada.')
             return redirect('rentals:detail', pk=self.rental.pk)
+        if (
+            self.rental.status != Rental.Status.PICKED_UP
+            or not hasattr(self.rental, 'pickup')
+        ):
+            messages.error(
+                request,
+                'A devolução exige uma retirada registrada e ainda em aberto.',
+            )
+            return redirect('rentals:detail', pk=self.rental.pk)
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -85,6 +115,13 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
         ).order_by('due_date')
         ctx['open_receivables'] = open_receivables
         ctx['total_open_balance'] = open_receivables.aggregate(s=Sum('balance'))['s'] or Decimal('0')
+        ctx['can_receive_on_return'] = (
+            bool(open_receivables)
+            or (
+                self.rental.return_date < timezone.localdate()
+                and self.rental.penalty_value > 0
+            )
+        )
         return ctx
 
     def form_valid(self, form):
@@ -94,7 +131,7 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
         return_date = form.cleaned_data['return_date']
         payment_amount = form.cleaned_data.get('payment_amount') or Decimal('0')
         payment_method = form.cleaned_data.get('payment_method', '')
-        payment_date = form.cleaned_data.get('payment_date') or date_cls.today()
+        payment_date = form.cleaned_data.get('payment_date') or timezone.localdate()
 
         payment_info = ''
         with transaction.atomic():
@@ -103,6 +140,15 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
             rental = Rental.objects.select_for_update().get(pk=self.rental.pk)
             if Return.objects.filter(rental=rental).exists():
                 messages.info(self.request, 'Esta locação já teve a devolução registrada.')
+                return redirect('rentals:detail', pk=rental.pk)
+            if (
+                rental.status != Rental.Status.PICKED_UP
+                or not Pickup.objects.filter(rental=rental).exists()
+            ):
+                messages.error(
+                    self.request,
+                    'A locação não está mais disponível para registrar devolução.',
+                )
                 return redirect('rentals:detail', pk=rental.pk)
 
             days_late = compute_days_late(rental.return_date, return_date)
@@ -117,7 +163,8 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
             if payment_amount > available_balance:
                 form.add_error(
                     'payment_amount',
-                    f'O valor recebido é maior que o saldo em aberto (R$ {available_balance:.2f}).',
+                    'O valor recebido é maior que o saldo em aberto '
+                    f'(R$ {_format_brl(available_balance)}).',
                 )
                 return self.form_invalid(form)
 
@@ -129,20 +176,17 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
             return_obj.save()
             self.object = return_obj
 
-            # 2. Update rental status
-            rental.status = Rental.Status.RETURNED
-            rental.save(update_fields=['status', 'updated_at'])
-
-            # 3. Create penalty receivable if applicable (R10.06)
+            # 2. Create penalty receivable if applicable (R10.06)
             if days_late > 0 and penalty_applied > 0:
-                Receivable.objects.create(
+                penalty_receivable = Receivable.objects.create(
                     rental=rental,
                     due_date=return_obj.return_date,
                     amount=return_obj.penalty_applied,
                     legacy_notes='Multa de atraso na devolução',
                 )
+                open_receivables.append(penalty_receivable)
 
-            # 4. Handle optional payment (R10.05)
+            # 3. Handle optional payment (R10.05)
             if payment_amount > Decimal('0') and payment_method:
                 remaining = payment_amount
                 for receivable in open_receivables:
@@ -157,11 +201,14 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
                         user=self.request.user,
                     )
                     remaining -= to_pay
-                payment_info = f' Recebimento de R$ {payment_amount} registrado.'
+                payment_info = (
+                    f' Recebimento de R$ {_format_brl(payment_amount)} registrado.'
+                )
 
         msg = (
             f'Devolução registrada. Dias de atraso: {days_late}; '
-            f'multa: R$ {return_obj.penalty_applied}.{payment_info}'
+            f'multa: R$ {_format_brl(return_obj.penalty_applied)}.'
+            f'{payment_info}'
         )
         messages.success(self.request, msg)
         return redirect('rentals:detail', pk=rental.pk)
@@ -211,7 +258,7 @@ class PickupListView(MovementsAccessMixin, ListView):
             'date_to': date_to.isoformat() if date_to else '',
             'customer_q': self.request.GET.get('customer', ''),
             'product_q': self.request.GET.get('product', ''),
-            'today': date_cls.today(),
+            'today': timezone.localdate(),
         })
         return ctx
 
@@ -254,7 +301,7 @@ class ReturnListView(MovementsAccessMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        today = date_cls.today()
+        today = timezone.localdate()
         date_from = parse_br_date(self.request.GET.get('date_from'))
         date_to = parse_br_date(self.request.GET.get('date_to'))
         rentals = ctx[self.context_object_name]
@@ -284,7 +331,7 @@ class OverdueListView(MovementsAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        today = date_cls.today()
+        today = timezone.localdate()
         rentals = (
             Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date__lt=today)
             .select_related('customer')

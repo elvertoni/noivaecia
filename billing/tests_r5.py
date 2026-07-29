@@ -1,11 +1,12 @@
 """Tests for Sprint R5 — financial dashboard, receivables, payment flows."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from accounts.models import ActionPermission, ModulePermission
@@ -101,6 +102,29 @@ class RegisterPaymentServiceTests(TestCase):
         register_payment(self.rec, Decimal('400'), date(2026, 6, 20))
         self.rec.refresh_from_db()
         self.assertEqual(self.rec.balance, Decimal('-100'))
+
+    def test_rejects_invalid_service_inputs(self):
+        with self.assertRaises(ValueError):
+            register_payment(
+                self.rec,
+                Decimal('-1'),
+                date(2026, 6, 20),
+            )
+        with self.assertRaises(ValueError):
+            register_payment(
+                self.rec,
+                Decimal('1'),
+                date(2026, 6, 20),
+                method='invalid',
+            )
+        with self.assertRaises(ValueError):
+            register_payment(
+                self.rec,
+                Decimal('1'),
+                timezone.localdate() + timedelta(days=1),
+            )
+
+        self.assertEqual(Payment.objects.count(), 0)
 
 
 class ReversePaymentServiceTests(TestCase):

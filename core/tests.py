@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 
 from accounts.models import ModulePermission
 from core.models import AuditLog
@@ -31,6 +32,8 @@ class DashboardModuleTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Clientes')
         self.assertNotContains(response, 'Manutenção')
+        self.assertEqual(response.context['indicators'], [])
+        self.assertNotContains(response, 'Recebimentos em aberto')
 
     def test_dashboard_lists_maintenance_when_allowed(self):
         user = User.objects.create_user(email='maint@b.com', password='Senha12345')
@@ -45,6 +48,29 @@ class DashboardModuleTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Manutenção')
+
+    def test_module_shortcuts_point_to_their_own_apps(self):
+        user = User.objects.create_user(email='links@b.com', password='Senha12345')
+        ModulePermission.objects.create(
+            user=user,
+            module_key='movements',
+            allowed=True,
+        )
+        ModulePermission.objects.create(
+            user=user,
+            module_key='billing',
+            allowed=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('dashboard'))
+        module_urls = {
+            module['key']: module['url']
+            for module in response.context['modules']
+        }
+
+        self.assertEqual(module_urls['movements'], reverse('movements:pickup_list'))
+        self.assertEqual(module_urls['billing'], reverse('billing:dashboard'))
 
 
 class AuditLogTests(TestCase):

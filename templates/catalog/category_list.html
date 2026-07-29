@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Categorias · Noivas &amp; Cia{% endblock %}
 
@@ -9,8 +10,10 @@
       <h1 class="page-title">Categorias</h1>
       <p class="page-description">Prefixos e nomes das categorias do acervo.</p>
     </div>
-    <div class="flex gap-2">
-      <a href="{% url 'catalog:category_merge' %}" class="btn btn-secondary">Mesclar</a>
+    <div class="flex flex-wrap gap-2">
+      {% if request.user|has_action:'catalog.delete' %}
+        <a href="{% url 'catalog:category_merge' %}" class="btn btn-secondary">Mesclar</a>
+      {% endif %}
       <a href="{% url 'catalog:category_create' %}" class="btn btn-primary">Nova categoria</a>
     </div>
   </div>
@@ -22,7 +25,7 @@
       <input type="text" name="q" id="category-search" value="{{ q }}" class="field-input" placeholder="Prefixo ou nome">
     </div>
     <div class="field-group flex items-end">
-      <label class="inline-flex items-center gap-2 text-sm text-app-muted" for="category-placeholder">
+      <label class="touch-target inline-flex items-center gap-2 text-sm text-app-muted" for="category-placeholder">
         <input type="checkbox" name="placeholder" id="category-placeholder" value="1" {% if only_placeholders %}checked{% endif %} class="rounded border-slate-300">
         Apenas placeholders
         {% if placeholder_count %}<span class="badge badge-warning">{{ placeholder_count }}</span>{% endif %}
@@ -34,12 +37,13 @@
 
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Categorias do acervo</caption>
       <thead>
         <tr>
-          <th>Prefixo</th>
-          <th>Nome</th>
-          <th class="text-right">Produtos</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Prefixo</th>
+          <th scope="col">Nome</th>
+          <th scope="col" class="text-right">Produtos</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -55,7 +59,9 @@
             <td class="text-right">{{ category.product_count }}</td>
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>
-              <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 text-danger">Excluir</a>
+              {% if request.user|has_action:'catalog.delete' %}
+                <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 text-danger">Excluir</a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}

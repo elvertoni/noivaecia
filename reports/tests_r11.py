@@ -130,6 +130,28 @@ class ARetirarReportViewTests(TestCase):
 
         self.assertEqual(len(rows), 2)  # header + one data row
 
+    def test_csv_export_escapes_spreadsheet_formulas_and_formats_money(self):
+        self.pending.customer.name = '=HYPERLINK("https://example.invalid")'
+        self.pending.customer.save()
+
+        response = self.client.get(self.url, {'format': 'csv'})
+        rows = _streaming_csv_rows(response)
+
+        self.assertEqual(rows[1][1], '\'=HYPERLINK("https://example.invalid")')
+        self.assertEqual(rows[1][4], '200,00')
+
+    def test_csv_export_requires_export_action(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='reports.export',
+        ).update(allowed=False)
+
+        response = self.client.get(self.url, {'format': 'csv'})
+        page = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(page, 'Exportar CSV')
+
 
 class ReportQueryPerformanceTests(TestCase):
     def setUp(self):

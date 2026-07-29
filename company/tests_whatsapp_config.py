@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import date, time
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -8,6 +8,8 @@ from django.urls import reverse
 from accounts.models import ModulePermission
 from company.forms import CompanyForm
 from company.models import Company
+from customers.models import Customer
+from rentals.models import Rental
 
 User = get_user_model()
 
@@ -128,6 +130,33 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         form = CompanyForm(data=data)
         self.assertTrue(form.is_valid(), form.errors)
         self.assertFalse(form.cleaned_data['whatsapp_reports_enabled'])
+
+    def test_rejects_negative_financial_rates(self):
+        for field_name in (
+            'daily_interest_rate',
+            'late_fee_rate',
+            'monthly_interest_rate',
+            'damage_penalty_rate',
+            'loss_penalty_rate',
+        ):
+            with self.subTest(field=field_name):
+                form = CompanyForm(data=self._base_data(**{field_name: '-0.01'}))
+                self.assertFalse(form.is_valid())
+                self.assertIn(field_name, form.errors)
+
+    def test_last_rental_number_cannot_be_lower_than_existing_contract(self):
+        customer = Customer.objects.create(name='Cliente Teste')
+        Rental.objects.create(
+            number=25,
+            customer=customer,
+            pickup_date=date.today(),
+            return_date=date.today(),
+        )
+
+        form = CompanyForm(data=self._base_data(last_rental_number=24))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('maior contrato existente (#25)', form.errors['last_rental_number'][0])
 
 
 CMD = 'notifications.management.commands.send_daily_whatsapp_report'

@@ -10,7 +10,7 @@
       <h1 class="page-title">Produtos</h1>
       <p class="page-description">Itens ativos e arquivados do acervo por categoria.</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="{% url 'catalog:placeholder_review' %}" class="btn btn-secondary">Placeholders</a>
       <a href="{% url 'catalog:product_create' %}" class="btn btn-primary">Novo produto</a>
     </div>
@@ -75,14 +75,15 @@
   <!-- Table (R8.02 badges) -->
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Produtos do acervo</caption>
       <thead>
         <tr>
-          <th>Código</th>
-          <th>Descrição</th>
-          <th>Cor</th>
-          <th>Tamanho</th>
-          <th class="text-right">Valor</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Código</th>
+          <th scope="col">Descrição</th>
+          <th scope="col">Cor</th>
+          <th scope="col">Tamanho</th>
+          <th scope="col" class="text-right">Valor</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -103,7 +104,7 @@
             <td>{{ product.description }}</td>
             <td>{{ product.color|default:'—' }}</td>
             <td>{{ product.size|default:'—' }}</td>
-            <td class="text-right whitespace-nowrap">R$ {{ product.value }}</td>
+            <td class="text-right whitespace-nowrap">R$ {{ product.value|brl }}</td>
             <td class="text-right whitespace-nowrap">
               <a href="{% url 'catalog:product_history' product.pk %}" class="text-link">Histórico</a>
               <a href="{% url 'catalog:product_update' product.pk %}" class="text-link ml-3">Editar</a>

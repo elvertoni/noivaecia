@@ -38,14 +38,15 @@
             </div>
             <div class="table-shell">
               <table class="data-table">
+                <caption class="sr-only">Títulos em aberto de {{ customer.name }}</caption>
                 <thead>
                   <tr>
-                    <th class="w-8"></th>
-                    <th>Vencimento</th>
-                    <th>Locação</th>
-                    <th class="text-right">Saldo</th>
-                    <th class="text-right">Total c/ juros</th>
-                    <th class="text-right">Atraso</th>
+                    <th scope="col" class="w-8"><span class="sr-only">Selecionar</span></th>
+                    <th scope="col">Vencimento</th>
+                    <th scope="col">Locação</th>
+                    <th scope="col" class="text-right">Saldo</th>
+                    <th scope="col" class="text-right">Total c/ juros</th>
+                    <th scope="col" class="text-right">Atraso</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -79,7 +80,9 @@
           </div>
 
           <div class="mt-4 form-actions">
-            <button type="submit" class="btn btn-primary">Receber selecionados</button>
+            {% if request.user|has_action:'billing.receive' %}
+              <button type="submit" class="btn btn-primary">Receber selecionados</button>
+            {% endif %}
             <a href="{% url 'billing:customer_receivables' customer.pk %}" class="btn btn-secondary">Cancelar</a>
           </div>
         </form>

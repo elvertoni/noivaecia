@@ -12,6 +12,7 @@ from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
+from notifications.models import CustomerMessage
 from rentals.models import Rental, RentalItem
 
 User = get_user_model()
@@ -114,6 +115,27 @@ class CustomerListSearchTests(TestCase):
         ids = {row['id'] for row in r.json()['results']}
         self.assertIn(active.pk, ids)
         self.assertNotIn(inactive.pk, ids)
+
+    def test_quick_search_rejects_user_without_customers_or_rentals_access(self):
+        user = User.objects.create_user(email='sem-modulo@test.com', password='pass')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('customers:search'), {'q': 'Ana'})
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_quick_search_accepts_rentals_module_access(self):
+        user = User.objects.create_user(email='locacoes@test.com', password='pass')
+        ModulePermission.objects.create(
+            user=user,
+            module_key='rentals',
+            allowed=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('customers:search'), {'q': 'Ana'})
+
+        self.assertEqual(response.status_code, 200)
 
     def test_search_by_phone_home(self):
         r = self.client.get(self.url, {'q': '2222-3333'})
@@ -297,6 +319,25 @@ class CustomerDeleteGuardTests(TestCase):
         r = self.client.post(url)
         self.assertFalse(Customer.objects.filter(pk=fresh.pk).exists())
 
+    def test_delete_blocked_when_customer_has_orphan_whatsapp_history(self):
+        fresh = _make_customer(name='Com mensagem')
+        CustomerMessage.objects.create(
+            customer=fresh,
+            kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='5543999998888',
+            status=CustomerMessage.Status.SENT,
+        )
+
+        response = self.client.post(
+            reverse('customers:delete', args=[fresh.pk]),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('customers:detail', args=[fresh.pk]),
+        )
+        self.assertTrue(Customer.objects.filter(pk=fresh.pk).exists())
+
 
 # ── R9.07 Deactivation ────────────────────────────────────────────────────────
 
@@ -308,7 +349,7 @@ class CustomerDeactivateTests(TestCase):
 
     def test_deactivate_active_customer(self):
         url = reverse('customers:deactivate', args=[self.customer.pk])
-        self.client.post(url)
+        self.client.post(url, {'is_active': '0'})
         self.customer.refresh_from_db()
         self.assertFalse(self.customer.is_active)
 
@@ -316,11 +357,19 @@ class CustomerDeactivateTests(TestCase):
         self.customer.is_active = False
         self.customer.save()
         url = reverse('customers:deactivate', args=[self.customer.pk])
-        self.client.post(url)
+        self.client.post(url, {'is_active': '1'})
         self.customer.refresh_from_db()
         self.assertTrue(self.customer.is_active)
 
     def test_deactivate_redirects_to_detail(self):
         url = reverse('customers:deactivate', args=[self.customer.pk])
-        r = self.client.post(url)
+        r = self.client.post(url, {'is_active': '0'})
         self.assertRedirects(r, reverse('customers:detail', args=[self.customer.pk]))
+
+    def test_deactivate_requires_explicit_target_state(self):
+        url = reverse('customers:deactivate', args=[self.customer.pk])
+
+        self.client.post(url)
+
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.is_active)

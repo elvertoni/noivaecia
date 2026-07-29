@@ -56,16 +56,19 @@
     <form method="post" class="space-y-4">
       {% csrf_token %}
       {% if form.non_field_errors %}
-        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+        <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
       {% endif %}
 
       {# Return date #}
       {% include 'includes/form_field.html' with field=form.return_date only %}
 
       {# Optional payment section (R10.05) #}
-      {% if open_receivables %}
+      {% if can_receive_on_return %}
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
           <h3 class="text-sm font-semibold text-app-ink">Registrar recebimento agora <span class="text-app-muted font-normal">(opcional)</span></h3>
+          {% if not open_receivables %}
+            <p class="text-xs text-app-muted">O valor disponível será a multa calculada para esta devolução em atraso.</p>
+          {% endif %}
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             {% include 'includes/form_field.html' with field=form.payment_amount only %}
             {% include 'includes/form_field.html' with field=form.payment_method only %}

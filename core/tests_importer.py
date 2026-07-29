@@ -25,6 +25,8 @@ from core.management.commands.import_legacy_access import (
     safe_date,
 )
 from customers.models import Customer
+from movements.models import Return
+from notifications.models import CustomerMessage
 from rentals.models import Rental, RentalItem
 
 
@@ -295,6 +297,41 @@ class ResetSafetyGateTests(TestCase):
                      reset=True, confirm_reset=True, verbosity=0)
         self.assertTrue(Customer.objects.exists())
 
+    def test_reset_removes_existing_customer_messages_before_customers(self):
+        customer = Customer.objects.create(name='Cliente anterior')
+        rental = Rental.objects.create(
+            number=99,
+            customer=customer,
+            pickup_date=date(2026, 1, 1),
+            return_date=date(2026, 1, 2),
+        )
+        CustomerMessage.objects.create(
+            rental=rental,
+            customer=customer,
+            kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='5543999998888',
+            status=CustomerMessage.Status.SENT,
+        )
+
+        call_command(
+            'import_legacy_access',
+            export_dir=self.export_dir,
+            reset=True,
+            confirm_reset=True,
+            verbosity=0,
+        )
+
+        self.assertFalse(CustomerMessage.objects.exists())
+        self.assertTrue(Customer.objects.filter(legacy_id=1).exists())
+
+    def test_rejects_non_positive_batch_size_before_importing(self):
+        with self.assertRaisesMessage(CommandError, 'maior que zero'):
+            call_command(
+                'import_legacy_access',
+                export_dir=self.export_dir,
+                batch_size=0,
+            )
+
 
 class DryRunTests(TestCase):
     """R4.03 — --dry-run does not persist data."""
@@ -456,6 +493,35 @@ class NormalizedImportTests(TestCase):
             row = cursor.fetchone()
         self.assertIsNotNone(row)
         self.assertIn('2026.06.12', row[0])
+
+    def test_new_records_use_ids_after_the_imported_range(self):
+        customer = Customer.objects.create(name='Cliente posterior')
+
+        self.assertGreater(customer.pk, 1)
+
+
+class InvalidMovementDateTests(TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_invalid_effective_return_date_does_not_abort_import(self):
+        data = minimal_data()
+        data['locado'][0]['dev_efetiva'] = 'data-inválida'
+        export_dir = build_export_dir(self.tmp, data)
+
+        call_command(
+            'import_legacy_access',
+            export_dir=export_dir,
+            reset=True,
+            confirm_reset=True,
+            verbosity=0,
+        )
+
+        self.assertTrue(Rental.objects.filter(number=1).exists())
+        self.assertFalse(Return.objects.filter(rental__number=1).exists())
 
 
 class Pago0ClosedSemanticsTest(TestCase):

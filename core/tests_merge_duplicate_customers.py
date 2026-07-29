@@ -11,6 +11,7 @@ from django.test import TestCase
 from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from core.models import AuditLog
 from customers.models import Customer
+from notifications.models import CustomerMessage
 from rentals.models import Rental
 
 
@@ -31,7 +32,10 @@ class MergeDuplicateCustomersTests(TestCase):
         )
         cls.loser = Customer.objects.create(
             name='Maria AP Silva', cpf='11111111111', city='Bandeirantes',
-            phone_mobile='(43)99999-0000', notes='Prefere retirar sábado.',
+            phone_home='(43) 3333-1111',
+            alternate_phone_contact='Mãe',
+            phone_mobile='(43)99999-0000',
+            notes='Prefere retirar sábado.',
         )
         cls.rental = Rental.objects.create(
             number=1, customer=cls.loser,
@@ -50,6 +54,13 @@ class MergeDuplicateCustomersTests(TestCase):
             date=date(2020, 1, 15), account=account,
             direction=FinancialMovement.Direction.INFLOW,
             amount=Decimal('100'), customer=cls.loser,
+        )
+        cls.message = CustomerMessage.objects.create(
+            rental=cls.rental,
+            customer=cls.loser,
+            kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='5543999990000',
+            status=CustomerMessage.Status.SENT,
         )
 
     def run_command(self, groups, *args):
@@ -81,20 +92,24 @@ class MergeDuplicateCustomersTests(TestCase):
         self.rental.refresh_from_db()
         self.payment.refresh_from_db()
         self.movement.refresh_from_db()
+        self.message.refresh_from_db()
 
         self.assertEqual(self.rental.customer_id, self.winner.pk)
         self.assertEqual(self.payment.customer_id, self.winner.pk)
         self.assertEqual(self.movement.customer_id, self.winner.pk)
+        self.assertEqual(self.message.customer_id, self.winner.pk)
         self.assertFalse(self.loser.is_active)
         self.assertIn('Mesclado no cliente #', self.loser.legacy_notes)
         # Winner keeps own data but gains the loser's phone and notes.
         self.assertEqual(self.winner.phone_mobile, '(43)99999-0000')
+        self.assertEqual(self.winner.alternate_phone_contact, 'Mãe')
         self.assertIn('Prefere retirar sábado.', self.winner.notes)
         self.assertIn('Absorveu cadastro(s)', self.winner.legacy_notes)
         log = AuditLog.objects.get(action='merge_duplicate_customer')
         self.assertEqual(log.object_id, str(self.winner.pk))
         self.assertEqual(log.metadata['loser_ids'], [self.loser.pk])
         self.assertEqual(log.metadata['rentals_moved'], 1)
+        self.assertEqual(log.metadata['messages_moved'], 1)
         self.assertIn('Grupos processados: 1', output)
 
     def test_apply_is_idempotent(self):

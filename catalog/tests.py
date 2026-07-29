@@ -477,6 +477,41 @@ class ProductBrowseViewTests(TestCase):
         self.assertFalse(results['BMA500']['available'])
         self.assertEqual(results['BMA500']['rental']['number'], 3)
 
+    def test_availability_inline_excludes_current_rental(self):
+        rental = Rental.objects.create(
+            number=5,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 20),
+            status=Rental.Status.PENDING,
+        )
+        RentalItem.objects.create(
+            rental=rental,
+            product=self.b54_cinza,
+            value=120,
+        )
+
+        results = {
+            row['code']: row
+            for row in self._get(
+                prefix='BMA',
+                pickup_date='2026-06-10',
+                return_date='2026-06-20',
+                exclude_rental_id=rental.pk,
+            )['results']
+        }
+
+        self.assertTrue(results['BMA500']['available'])
+
+    def test_rejects_reversed_rental_window(self):
+        response = self.client.get(self.url, {
+            'pickup_date': '2026-06-20',
+            'return_date': '2026-06-10',
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'invalid_date')
+
     def test_cancelled_rental_does_not_block(self):
         rental = Rental.objects.create(
             number=2, customer=self.customer,
@@ -600,3 +635,38 @@ class ProductAvailabilityJsonTests(TestCase):
         })
 
         self.assertJSONEqual(response.content, {'available': False, 'error': 'invalid_date'})
+
+    def test_rejects_return_before_pickup(self):
+        response = self.client.get(self.url, {
+            'product_id': self.product.pk,
+            'pickup_date': '20/06/2026',
+            'return_date': '10/06/2026',
+        })
+
+        self.assertJSONEqual(
+            response.content,
+            {'available': False, 'error': 'invalid_date'},
+        )
+
+    def test_excludes_current_rental_when_editing(self):
+        rental = Rental.objects.create(
+            number=22,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 15),
+            return_date=date(2026, 6, 20),
+            status=Rental.Status.PENDING,
+        )
+        RentalItem.objects.create(
+            rental=rental,
+            product=self.product,
+            value=300,
+        )
+
+        response = self.client.get(self.url, {
+            'product_id': self.product.pk,
+            'pickup_date': '15/06/2026',
+            'return_date': '20/06/2026',
+            'exclude_rental_id': rental.pk,
+        })
+
+        self.assertJSONEqual(response.content, {'available': True})

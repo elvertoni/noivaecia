@@ -23,12 +23,12 @@
   {# Filtros #}
   <div class="panel space-y-3">
     {# Linha 1 — busca geral #}
-    <form method="get" class="flex gap-2" id="form-busca-geral">
+    <form method="get" class="flex flex-col gap-2 sm:flex-row" id="form-busca-geral">
       {% if active_filter %}<input type="hidden" name="active" value="{{ active_filter }}">{% endif %}
       <label for="q" class="sr-only">Buscar clientes</label>
       <input type="search" name="q" id="q" value="{{ search }}"
              placeholder="Buscar por nome, CPF, RG, telefone ou ID legado…"
-             class="field-input flex-1"
+             class="field-input w-full flex-1"
              autocomplete="off">
       <button type="submit" class="btn btn-primary">Buscar</button>
       {% if search %}
@@ -57,15 +57,16 @@
   {# Tabela #}
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Clientes cadastrados</caption>
       <thead>
         <tr>
-          <th>Nome</th>
-          <th>Cidade / UF</th>
-          <th>RG</th>
-          <th>CPF</th>
-          <th>Celular</th>
-          <th>Tel. alternativo</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Nome</th>
+          <th scope="col">Cidade / UF</th>
+          <th scope="col">RG</th>
+          <th scope="col">CPF</th>
+          <th scope="col">Celular</th>
+          <th scope="col">Tel. alternativo</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>

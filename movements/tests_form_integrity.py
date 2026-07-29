@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import ModulePermission
 from billing.models import Receivable
@@ -57,6 +58,43 @@ class ReturnFormIntegrityTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('payment_amount', form.errors)
+
+    def test_return_and_payment_dates_cannot_be_in_the_future(self):
+        future_date = timezone.localdate().replace(
+            year=timezone.localdate().year + 1,
+        )
+        form = ReturnForm(
+            data={
+                'return_date': future_date.isoformat(),
+                'payment_amount': '10,00',
+                'payment_method': 'cash',
+                'payment_date': future_date.isoformat(),
+            },
+            rental=self.rental,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('return_date', form.errors)
+        self.assertIn('payment_date', form.errors)
+
+    def test_pending_rental_cannot_be_returned_by_direct_url(self):
+        pending = Rental.objects.create(
+            number=2002,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+            status=Rental.Status.PENDING,
+        )
+
+        response = self.client.post(
+            reverse('movements:return', args=[pending.pk]),
+            {'return_date': '15/06/2026'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, Rental.Status.PENDING)
+        self.assertFalse(Return.objects.filter(rental=pending).exists())
 
     def test_return_rejects_payment_above_available_balance_before_saving(self):
         receivable = Receivable.objects.create(

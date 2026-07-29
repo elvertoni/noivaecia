@@ -5,6 +5,7 @@ from django.contrib.auth.forms import (
     SetPasswordForm,
     UserCreationForm,
 )
+from django.core.exceptions import ValidationError
 
 from core.ui import INPUT_CLASS
 from core.modules import MODULES
@@ -79,6 +80,12 @@ class EmailUserCreationForm(UserCreationForm):
         if commit:
             user.save()
         return user
+
+    def clean_email(self):
+        email = User.objects.normalize_email(self.cleaned_data['email']).lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError('Já existe um usuário com este e-mail.')
+        return email
 
     def save_module_permissions(self, user):
         selected = set(self.cleaned_data.get('module_permissions') or [])

@@ -23,6 +23,7 @@ from customers.models import Customer
 from .models import Rental, RentalItem
 
 MAX_PROOF_PHOTO_UPLOAD_SIZE = 8 * 1024 * 1024
+MAX_PROOF_PHOTO_PIXELS = 40_000_000
 MAX_PROOF_PHOTO_EDGE = 1600
 PROOF_PHOTO_JPEG_QUALITY = 84
 
@@ -50,6 +51,10 @@ def process_proof_photo(uploaded_file):
     try:
         uploaded_file.seek(0)
         with Image.open(uploaded_file) as image:
+            if image.width * image.height > MAX_PROOF_PHOTO_PIXELS:
+                raise ValidationError(
+                    'A imagem possui resolução excessiva. Envie uma foto menor.'
+                )
             image.load()
             image = ImageOps.exif_transpose(image)
             if image.mode in ('RGBA', 'LA') or (
@@ -155,9 +160,15 @@ class RentalForm(forms.ModelForm):
             except (ValueError, TypeError):
                 pass
         if customer_id:
-            self.fields['customer'].queryset = (
-                Customer.objects.filter(pk=customer_id).only('pk', 'name')
+            selected_customer_is_current = (
+                self.instance
+                and self.instance.pk
+                and self.instance.customer_id == customer_id
             )
+            customers = Customer.objects.filter(pk=customer_id)
+            if not selected_customer_is_current:
+                customers = customers.filter(is_active=True)
+            self.fields['customer'].queryset = customers.only('pk', 'name')
         else:
             self.fields['customer'].queryset = Customer.objects.none()
 

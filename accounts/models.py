@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 
 from core.models import TimeStampedModel
 
@@ -13,7 +15,7 @@ class UserManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
         if not email:
             raise ValueError('O e-mail é obrigatório.')
-        email = self.normalize_email(email)
+        email = self.normalize_email(email).lower()
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -71,9 +73,17 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         """
         if self.is_superuser:
             return True
-        return self.module_permissions.filter(
-            module_key=module_key, allowed=True
-        ).exists()
+        cache_name = '_allowed_module_keys_cache'
+        allowed_keys = getattr(self, cache_name, None)
+        if allowed_keys is None:
+            allowed_keys = frozenset(
+                self.module_permissions.filter(allowed=True).values_list(
+                    'module_key',
+                    flat=True,
+                )
+            )
+            setattr(self, cache_name, allowed_keys)
+        return module_key in allowed_keys
 
     def has_action(self, action_key):
         """Return whether this user may perform a fine-grained action (R3.11).
@@ -82,9 +92,17 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         """
         if self.is_superuser:
             return True
-        return self.action_permissions.filter(
-            action_key=action_key, allowed=True
-        ).exists()
+        cache_name = '_allowed_action_keys_cache'
+        allowed_keys = getattr(self, cache_name, None)
+        if allowed_keys is None:
+            allowed_keys = frozenset(
+                self.action_permissions.filter(allowed=True).values_list(
+                    'action_key',
+                    flat=True,
+                )
+            )
+            setattr(self, cache_name, allowed_keys)
+        return action_key in allowed_keys
 
     def can_manage_users(self):
         """Return whether this user can create users and change module access."""
@@ -138,3 +156,19 @@ class ActionPermission(TimeStampedModel):
 
     def __str__(self):
         return f'{self.user} · {self.action_key} · {self.allowed}'
+
+
+def _clear_cached_permission(instance, cache_name):
+    user = instance._state.fields_cache.get('user')
+    if user is not None:
+        user.__dict__.pop(cache_name, None)
+
+
+@receiver([post_save, post_delete], sender=ModulePermission)
+def clear_module_permission_cache(sender, instance, **kwargs):
+    _clear_cached_permission(instance, '_allowed_module_keys_cache')
+
+
+@receiver([post_save, post_delete], sender=ActionPermission)
+def clear_action_permission_cache(sender, instance, **kwargs):
+    _clear_cached_permission(instance, '_allowed_action_keys_cache')

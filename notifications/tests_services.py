@@ -2,6 +2,7 @@
 network — this module only exercises ORM fixtures and string assembly."""
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -59,6 +60,13 @@ class EmptyDayTests(TestCase):
         self.assertNotIn('📦', text)
         self.assertNotIn('👗', text)
         self.assertNotIn('💰', text)
+
+    @mock.patch('notifications.services.timezone.localdate', return_value=TODAY)
+    def test_default_reference_date_uses_django_local_date(self, localdate):
+        text = build_daily_report()
+
+        localdate.assert_called_with()
+        self.assertIn('resumo de seg, 20/07', text)
 
 
 class DeliveriesBlockTests(TestCase):

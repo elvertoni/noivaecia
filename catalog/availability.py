@@ -58,9 +58,24 @@ def find_overlapping_rental(product, pickup_date, return_date, exclude_rental_id
     ``exclude_rental_id`` skips the rental being edited so it never conflicts
     with itself.
     """
+    return find_overlapping_rentals(
+        [product.pk],
+        pickup_date,
+        return_date,
+        exclude_rental_id=exclude_rental_id,
+    ).get(product.pk)
+
+
+def find_overlapping_rentals(
+    product_ids,
+    pickup_date,
+    return_date,
+    exclude_rental_id=None,
+):
+    """Map products to their first active rental overlapping the date window."""
     qs = (
         RentalItem.objects.filter(
-            product=product,
+            product_id__in=product_ids,
             rental__pickup_date__lte=return_date,
             rental__return_date__gte=pickup_date,
         )
@@ -70,8 +85,10 @@ def find_overlapping_rental(product, pickup_date, return_date, exclude_rental_id
     )
     if exclude_rental_id:
         qs = qs.exclude(rental_id=exclude_rental_id)
-    item = qs.first()
-    return item.rental if item else None
+    result = {}
+    for item in qs:
+        result.setdefault(item.product_id, item.rental)
+    return result
 
 
 def find_upcoming_pickups(product_ids, today, within_days=10):

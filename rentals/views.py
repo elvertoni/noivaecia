@@ -15,9 +15,11 @@ from django.views.generic import (
 )
 
 from billing.services import PaymentPlanError, create_rental_payment_plan
-from catalog.availability import find_overlapping_rental
+from catalog.availability import find_overlapping_rentals
+from catalog.models import Product
 from company.models import Company
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
+from core.models import AuditLog
 from customers.models import _normalize_name
 
 from .forms import RentalCancelForm, RentalForm, RentalItemFormSet, RentalItemEditFormSet
@@ -33,20 +35,26 @@ def check_item_availability(items, pickup_date, return_date, exclude_rental_id=N
     """
     if not (pickup_date and return_date):
         return []
-    conflicts = []
-    seen = set()
+    products = {}
     for item_form in items.forms:
         if not getattr(item_form, 'cleaned_data', None):
             continue
         if item_form.cleaned_data.get('DELETE'):
             continue
         product = item_form.cleaned_data.get('product')
-        if not product or product.pk in seen:
+        if not product or product.pk in products:
             continue
-        seen.add(product.pk)
-        clash = find_overlapping_rental(
-            product, pickup_date, return_date, exclude_rental_id=exclude_rental_id,
-        )
+        products[product.pk] = product
+
+    overlaps = find_overlapping_rentals(
+        products,
+        pickup_date,
+        return_date,
+        exclude_rental_id=exclude_rental_id,
+    )
+    conflicts = []
+    for product_id, product in products.items():
+        clash = overlaps.get(product_id)
         if clash:
             conflicts.append(
                 f'A peça {product.category.prefix}{product.code} '
@@ -55,6 +63,24 @@ def check_item_availability(items, pickup_date, return_date, exclude_rental_id=N
                 f'({clash.pickup_date:%d/%m/%Y} a {clash.return_date:%d/%m/%Y}).'
             )
     return conflicts
+
+
+def lock_item_products(items):
+    """Serialize normal create/edit flows that reserve the same physical pieces."""
+    product_ids = {
+        item_form.cleaned_data['product'].pk
+        for item_form in items.forms
+        if getattr(item_form, 'cleaned_data', None)
+        and not item_form.cleaned_data.get('DELETE')
+        and item_form.cleaned_data.get('product')
+    }
+    if product_ids:
+        list(
+            Product.objects.select_for_update()
+            .filter(pk__in=product_ids)
+            .order_by('pk')
+            .values_list('pk', flat=True)
+        )
 
 
 class RentalAccessMixin(ModuleAccessMixin):
@@ -191,20 +217,6 @@ class RentalCreateView(RentalAccessMixin, CreateView):
         if not items.is_valid():
             return self.form_invalid(form)
 
-        conflicts = check_item_availability(
-            items,
-            form.cleaned_data.get('pickup_date'),
-            form.cleaned_data.get('return_date'),
-        )
-        if conflicts:
-            for message in conflicts:
-                form.add_error(None, message)
-            messages.error(
-                self.request,
-                'Há peças já alocadas para o período. Revise os itens em destaque.',
-            )
-            return self.form_invalid(form)
-
         items_total = sum(
             (
                 item_form.cleaned_data.get('value') or Decimal('0')
@@ -242,6 +254,21 @@ class RentalCreateView(RentalAccessMixin, CreateView):
 
         try:
             with transaction.atomic():
+                lock_item_products(items)
+                conflicts = check_item_availability(
+                    items,
+                    form.cleaned_data.get('pickup_date'),
+                    form.cleaned_data.get('return_date'),
+                )
+                if conflicts:
+                    for message in conflicts:
+                        form.add_error(None, message)
+                    messages.error(
+                        self.request,
+                        'Há peças já alocadas para o período. Revise os itens informados.',
+                    )
+                    return self.form_invalid(form)
+
                 rental = form.save(commit=False)
                 rental.number = Company.next_rental_number()
                 rental.save()
@@ -326,30 +353,49 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         if not items.is_valid():
             return self.form_invalid(form)
 
-        conflicts = check_item_availability(
-            items,
-            form.cleaned_data.get('pickup_date'),
-            form.cleaned_data.get('return_date'),
-            exclude_rental_id=self.object.pk,
-        )
-        if conflicts:
-            for message in conflicts:
-                form.add_error(None, message)
-            messages.error(
-                self.request,
-                'Há peças já alocadas para o período. Revise os itens em destaque.',
-            )
-            return self.form_invalid(form)
-
         with transaction.atomic():
+            locked_rental = Rental.objects.select_for_update().get(pk=self.object.pk)
+            if locked_rental.status == Rental.Status.CANCELLED:
+                form.add_error(None, 'A locação foi cancelada e não pode mais ser editada.')
+                return self.form_invalid(form)
+
+            list(
+                RentalItem.objects.select_for_update()
+                .filter(rental=locked_rental)
+                .order_by('pk')
+                .values_list('pk', flat=True)
+            )
+            lock_item_products(items)
+            conflicts = check_item_availability(
+                items,
+                form.cleaned_data.get('pickup_date'),
+                form.cleaned_data.get('return_date'),
+                exclude_rental_id=locked_rental.pk,
+            )
+            if conflicts:
+                for message in conflicts:
+                    form.add_error(None, message)
+                messages.error(
+                    self.request,
+                    'Há peças já alocadas para o período. Revise os itens informados.',
+                )
+                return self.form_invalid(form)
+
+            has_payments = locked_rental.receivables.filter(
+                payments__isnull=False,
+            ).exists()
             rental = form.save(commit=False)
+            if has_payments:
+                for field_name in self.protected_field_names:
+                    setattr(rental, field_name, getattr(locked_rental, field_name))
+            rental.total_value = locked_rental.total_value
             rental.save()
-            old_total = rental.total_value
+            old_total = locked_rental.total_value
             items.instance = rental
             items.save()
             rental.recalculate_total()
 
-        if context['has_payments'] and rental.total_value != old_total:
+        if has_payments and rental.total_value != old_total:
             messages.warning(
                 self.request,
                 'O total da locação foi alterado. Revise ou gere novamente as parcelas futuras '
@@ -386,24 +432,28 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
 
     def form_valid(self, form):
         with transaction.atomic():
-            self.rental.status = Rental.Status.CANCELLED
-            self.rental.cancelled_reason = form.cleaned_data['reason']
-            self.rental.cancelled_at = timezone.now()
-            self.rental.cancelled_by = self.request.user
-            self.rental.save(update_fields=[
+            rental = Rental.objects.select_for_update().get(pk=self.rental.pk)
+            if rental.status in (Rental.Status.CANCELLED, Rental.Status.RETURNED):
+                messages.error(self.request, 'Esta locação não pode ser cancelada.')
+                return redirect(rental.get_absolute_url())
+            rental.status = Rental.Status.CANCELLED
+            rental.cancelled_reason = form.cleaned_data['reason']
+            rental.cancelled_at = timezone.now()
+            rental.cancelled_by = self.request.user
+            rental.save(update_fields=[
                 'status', 'cancelled_reason', 'cancelled_at', 'cancelled_by', 'updated_at',
             ])
-        from core.models import AuditLog
-        AuditLog.objects.create(
-            user=self.request.user,
-            action='rental_cancel',
-            model_name='Rental',
-            object_id=str(self.rental.pk),
-            object_repr=f'Locação #{self.rental.number}',
-            reason=form.cleaned_data['reason'],
-        )
-        messages.success(self.request, f'Locação #{self.rental.number} cancelada.')
-        return redirect(self.rental.get_absolute_url())
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='rental_cancel',
+                model_name='Rental',
+                object_id=str(rental.pk),
+                object_repr=f'Locação #{rental.number}',
+                reason=form.cleaned_data['reason'],
+            )
+        self.rental = rental
+        messages.success(self.request, f'Locação #{rental.number} cancelada.')
+        return redirect(rental.get_absolute_url())
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
@@ -418,41 +468,47 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
         return self._render_confirm(request, rental)
 
     def post(self, request, *args, **kwargs):
-        rental = get_object_or_404(Rental, pk=kwargs['pk'])
+        with transaction.atomic():
+            rental = get_object_or_404(
+                Rental.objects.select_for_update(),
+                pk=kwargs['pk'],
+            )
+            has_pickup = hasattr(rental, 'pickup') and rental.pickup is not None
+            has_return = (
+                hasattr(rental, 'return_record')
+                and rental.return_record is not None
+            )
+            has_payments = rental.receivables.filter(
+                payments__isnull=False,
+            ).exists()
 
-        has_pickup = hasattr(rental, 'pickup') and rental.pickup is not None
-        has_return = hasattr(rental, 'return_record') and rental.return_record is not None
-        has_payments = rental.receivables.filter(payments__isnull=False).exists()
+            if has_pickup or has_return or has_payments:
+                messages.error(
+                    request,
+                    'Não é possível excluir esta locação pois já possui retirada, devolução ou '
+                    'pagamento registrados. Use o cancelamento.',
+                )
+                return redirect(rental.get_absolute_url())
 
-        if has_pickup or has_return or has_payments:
+            if rental.status == Rental.Status.CANCELLED:
+                number = rental.number
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='rental_delete',
+                    model_name='Rental',
+                    object_id=str(rental.pk),
+                    object_repr=f'Locação #{number}',
+                    reason='Exclusão física de locação cancelada.',
+                )
+                rental.delete()
+                messages.success(request, f'Locação #{number} excluída.')
+                return redirect('rentals:list')
+
             messages.error(
                 request,
-                'Não é possível excluir esta locação pois já possui retirada, devolução ou '
-                'pagamento registrados. Use o cancelamento.',
+                'Apenas locações canceladas podem ser excluídas. Cancele primeiro.',
             )
             return redirect(rental.get_absolute_url())
-
-        if rental.status == Rental.Status.CANCELLED:
-            from core.models import AuditLog
-            number = rental.number
-            rental_pk = rental.pk
-            AuditLog.objects.create(
-                user=request.user,
-                action='rental_delete',
-                model_name='Rental',
-                object_id=str(rental_pk),
-                object_repr=f'Locação #{number}',
-                reason='Exclusão física de locação cancelada.',
-            )
-            rental.delete()
-            messages.success(request, f'Locação #{number} excluída.')
-            return redirect('rentals:list')
-
-        messages.error(
-            request,
-            'Apenas locações canceladas podem ser excluídas. Cancele primeiro.',
-        )
-        return redirect(rental.get_absolute_url())
 
     def _render_confirm(self, request, rental):
         from django.template.response import TemplateResponse

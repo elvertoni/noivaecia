@@ -1,5 +1,6 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from rentals.models import Rental
 
@@ -13,7 +14,10 @@ def mark_rental_picked_up(sender, instance, created, **kwargs):
         return
 
     if created:
-        Rental.objects.filter(pk=instance.rental_id).update(status=Rental.Status.PICKED_UP)
+        Rental.objects.filter(pk=instance.rental_id).update(
+            status=Rental.Status.PICKED_UP,
+            updated_at=timezone.now(),
+        )
 
 
 @receiver(post_save, sender=Return)
@@ -23,4 +27,7 @@ def mark_rental_returned(sender, instance, created, **kwargs):
         return
 
     if created:
-        Rental.objects.filter(pk=instance.rental_id).update(status=Rental.Status.RETURNED)
+        Rental.objects.filter(pk=instance.rental_id).update(
+            status=Rental.Status.RETURNED,
+            updated_at=timezone.now(),
+        )

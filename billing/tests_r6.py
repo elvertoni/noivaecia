@@ -329,6 +329,11 @@ class ReconciliationExportViewTests(TestCase):
         self.rec.paid_amount = Decimal('99')
         self.rec.save()
         self.user = _make_staff('billing')
+        ActionPermission.objects.create(
+            user=self.user,
+            action_key='reports.export',
+            allowed=True,
+        )
         self.client.force_login(self.user)
 
     def test_returns_csv(self):
@@ -349,3 +354,13 @@ class ReconciliationExportViewTests(TestCase):
         # More than just the header row
         rows = list(csv.reader(io.StringIO(content)))
         self.assertGreater(len(rows), 1)
+
+    def test_export_requires_reports_export_action(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='reports.export',
+        ).update(allowed=False)
+
+        response = self.client.get(reverse('billing:reconciliation_export'))
+
+        self.assertEqual(response.status_code, 403)

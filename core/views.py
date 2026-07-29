@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_GET
@@ -13,8 +14,8 @@ MODULE_URL_NAMES = {
     'catalog': 'catalog:product_list',
     'company': 'company:edit',
     'rentals': 'rentals:list',
-    'movements': 'rentals:list',
-    'billing': 'rentals:list',
+    'movements': 'movements:pickup_list',
+    'billing': 'billing:dashboard',
     'reports': 'reports:index',
     'maintenance': 'maintenance:index',
 }
@@ -32,6 +33,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        allowed_module_keys = {
+            key
+            for key, _ in MODULES
+            if self.request.user.has_module(key)
+        }
         context['modules'] = [
             {
                 'key': key,
@@ -39,16 +45,39 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'url': reverse(MODULE_URL_NAMES.get(key, 'dashboard')),
             }
             for key, label in MODULES
-            if self.request.user.has_module(key)
+            if key in allowed_module_keys
         ]
 
-        to_pick_up = Rental.objects.filter(status=Rental.Status.PENDING).count()
-        to_return = Rental.objects.filter(status=Rental.Status.PICKED_UP).count()
-        open_receivables = Receivable.objects.filter(balance__gt=0).count()
+        indicators = []
+        if 'movements' in allowed_module_keys:
+            rental_counts = Rental.objects.aggregate(
+                to_pick_up=Count(
+                    'id',
+                    filter=Q(status=Rental.Status.PENDING),
+                ),
+                to_return=Count(
+                    'id',
+                    filter=Q(status=Rental.Status.PICKED_UP),
+                ),
+            )
+            indicators.extend([
+                {
+                    'label': 'Locações a retirar',
+                    'value': rental_counts['to_pick_up'],
+                    'url': reverse('movements:pickup_list'),
+                },
+                {
+                    'label': 'Locações a devolver',
+                    'value': rental_counts['to_return'],
+                    'url': reverse('movements:return_list'),
+                },
+            ])
+        if 'billing' in allowed_module_keys:
+            indicators.append({
+                'label': 'Recebimentos em aberto',
+                'value': Receivable.objects.filter(balance__gt=0).count(),
+                'url': reverse('billing:receivables'),
+            })
 
-        context['indicators'] = [
-            {'label': 'Locações a retirar', 'value': to_pick_up, 'url': reverse('movements:pickup_list')},
-            {'label': 'Locações a devolver', 'value': to_return, 'url': reverse('movements:return_list')},
-            {'label': 'Recebimentos em aberto', 'value': open_receivables, 'url': reverse('billing:receivables')},
-        ]
+        context['indicators'] = indicators
         return context

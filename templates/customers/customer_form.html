@@ -15,7 +15,7 @@
       {% csrf_token %}
 
       {% if form.non_field_errors %}
-        <div class="alert alert-error">{{ form.non_field_errors }}</div>
+        <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
       {% endif %}
 
       {# Nome #}
@@ -135,7 +135,7 @@
   }
 
   if (selectEstado && inputCidade && cityOptions) {
-    const cidadeInicial = '{{ form.city.value|default:"Bandeirantes" }}';
+    const cidadeInicial = '{{ form.city.value|default:"Bandeirantes"|escapejs }}';
     popularCidades(selectEstado.value || 'PR', cidadeInicial);
 
     selectEstado.addEventListener('change', function () {

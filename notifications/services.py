@@ -14,17 +14,16 @@ exists, so this module never recomputes a business rule on its own:
   / ``billing.services.register_payment`` (write-offs force ``balance`` to
   zero, so the ``balance__gt=0`` filter already excludes them).
 - "Entregas a fazer" (block a, devoluções) has no existing rental-level
-  function that accepts an arbitrary reference date — the closest one,
-  ``reports.services.report_atrasados``, hardcodes ``date.today()`` — so it
-  filters ``Rental`` directly by ``status``/``return_date`` using the same
-  semantics.
+  function that accepts an arbitrary reference date, so it filters ``Rental``
+  directly by ``status``/``return_date`` using the same semantics.
 """
 import re
-from datetime import date as date_cls, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from string import Formatter
 
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from notifications import evolution
@@ -132,7 +131,7 @@ def _receivables_block(on_date):
 
 def build_daily_report(on_date=None):
     """Assemble the WhatsApp text for the daily operational summary."""
-    on_date = on_date or date_cls.today()
+    on_date = on_date or timezone.localdate()
     header = _format_header(on_date)
 
     delivery_lines, delivery_count, delivery_overdue = _deliveries_block(on_date)
@@ -289,7 +288,9 @@ def validate_message_template(template):
 
 
 def _message_template_context(rental):
-    item_count = rental.items.count()
+    item_count = getattr(rental, 'item_count', None)
+    if item_count is None:
+        item_count = rental.items.count()
     return {
         'cliente': _first_name(rental.customer),
         'numero_locacao': rental.number,
@@ -336,6 +337,7 @@ def pickup_reminder_queue(today=None):
     rentals = (
         Rental.objects.filter(status=Rental.Status.PENDING, pickup_date=target_date)
         .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.PICKUP_REMINDER))
+        .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
     )
@@ -361,6 +363,7 @@ def return_reminder_queue(today=None):
     rentals = (
         Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date=today)
         .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.RETURN_REMINDER))
+        .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
     )
@@ -393,7 +396,15 @@ def dispatch_customer_message(rental, kind, user=None, message_template=None):
     An invalid phone number short-circuits to a ``FAILED`` record without any
     network call.
     """
+    if kind not in _MESSAGE_RENDERERS:
+        raise ValueError('Tipo de aviso inválido.')
+
     with transaction.atomic():
+        rental = (
+            Rental.objects.select_for_update()
+            .select_related('customer')
+            .get(pk=rental.pk)
+        )
         existing = CustomerMessage.objects.filter(
             rental=rental, kind=kind, status=CustomerMessage.Status.SENT,
         ).first()

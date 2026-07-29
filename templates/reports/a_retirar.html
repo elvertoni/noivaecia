@@ -8,8 +8,10 @@
       <h1 class="page-title">Produtos a Retirar</h1>
       <p class="page-description">Locações pendentes de retirada.</p>
     </div>
-    <div class="flex gap-2 print:hidden">
+    <div class="flex flex-wrap gap-2 print:hidden">
+      {% if request.user|has_action:'reports.export' %}
       <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
+      {% endif %}
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -43,14 +45,15 @@
   </form>
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Locações pendentes de retirada</caption>
       <thead>
         <tr>
-          <th>Locação</th>
-          <th>Cliente</th>
-          <th>Retirada prevista</th>
-          <th>Retorno previsto</th>
-          <th>Itens</th>
-          <th class="text-right">Total</th>
+          <th scope="col">Locação</th>
+          <th scope="col">Cliente</th>
+          <th scope="col">Retirada prevista</th>
+          <th scope="col">Devolução prevista</th>
+          <th scope="col">Itens</th>
+          <th scope="col" class="text-right">Total</th>
         </tr>
       </thead>
       <tbody>

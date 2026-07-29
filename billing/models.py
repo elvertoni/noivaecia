@@ -72,6 +72,13 @@ class Receivable(TimeStampedModel):
             self.balance = Decimal('0')
         else:
             self.balance = (self.amount or Decimal('0')) - (self.paid_amount or Decimal('0'))
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and {
+            'amount',
+            'paid_amount',
+            'written_off_at',
+        }.intersection(update_fields):
+            kwargs['update_fields'] = set(update_fields) | {'balance'}
         super().save(*args, **kwargs)
 
     @property

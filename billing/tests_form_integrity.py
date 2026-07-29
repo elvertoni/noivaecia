@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import ActionPermission, ModulePermission
 from billing.forms import ManualMovementForm, PaymentForm
@@ -47,6 +48,28 @@ class BillingFormIntegrityTests(TestCase):
         invalid = PaymentForm(data={'value': '0', 'payment_date': '2026-06-20'})
         self.assertFalse(invalid.is_valid())
         self.assertIn('value', invalid.errors)
+
+    def test_payment_and_manual_movement_reject_future_dates(self):
+        future = timezone.localdate().replace(
+            year=timezone.localdate().year + 1,
+        )
+        payment = PaymentForm(data={
+            'value': '10,00',
+            'payment_date': future.isoformat(),
+        })
+        movement = ManualMovementForm(data={
+            'date': future.isoformat(),
+            'account': self.account.pk,
+            'direction': 'inflow',
+            'amount': '10,00',
+            'description': 'Futuro',
+            'customer_name': '',
+        })
+
+        self.assertFalse(payment.is_valid())
+        self.assertFalse(movement.is_valid())
+        self.assertIn('payment_date', payment.errors)
+        self.assertIn('date', movement.errors)
 
     def test_manual_movement_requires_an_exact_customer_match(self):
         partial = ManualMovementForm(data={
@@ -97,6 +120,19 @@ class BillingFormIntegrityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('installments', response.context['generate_form'].errors)
         self.assertContains(response, 'Certifique-se que este valor seja maior ou igual a 1.')
+
+    def test_installment_generation_requires_receive_action(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='billing.receive',
+        ).update(allowed=False)
+
+        response = self.client.post(
+            reverse('billing:generate', args=[self.rental.pk]),
+            {'installments': '1', 'first_due_date': '20/06/2026'},
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_legacy_payment_uses_audited_payment_service(self):
         response = self.client.post(

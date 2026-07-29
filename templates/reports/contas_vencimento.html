@@ -8,8 +8,10 @@
       <h1 class="page-title">Contas a Receber por Vencimento</h1>
       <p class="page-description">Títulos em aberto ordenados por vencimento. Equivalente ao receber.rpt.</p>
     </div>
-    <div class="flex gap-2 print:hidden">
+    <div class="flex flex-wrap gap-2 print:hidden">
+      {% if request.user|has_action:'reports.export' %}
       <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
+      {% endif %}
       <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
@@ -59,14 +61,15 @@
 
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Títulos em aberto por vencimento</caption>
       <thead>
         <tr>
-          <th>Vencimento</th>
-          <th>Locação</th>
-          <th>Cliente</th>
-          <th class="text-right">Valor</th>
-          <th class="text-right">Recebido</th>
-          <th class="text-right">Saldo</th>
+          <th scope="col">Vencimento</th>
+          <th scope="col">Locação</th>
+          <th scope="col">Cliente</th>
+          <th scope="col" class="text-right">Valor</th>
+          <th scope="col" class="text-right">Recebido</th>
+          <th scope="col" class="text-right">Saldo</th>
         </tr>
       </thead>
       <tbody>

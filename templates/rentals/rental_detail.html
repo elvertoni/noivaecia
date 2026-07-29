@@ -37,11 +37,15 @@
 
       {# 3. Destructive actions (visually separated) #}
       {% if rental.status == 'pending' or rental.status == 'picked_up' %}
-        <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary text-amber-700 hover:text-amber-800">Cancelar</a>
+        {% if request.user|has_action:'rentals.cancel' %}
+          <a href="{% url 'rentals:cancel' rental.pk %}" class="btn btn-secondary text-amber-700 hover:text-amber-800">Cancelar</a>
+        {% endif %}
       {% endif %}
 
       {% if rental.status == 'cancelled' %}
-        <a href="{% url 'rentals:delete' rental.pk %}" class="btn btn-danger">Excluir</a>
+        {% if request.user|has_action:'rentals.delete' %}
+          <a href="{% url 'rentals:delete' rental.pk %}" class="btn btn-danger">Excluir</a>
+        {% endif %}
       {% endif %}
     </div>
   </div>
@@ -52,7 +56,7 @@
       <p class="mt-1 text-lg font-semibold text-app-ink">{{ rental.pickup_date|date:'d/m/Y' }}</p>
     </div>
     <div class="panel">
-      <p class="field-label">Retorno</p>
+      <p class="field-label">Devolução</p>
       <p class="mt-1 text-lg font-semibold text-app-ink">{{ rental.return_date|date:'d/m/Y' }}</p>
     </div>
     <div class="panel">
@@ -63,7 +67,7 @@
     </div>
     <div class="panel">
       <p class="field-label">Total</p>
-      <p class="mt-1 text-lg font-semibold text-app-ink">R$ {{ rental.total_value }}</p>
+      <p class="mt-1 text-lg font-semibold text-app-ink">R$ {{ rental.total_value|brl }}</p>
     </div>
   </div>
 
@@ -71,12 +75,13 @@
     <h2 class="section-title">Itens</h2>
     <div class="mt-4 table-shell">
       <table class="data-table">
+        <caption class="sr-only">Itens da locação #{{ rental.number }}</caption>
         <thead>
           <tr>
-            <th>Produto</th>
-            <th>Descrição</th>
-            <th>Foto</th>
-            <th class="text-right">Valor</th>
+            <th scope="col">Produto</th>
+            <th scope="col">Descrição</th>
+            <th scope="col">Foto</th>
+            <th scope="col" class="text-right">Valor</th>
           </tr>
         </thead>
         <tbody>
@@ -108,7 +113,7 @@
                   <span class="text-sm text-slate-500">Sem foto</span>
                 {% endif %}
               </td>
-              <td class="text-right">R$ {{ item.value }}</td>
+              <td class="text-right">R$ {{ item.value|brl }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="4" class="table-empty">Sem itens.</td></tr>
@@ -124,7 +129,7 @@
       <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
         <p><span class="text-slate-500">Devolvido em:</span> {{ rental.return_record.return_date|date:'d/m/Y' }}</p>
         <p><span class="text-slate-500">Dias de atraso:</span> {{ rental.return_record.days_late }}</p>
-        <p><span class="text-slate-500">Multa aplicada:</span> R$ {{ rental.return_record.penalty_applied }}</p>
+        <p><span class="text-slate-500">Multa aplicada:</span> R$ {{ rental.return_record.penalty_applied|brl }}</p>
       </div>
     </div>
   {% endif %}

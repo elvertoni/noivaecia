@@ -2,9 +2,16 @@
 
 from decimal import Decimal
 
+from django import forms
 from django.test import SimpleTestCase
 
-from core.ui import BRMoneyField, normalize_br_decimal, parse_br_date
+from core.templatetags.core_tags import render_field
+from core.ui import (
+    BRMoneyField,
+    configure_br_decimal_field,
+    normalize_br_decimal,
+    parse_br_date,
+)
 
 
 class BrazilianDecimalTests(SimpleTestCase):
@@ -40,6 +47,37 @@ class BrazilianDecimalTests(SimpleTestCase):
         self.assertIn('1.234,50', rendered)
         self.assertIn('aria-describedby="id_amount-currency"', rendered)
         self.assertIn('id="id_amount-currency"', rendered)
+
+    def test_configure_decimal_field_preserves_existing_widget_attributes(self):
+        field = forms.DecimalField(
+            widget=forms.NumberInput(attrs={
+                'min': '0',
+                'placeholder': 'Valor',
+            }),
+        )
+
+        configure_br_decimal_field(field, currency=True)
+
+        self.assertEqual(field.widget.attrs['min'], '0')
+        self.assertEqual(field.widget.attrs['placeholder'], 'Valor')
+
+    def test_render_field_merges_existing_accessibility_descriptions(self):
+        class AmountForm(forms.Form):
+            amount = BRMoneyField(
+                max_digits=10,
+                decimal_places=2,
+                help_text='Informe o valor.',
+            )
+
+        form = AmountForm()
+        form.fields['amount'].widget.attrs['aria-describedby'] = 'custom-help'
+
+        rendered = render_field(form['amount'])
+
+        self.assertIn(
+            'aria-describedby="custom-help id_amount-help id_amount-currency"',
+            rendered,
+        )
 
 
 class BrazilianDateTests(SimpleTestCase):

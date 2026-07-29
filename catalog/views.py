@@ -86,23 +86,24 @@ class CategoryDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
     success_url = reverse_lazy('catalog:category_list')
 
     def form_valid(self, form):
-        category = self.get_object()
+        category = self.object
         try:
-            response = super().form_valid(form)
+            with transaction.atomic():
+                response = super().form_valid(form)
+                AuditLog.objects.create(
+                    user=self.request.user,
+                    action='category_delete',
+                    model_name='Category',
+                    object_id=str(category.pk),
+                    object_repr=str(category),
+                    reason='Exclusão de categoria.',
+                )
         except ProtectedError:
             messages.error(
                 self.request,
                 'Esta categoria não pode ser excluída porque possui produtos vinculados.',
             )
             return redirect('catalog:category_list')
-        AuditLog.objects.create(
-            user=self.request.user,
-            action='category_delete',
-            model_name='Category',
-            object_id=str(category.pk),
-            object_repr=str(category),
-            reason='Exclusão de categoria.',
-        )
         messages.success(self.request, 'Categoria excluída com sucesso.')
         return response
 
@@ -461,13 +462,14 @@ class PlaceholderReviewView(CatalogAccessMixin, TemplateView):
 
 # ── Category merge (R8.06) ────────────────────────────────────────────────────
 
-class CategoryMergeView(CatalogAccessMixin, View):
+class CategoryMergeView(CatalogAccessMixin, ActionRequiredMixin, View):
     """Merge source category into target, updating all products/items (R8.06).
 
     GET/POST preview=1: show impact preview.
     POST confirmed=1: execute in atomic transaction.
     """
 
+    action_key = 'catalog.delete'
     template_name = 'catalog/category_merge.html'
 
     def get(self, request, *args, **kwargs):
@@ -485,10 +487,9 @@ class CategoryMergeView(CatalogAccessMixin, View):
         target = form.cleaned_data['target']
         confirmed = request.POST.get('confirmed') == '1'
 
-        product_count = Product.objects.filter(category=source).count()
-
         # Count rental items affected via products in source category
         from rentals.models import RentalItem
+        product_count = Product.objects.filter(category=source).count()
         item_count = RentalItem.objects.filter(product__category=source).count()
 
         if not confirmed:
@@ -502,6 +503,22 @@ class CategoryMergeView(CatalogAccessMixin, View):
 
         # Execute merge
         with transaction.atomic():
+            categories = {
+                category.pk: category
+                for category in Category.objects.select_for_update().filter(
+                    pk__in=(source.pk, target.pk),
+                )
+            }
+            if len(categories) != 2:
+                messages.error(
+                    request,
+                    'Uma das categorias foi alterada ou excluída. Revise a mesclagem.',
+                )
+                return redirect('catalog:category_merge')
+            source = categories[source.pk]
+            target = categories[target.pk]
+            product_count = Product.objects.filter(category=source).count()
+            item_count = RentalItem.objects.filter(product__category=source).count()
             Product.objects.filter(category=source).update(category=target)
             AuditLog.objects.create(
                 user=request.user,
@@ -646,6 +663,19 @@ class ProductBrowseView(View):
         if pickup_date_str and return_date_str:
             pickup_date = parse_br_date(pickup_date_str)
             return_date = parse_br_date(return_date_str)
+            if (
+                pickup_date is None
+                or return_date is None
+                or return_date < pickup_date
+            ):
+                return JsonResponse(
+                    {'results': [], 'error': 'invalid_date'},
+                    status=400,
+                )
+
+        exclude_rental_id = self._parse_rental_id(
+            request.GET.get('exclude_rental_id', ''),
+        )
 
         # ``scoped``: q + visibility only (drives the category facet).
         scoped = Product.objects.select_related('category').filter(is_active=True)
@@ -688,6 +718,8 @@ class ProductBrowseView(View):
                 )
                 .exclude(rental__status__in=self.INACTIVE_STATUSES)
             )
+            if exclude_rental_id is not None:
+                active_item = active_item.exclude(rental_id=exclude_rental_id)
             results_qs = results_qs.annotate(in_use=Exists(active_item))
 
         total = results_qs.count()
@@ -697,7 +729,12 @@ class ProductBrowseView(View):
         page_items = list(results_qs[start:start + self.PAGE_SIZE])
 
         rental_map = (
-            self._rentals_for_page(page_items, pickup_date, return_date)
+            self._rentals_for_page(
+                page_items,
+                pickup_date,
+                return_date,
+                exclude_rental_id=exclude_rental_id,
+            )
             if pickup_date and return_date else {}
         )
 
@@ -733,7 +770,23 @@ class ProductBrowseView(View):
             'facets': {'sizes': sizes, 'colors': colors},
         })
 
-    def _rentals_for_page(self, page_items, pickup_date, return_date):
+    @staticmethod
+    def _parse_rental_id(value):
+        try:
+            rental_id = int(value)
+        except (TypeError, ValueError):
+            return None
+        if 1 <= rental_id <= 2147483647:
+            return rental_id
+        return None
+
+    def _rentals_for_page(
+        self,
+        page_items,
+        pickup_date,
+        return_date,
+        exclude_rental_id=None,
+    ):
         in_use_ids = [p.pk for p in page_items if getattr(p, 'in_use', False)]
         if not in_use_ids:
             return {}
@@ -748,6 +801,8 @@ class ProductBrowseView(View):
             # Deterministic: match the overlap validator when a piece has holds.
             .order_by('rental__pickup_date', 'rental__number')
         )
+        if exclude_rental_id is not None:
+            items = items.exclude(rental_id=exclude_rental_id)
         rental_map = {}
         for item in items:
             rental_map.setdefault(item.product_id, item.rental)
@@ -777,9 +832,21 @@ class ProductAvailabilityJsonView(View):
             return JsonResponse({'available': True})
         pickup_date = parse_br_date(pickup_date_str)
         return_date = parse_br_date(return_date_str)
-        if pickup_date is None or return_date is None:
+        if (
+            pickup_date is None
+            or return_date is None
+            or return_date < pickup_date
+        ):
             return JsonResponse({'available': False, 'error': 'invalid_date'})
-        rental = find_overlapping_rental(product, pickup_date, return_date)
+        exclude_rental_id = ProductBrowseView._parse_rental_id(
+            request.GET.get('exclude_rental_id', ''),
+        )
+        rental = find_overlapping_rental(
+            product,
+            pickup_date,
+            return_date,
+            exclude_rental_id=exclude_rental_id,
+        )
         if rental:
             return JsonResponse({
                 'available': False,

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Recebimentos · Locação #{{ rental.number }}{% endblock %}
 
@@ -12,6 +13,7 @@
     <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
   </div>
 
+  {% if request.user|has_action:'billing.receive' %}
   <div class="panel">
     <h2 class="section-title">Organizar parcelas futuras</h2>
     <p class="mt-1 text-sm text-app-muted">
@@ -25,33 +27,35 @@
       <button type="submit" class="btn btn-primary">Atualizar parcelas</button>
     </form>
   </div>
+  {% endif %}
 
   <div class="table-shell">
     <table class="data-table">
+      <caption class="sr-only">Títulos da locação #{{ rental.number }}</caption>
       <thead>
         <tr>
-          <th>Vencimento</th>
-          <th class="text-right">Valor</th>
-          <th class="text-right">Recebido</th>
-          <th class="text-right">Saldo</th>
-          <th class="text-right">Total c/ juros</th>
-          <th>Último pgto.</th>
-          <th class="text-right">Ações</th>
+          <th scope="col">Vencimento</th>
+          <th scope="col" class="text-right">Valor</th>
+          <th scope="col" class="text-right">Recebido</th>
+          <th scope="col" class="text-right">Saldo</th>
+          <th scope="col" class="text-right">Total c/ juros</th>
+          <th scope="col">Último pgto.</th>
+          <th scope="col" class="text-right">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
           <tr>
             <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
-            <td class="text-right">R$ {{ row.obj.amount }}</td>
-            <td class="text-right">R$ {{ row.obj.paid_amount }}</td>
-            <td class="text-right">R$ {{ row.obj.balance }}</td>
-            <td class="text-right font-medium text-app-ink">R$ {{ row.total_with_interest }}</td>
+            <td class="text-right">R$ {{ row.obj.amount|brl }}</td>
+            <td class="text-right">R$ {{ row.obj.paid_amount|brl }}</td>
+            <td class="text-right">R$ {{ row.obj.balance|brl }}</td>
+            <td class="text-right font-medium text-app-ink">R$ {{ row.total_with_interest|brl }}</td>
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
               {% if row.obj.is_written_off %}
                 <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
-              {% elif not row.obj.is_paid %}
+              {% elif not row.obj.is_paid and request.user|has_action:'billing.receive' %}
                 <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Receber</a>
               {% else %}
                 <span class="badge badge-success">Quitado</span>

@@ -136,6 +136,29 @@ class RentalFormValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('value', form.errors)
 
+    def test_new_rental_rejects_inactive_customer(self):
+        self.customer.is_active = False
+        self.customer.save(update_fields=['is_active', 'updated_at'])
+
+        form = RentalForm(data=self._header_data())
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('customer', form.errors)
+
+    def test_existing_rental_keeps_inactive_customer_editable(self):
+        rental = Rental.objects.create(
+            number=90,
+            customer=self.customer,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+        )
+        self.customer.is_active = False
+        self.customer.save(update_fields=['is_active', 'updated_at'])
+
+        form = RentalForm(data=self._header_data(), instance=rental)
+
+        self.assertTrue(form.is_valid(), form.errors)
+
 
 class RentalCreateFlowTests(TestCase):
     def setUp(self):
@@ -944,3 +967,38 @@ class RentalItemSnapshotTests(TestCase):
         )
         existing_form = RentalItemForm(data=payload, prefix='items-0', instance=item)
         self.assertTrue(existing_form.is_valid(), existing_form.errors)
+
+
+class RentalListPaginationTests(TestCase):
+    def setUp(self):
+        user = User.objects.create_user(
+            email='rental-pagination@test.com',
+            password='pass',
+        )
+        ModulePermission.objects.create(
+            user=user,
+            module_key='rentals',
+            allowed=True,
+        )
+        self.client.force_login(user)
+        customer = Customer.objects.create(name='Cliente Paginação')
+        for number in range(1, 22):
+            Rental.objects.create(
+                number=number,
+                customer=customer,
+                pickup_date=date(2026, 7, 1),
+                return_date=date(2026, 7, 2),
+                status=Rental.Status.PENDING,
+            )
+
+    def test_pagination_preserves_active_filters(self):
+        response = self.client.get(
+            reverse('rentals:list'),
+            {'q': 'Cliente', 'status': Rental.Status.PENDING},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            '?q=Cliente&amp;status=pending&amp;page=2',
+        )

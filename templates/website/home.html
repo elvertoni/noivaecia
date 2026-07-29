@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block title %}Noivas &amp; Cia · Locação para grandes eventos{% endblock %}
+{% block meta %}<meta name="description" content="Sistema de gestão comercial e locação da Noivas &amp; Cia.">{% endblock %}
 
 {% block sidebar %}{% endblock %}
 {% block main_padding %}p-4 sm:p-6{% endblock %}
@@ -10,7 +11,7 @@
 <div class="flex min-h-[85vh] items-center justify-center">
 <div class="mx-auto w-full max-w-5xl py-10">
   <section class="mx-auto max-w-3xl text-center">
-    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia - Trajes de Festas" width="1254" height="858" decoding="async" class="brand-logo-home mx-auto">
+    <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="Noivas &amp; Cia" width="1254" height="858" decoding="async" class="brand-logo-home mx-auto">
     <h1 class="mt-6 text-2xl font-semibold leading-tight text-app-ink sm:text-3xl">
       Sistema de gestão comercial e locação
     </h1>
@@ -20,25 +21,31 @@
     </p>
 
     <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      {% if request.user.is_authenticated %}
+      <a href="{% url 'dashboard' %}" class="btn btn-primary w-full sm:w-auto">
+        Ir para o painel
+      </a>
+      {% else %}
       <a href="{% url 'login' %}" class="btn btn-primary w-full sm:w-auto">
         Entrar no sistema
       </a>
+      {% endif %}
     </div>
 
-    <div class="mt-10 grid grid-cols-1 gap-3 text-left sm:grid-cols-3">
-      <div class="surface-section p-4">
-        <p class="text-sm font-semibold text-app-ink">Cadastros</p>
+    <ul class="mt-10 grid grid-cols-1 gap-3 text-left sm:grid-cols-3" aria-label="Recursos do sistema">
+      <li class="surface-section p-4">
+        <h2 class="text-sm font-semibold text-app-ink">Cadastros</h2>
         <p class="mt-1 text-sm leading-6 text-slate-600">Clientes, categorias e produtos organizados para consulta rápida.</p>
-      </div>
-      <div class="surface-section p-4">
-        <p class="text-sm font-semibold text-app-ink">Locações</p>
+      </li>
+      <li class="surface-section p-4">
+        <h2 class="text-sm font-semibold text-app-ink">Locações</h2>
         <p class="mt-1 text-sm leading-6 text-slate-600">Contratos, itens, retirada e devolução em um fluxo previsível.</p>
-      </div>
-      <div class="surface-section p-4">
-        <p class="text-sm font-semibold text-app-ink">Financeiro</p>
+      </li>
+      <li class="surface-section p-4">
+        <h2 class="text-sm font-semibold text-app-ink">Financeiro</h2>
         <p class="mt-1 text-sm leading-6 text-slate-600">Parcelas, recebimentos, saldos e juros visíveis no atendimento.</p>
-      </div>
-    </div>
+      </li>
+    </ul>
   </section>
 </div>
 </div>

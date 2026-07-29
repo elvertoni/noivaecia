@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Cancelar locação #{{ rental.number }} · Noivas &amp; Cia{% endblock %}
 
@@ -25,7 +26,9 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-danger">Confirmar cancelamento</button>
+        {% if request.user|has_action:'rentals.cancel' %}
+          <button type="submit" class="btn btn-danger">Confirmar cancelamento</button>
+        {% endif %}
         <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
       </div>
     </form>

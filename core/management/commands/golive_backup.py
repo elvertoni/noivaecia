@@ -68,6 +68,17 @@ def _archive_media(media_root: Path, archive_path: Path) -> None:
         tar.add(media_root, arcname='media')
 
 
+def _validate_backup_location(output_dir: Path, media_root: Path) -> None:
+    """Prevent a media archive from recursively including itself."""
+    try:
+        output_dir.resolve().relative_to(media_root.resolve())
+    except ValueError:
+        return
+    raise CommandError(
+        '--output-dir não pode ficar dentro de MEDIA_ROOT ao incluir a mídia.'
+    )
+
+
 class Command(BaseCommand):
     help = 'Cria backup do banco (SQLite ou PostgreSQL), da mídia e um manifesto JSON.'
 
@@ -91,6 +102,11 @@ class Command(BaseCommand):
         stamp = now.strftime('%Y-%m-%d-%H-%M-%S')
 
         output_dir = Path(options['output_dir'] or settings.BACKUP_ROOT)
+        media_root = Path(
+            getattr(settings, 'MEDIA_ROOT', settings.BASE_DIR / 'media')
+        )
+        if not options['skip_media']:
+            _validate_backup_location(output_dir, media_root)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         manifest = {
@@ -128,7 +144,6 @@ class Command(BaseCommand):
 
         # — mídia —
         if not options['skip_media']:
-            media_root = Path(getattr(settings, 'MEDIA_ROOT', settings.BASE_DIR / 'media'))
             if media_root.exists() and any(media_root.iterdir()):
                 media_path = output_dir / f'media-{stamp}.tar.gz'
                 self.stdout.write(f'Arquivando mídia → {media_path}')

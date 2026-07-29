@@ -10,12 +10,12 @@ Usage:
     python manage.py cpf_duplicate_report [--output-dir DIR]
 """
 
-from datetime import datetime
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Max, Min
 from django.db.models.functions import Length
+from django.utils import timezone
 
 from customers.models import Customer
 
@@ -47,10 +47,11 @@ class Command(BaseCommand):
             f'{total_customers} cliente(s) envolvido(s)'
         ))
 
+        now = timezone.localtime()
         lines = [
             '# Relatório de CPF duplicado',
             '',
-            f'Gerado em {datetime.now().isoformat(timespec="seconds")}. '
+            f'Gerado em {now.isoformat(timespec="seconds")}. '
             'Somente leitura — nenhuma alteração foi feita. Revisão humana '
             'necessária antes de qualquer mesclagem.',
             '',
@@ -90,7 +91,7 @@ class Command(BaseCommand):
 
         output_dir = Path(options['output_dir'])
         output_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        timestamp = now.strftime('%Y-%m-%d-%H-%M-%S')
         output_path = output_dir / f'{timestamp}-cpf-duplicates.md'
         output_path.write_text('\n'.join(lines), encoding='utf-8')
 
