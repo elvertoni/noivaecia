@@ -77,7 +77,7 @@ class RentalFooterUITests(TestCase):
             'grid',
             'w-full',
             'min-w-0',
-            'grid-cols-3',
+            'grid-cols-2',
             'sm:flex',
             'sm:w-auto',
         }.issubset(button_group_classes))
@@ -96,6 +96,7 @@ class RentalFooterUITests(TestCase):
         self.assertContains(self.response, '>Cancelar</a>', html=False)
         self.assertContains(self.response, 'form="rental-form"')
         self.assertContains(self.response, 'Salvar locação')
+        self.assertContains(self.response, 'Salvar e Imprimir')
         self.assertContains(self.response, 'id="add-item-footer"')
 
     def test_add_item_actions_remain_in_the_items_section(self):

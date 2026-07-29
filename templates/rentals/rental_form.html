@@ -110,125 +110,97 @@
           </div>
         {% endif %}
 
-        <div id="item-forms" class="mt-4 space-y-4">
-          {% for item_form in items %}
-            {# Skip blank, unsaved rows on re-render so leftover empty items never pile up. #}
-            {% if not items.is_bound or item_form.instance.pk or item_form.has_changed %}
-            <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
-              {{ item_form.id }}
-              
-              <!-- Shared Top Bar (Always Visible) -->
-              <div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
-                <div class="flex items-center gap-3">
-                  <!-- Concluir (Done) button, only shown if expanded and is saved -->
-                  {% if item_form.instance.pk %}
-                    <button type="button" class="btn-concluir-item text-sm font-medium text-emerald-600 hover:underline hidden"
-                            onclick="toggleItemForm(this.closest('.item-form'), false)">
-                      Concluir
-                    </button>
-                  {% endif %}
-                  <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600 font-medium cursor-pointer" for="{{ item_form.DELETE.id_for_label }}">
-                    {{ item_form.DELETE }} Remover
-                  </label>
-                </div>
-              </div>
+        <!-- High-Density Items Table Shell -->
+        <div class="mt-4 table-shell overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table class="data-table w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+                <th class="w-12 px-3 py-2.5 text-center">#</th>
+                <th class="min-w-[240px] px-3 py-2.5">Produto / Código</th>
+                <th class="min-w-[200px] px-3 py-2.5">Descrição / Ajustes</th>
+                <th class="w-32 px-3 py-2.5 text-right">Valor (R$)</th>
+                <th class="w-16 px-3 py-2.5 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="item-forms" class="divide-y divide-slate-100 text-sm">
+              {% for item_form in items %}
+                {# Skip blank, unsaved rows on re-render so leftover empty items never pile up. #}
+                {% if not items.is_bound or item_form.instance.pk or item_form.has_changed %}
+                <tr class="item-form transition-colors hover:bg-slate-50/80">
+                  <td class="px-3 py-2 text-center font-medium text-slate-500 align-middle">
+                    {{ item_form.id }}
+                    <span class="item-index text-xs font-semibold text-slate-600">#{{ forloop.counter }}</span>
+                  </td>
+                  <td class="px-3 py-2 align-top">
+                    <div class="field-group product-search-field mb-0">
+                      {{ item_form.product }}
+                      <div class="relative">
+                        <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm"
+                               placeholder="Buscar por código ou descrição…"
+                               autocomplete="off"
+                               data-field-id="{{ item_form.product.id_for_label }}"
+                               role="combobox"
+                               aria-autocomplete="list"
+                               aria-expanded="false"
+                               aria-required="true"
+                               {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.id_for_label }}-error"{% endif %}>
+                        <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+                      </div>
+                      <div class="mt-1 flex items-center justify-between gap-2">
+                        <button type="button" class="open-browse text-xs font-medium text-rose-600 hover:underline">Filtros avançados</button>
+                      </div>
+                      <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
+                      {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                    </div>
+                  </td>
+                  <td class="px-3 py-2 align-top">
+                    <div class="field-group mb-0">
+                      {{ item_form.description|render_field }}
+                      {% if item_form.description.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.description.errors|striptags }}</p>{% endif %}
+                    </div>
+                  </td>
+                  <td class="px-3 py-2 align-top">
+                    <div class="field-group mb-0">
+                      {{ item_form.value|render_field }}
+                      {% if item_form.value.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                    </div>
+                  </td>
+                  <td class="px-3 py-2 text-center align-top">
+                    <label class="touch-target inline-flex items-center justify-center p-1 text-rose-600 hover:text-rose-800 cursor-pointer" title="Remover item" for="{{ item_form.DELETE.id_for_label }}">
+                      {{ item_form.DELETE }}
+                      <span class="sr-only">Remover</span>
+                    </label>
+                  </td>
+                </tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
 
-              <!-- Collapsed Summary Card -->
-              <button type="button"
-                      class="item-summary-card group flex w-full items-center justify-between py-2 text-left hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors {% if not item_form.instance.pk or item_form.errors %}hidden{% endif %}"
-                      onclick="toggleItemForm(this.closest('.item-form'), true)"
-                      title="Editar item">
-                <div class="flex items-center gap-3 min-w-0">
-                  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
-                    {% if item_form.instance.proof_photo %}
-                      <img src="{% url 'rentals:item_photo' item_form.instance.pk %}"
-                           alt="Foto"
-                           class="h-full w-full rounded-lg object-cover">
-                    {% else %}
-                      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                      </svg>
-                    {% endif %}
-                  </div>
-                  <div class="min-w-0">
-                    <p class="font-medium text-app-ink text-sm truncate summary-product-title">
-                      {% if item_form.instance.product %}
-                        {{ item_form.instance.product_reference }} · {{ item_form.instance.display_description|default:'Sem descrição' }}{% if item_form.instance.display_color %} — {{ item_form.instance.display_color }}{% endif %}{% if item_form.instance.display_size %} — {{ item_form.instance.display_size }}{% endif %}
-                      {% else %}
-                        Item sem produto selecionado
-                      {% endif %}
-                    </p>
-                    <p class="text-xs text-app-muted truncate summary-product-details">
-                      {% if item_form.instance.description %}
-                        Obs: {{ item_form.instance.description }}
-                      {% else %}
-                        Sem observações adicionais
-                      {% endif %}
-                    </p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3 shrink-0 ml-4">
-                  <span class="text-sm font-semibold text-app-ink summary-product-value">
-                    R$ {{ item_form.instance.value|default:'0,00' }}
-                  </span>
-                  <span class="rounded-md p-1 text-slate-400 transition-colors group-hover:text-rose-600">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-                    </svg>
-                  </span>
-                </div>
-              </button>
-
-              <!-- Detailed Edit Fields -->
-              <div class="item-edit-fields mt-3 space-y-3 {% if item_form.instance.pk and not item_form.errors %}hidden{% endif %}">
-                <!-- Product field with search widget (R7.03/R7.04) -->
-                <div class="field-group product-search-field">
-                  <label class="field-label" for="{{ item_form.product.id_for_label }}-search">Produto</label>
-                  {{ item_form.product }}
-                  <div class="relative">
-                    <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input"
-                           placeholder="Buscar produto por código ou descrição…"
-                           autocomplete="off"
-                           data-field-id="{{ item_form.product.id_for_label }}"
-                           role="combobox"
-                           aria-autocomplete="list"
-                           aria-expanded="false"
-                           aria-required="true"
-                           {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.id_for_label }}-error"{% endif %}>
-                    <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
-                  </div>
-                  <p class="product-search-status sr-only" aria-live="polite"></p>
-                  <div class="mt-1.5 flex items-center justify-between gap-2">
-                    <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
-                  </div>
-                  <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
-                  {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
-                </div>
-
-                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div class="field-group sm:col-span-2">
-                    <label class="field-label" for="{{ item_form.description.id_for_label }}">{{ item_form.description.label }}</label>
-                    {{ item_form.description|render_field }}
-                    {% if item_form.description.errors %}<p class="field-error" role="alert">{{ item_form.description.errors|striptags }}</p>{% endif %}
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label" for="{{ item_form.value.id_for_label }}">{{ item_form.value.label }}</label>
-                    {{ item_form.value|render_field }}
-                    {% if item_form.value.errors %}<p class="field-error" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
-                  </div>
-                </div>
-
-                <div class="field-group mt-3">
-                  <label class="field-label" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
-                  {{ item_form.proof_photo_upload|render_field }}
-                  {% if item_form.proof_photo_upload.help_text %}<p class="field-help">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
-                  {% if item_form.proof_photo_upload.errors %}<p class="field-error" role="alert">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
-                </div>
-              </div>
+        <!-- Resumo de Totais da Locação em Tempo Real -->
+        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-xs">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p class="text-xs font-medium text-app-muted uppercase tracking-wider">Subtotal dos Itens</p>
+              <p id="subtotal-display" class="text-lg font-semibold text-app-ink mt-0.5">R$ 0,00</p>
             </div>
-            {% endif %}
-          {% endfor %}
+            <div>
+              <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted uppercase tracking-wider cursor-pointer" for="apply-cash-discount">
+                <input type="checkbox" id="apply-cash-discount" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+                Desconto à Vista (10%)
+              </label>
+              <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-app-muted uppercase tracking-wider">Multa Reposição Estimada</p>
+              <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
+            </div>
+            <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">
+              <p class="text-xs font-semibold text-rose-900 uppercase tracking-wider">Total Final Locação</p>
+              <p id="total-final-display" class="text-xl font-bold text-rose-700 mt-0.5">R$ 0,00</p>
+            </div>
+          </div>
         </div>
 
         {# Mirror of the header button — follows the flow so the user never scrolls up. #}
@@ -309,7 +281,7 @@
   {% if not has_payments %}
     <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
   {% endif %}
-  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
     <button type="button"
             id="add-item-footer"
             class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4"
@@ -323,6 +295,16 @@
     {% endif %}
     <button type="submit"
             form="rental-form"
+            name="save_and_print"
+            value="1"
+            class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h14z" />
+      </svg>
+      Salvar e Imprimir
+    </button>
+    <button type="submit"
+            form="rental-form"
             class="btn btn-primary min-w-0 w-full px-2 sm:w-auto sm:px-4">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"/>
@@ -334,58 +316,17 @@
 
 <template id="empty-form">
   {% with f=items.empty_form %}
-  <div class="item-form rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200">
-    {{ f.id }}
-    
-    <!-- Shared Top Bar (Always Visible) -->
-    <div class="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-      <h3 class="item-index text-sm font-semibold text-app-ink">Item</h3>
-      <div class="flex items-center gap-3">
-        <!-- Concluir (Done) button, shown after product is selected -->
-        <button type="button" class="btn-concluir-item text-sm font-medium text-emerald-600 hover:underline hidden"
-                onclick="toggleItemForm(this.closest('.item-form'), false)">
-          Concluir
-        </button>
-        <label class="touch-target inline-flex items-center gap-1.5 text-sm text-rose-600 font-medium cursor-pointer" for="{{ f.DELETE.id_for_label }}">
-          {{ f.DELETE }} Remover
-        </label>
-      </div>
-    </div>
-
-    <!-- Collapsed Summary Card (Starts hidden for new item) -->
-    <button type="button"
-            class="item-summary-card group flex w-full items-center justify-between py-2 text-left hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors hidden"
-            onclick="toggleItemForm(this.closest('.item-form'), true)"
-            title="Editar item">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
-          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-          </svg>
-        </div>
-        <div class="min-w-0">
-          <p class="font-medium text-app-ink text-sm truncate summary-product-title">Item sem produto selecionado</p>
-          <p class="text-xs text-app-muted truncate summary-product-details">Sem observações adicionais</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3 shrink-0 ml-4">
-        <span class="text-sm font-semibold text-app-ink summary-product-value">R$ 0,00</span>
-        <span class="rounded-md p-1 text-slate-400 transition-colors group-hover:text-rose-600">
-          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-          </svg>
-        </span>
-      </div>
-    </button>
-
-    <!-- Detailed Edit Fields (Starts expanded) -->
-    <div class="item-edit-fields mt-3 space-y-3">
-      <div class="field-group product-search-field">
-        <label class="field-label" for="{{ f.product.id_for_label }}-search">Produto</label>
+  <tr class="item-form transition-colors hover:bg-slate-50/80">
+    <td class="px-3 py-2 text-center font-medium text-slate-500 align-middle">
+      {{ f.id }}
+      <span class="item-index text-xs font-semibold text-slate-600">#__prefix__</span>
+    </td>
+    <td class="px-3 py-2 align-top">
+      <div class="field-group product-search-field mb-0">
         {{ f.product }}
         <div class="relative">
-          <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input"
-                 placeholder="Buscar produto por código ou descrição…"
+          <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm"
+                 placeholder="Buscar por código ou descrição…"
                  autocomplete="off"
                  role="combobox"
                  aria-autocomplete="list"
@@ -393,31 +334,29 @@
                  aria-required="true">
           <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
         </div>
-        <p class="product-search-status sr-only" aria-live="polite"></p>
-        <div class="mt-1.5 flex items-center justify-between gap-2">
-          <button type="button" class="open-browse text-sm font-medium text-rose-600 hover:underline">Buscar com filtros</button>
+        <div class="mt-1 flex items-center justify-between gap-2">
+          <button type="button" class="open-browse text-xs font-medium text-rose-600 hover:underline">Filtros avançados</button>
         </div>
-        <div class="availability-badge hidden mt-2 rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></div>
+        <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
       </div>
-
-      <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div class="field-group sm:col-span-2">
-          <label class="field-label" for="{{ f.description.id_for_label }}">{{ f.description.label }}</label>
-          {{ f.description|render_field }}
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="{{ f.value.id_for_label }}">{{ f.value.label }}</label>
-          {{ f.value|render_field }}
-        </div>
+    </td>
+    <td class="px-3 py-2 align-top">
+      <div class="field-group mb-0">
+        {{ f.description|render_field }}
       </div>
-
-      <div class="field-group mt-3">
-        <label class="field-label" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
-        {{ f.proof_photo_upload|render_field }}
-        {% if f.proof_photo_upload.help_text %}<p class="field-help">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+    </td>
+    <td class="px-3 py-2 align-top">
+      <div class="field-group mb-0">
+        {{ f.value|render_field }}
       </div>
-    </div>
-  </div>
+    </td>
+    <td class="px-3 py-2 text-center align-top">
+      <label class="touch-target inline-flex items-center justify-center p-1 text-rose-600 hover:text-rose-800 cursor-pointer" title="Remover item" for="{{ f.DELETE.id_for_label }}">
+        {{ f.DELETE }}
+        <span class="sr-only">Remover</span>
+      </label>
+    </td>
+  </tr>
   {% endwith %}
 </template>
 
@@ -1369,6 +1308,105 @@
     const input = document.getElementById(id);
     if (input) input.addEventListener('change', recheckAllAvailability);
   });
+
+  // ── Financial Totals & Cash Discount Calculation ───────────────────────────
+  function parseBRDecimal(value) {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    const clean = String(value).replace(/[^\d,-]/g, '').replace(',', '.');
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  function formatMoneyBR(value) {
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function updateFinancialTotals() {
+    let subtotal = 0;
+    if (container) {
+      container.querySelectorAll('.item-form').forEach(function (row) {
+        const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+        if (del && del.checked) return;
+        const valInput = row.querySelector('input[name$="-value"]');
+        if (valInput) {
+          subtotal += parseBRDecimal(valInput.value);
+        }
+      });
+    }
+
+    const applyDiscountCb = document.getElementById('apply-cash-discount');
+    const isCashDiscount = applyDiscountCb ? applyDiscountCb.checked : false;
+    const discount = isCashDiscount ? (subtotal * 0.10) : 0;
+    const totalFinal = Math.max(0, subtotal - discount);
+
+    const subtotalEl = document.getElementById('subtotal-display');
+    const discountEl = document.getElementById('discount-display');
+    const totalFinalEl = document.getElementById('total-final-display');
+    const penaltyEl = document.getElementById('penalty-display');
+
+    if (subtotalEl) subtotalEl.textContent = `R$ ${formatMoneyBR(subtotal)}`;
+    if (discountEl) discountEl.textContent = isCashDiscount ? `- R$ ${formatMoneyBR(discount)}` : `R$ 0,00`;
+    if (totalFinalEl) totalFinalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
+    if (penaltyEl) penaltyEl.textContent = `R$ ${formatMoneyBR(subtotal * 3.5)}`; // Multa reposição estimada
+  }
+
+  if (container) {
+    container.addEventListener('input', function (e) {
+      if (e.target.matches('input[name$="-value"]')) {
+        updateFinancialTotals();
+      }
+    });
+    container.addEventListener('change', function (e) {
+      if (e.target.matches('input[type="checkbox"][name$="-DELETE"]')) {
+        updateFinancialTotals();
+      }
+    });
+  }
+
+  const applyDiscountCb = document.getElementById('apply-cash-discount');
+  if (applyDiscountCb) {
+    applyDiscountCb.addEventListener('change', updateFinancialTotals);
+  }
+
+  // Initial calculation on page load
+  updateFinancialTotals();
+
+  // ── Keyboard Shortcuts (F2 / Ctrl+S / Enter on value column) ──────────────
+  document.addEventListener('keydown', function (e) {
+    // F2: Adicionar novo item
+    if (e.key === 'F2') {
+      e.preventDefault();
+      handleAddItem();
+    }
+    // Ctrl+S / Cmd+S: Salvar locação
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      const form = document.getElementById('rental-form');
+      if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+    }
+  });
+
+  // Enter na coluna de valor foca/cria a próxima linha
+  if (container) {
+    container.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.matches('input[name$="-value"]')) {
+        e.preventDefault();
+        const row = e.target.closest('.item-form');
+        const rows = Array.from(container.querySelectorAll('.item-form:not(.hidden)'));
+        const isLast = rows.indexOf(row) === rows.length - 1;
+        if (isLast) {
+          handleAddItem();
+        } else {
+          const nextRow = rows[rows.indexOf(row) + 1];
+          if (nextRow) {
+            const searchInput = nextRow.querySelector('.product-search-input');
+            if (searchInput) searchInput.focus();
+          }
+        }
+      }
+    });
+  }
 
   // Deep-link from "Adicionar item à locação nº" (?add=1): expand the items
   // section, add a fresh row, and drop the cursor in its product search.

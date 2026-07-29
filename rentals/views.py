@@ -265,6 +265,8 @@ class RentalCreateView(RentalAccessMixin, CreateView):
 
         self.object = rental
         messages.success(self.request, f'Locação #{rental.number} criada com sucesso.')
+        if self.request.POST.get('save_and_print') == '1':
+            return HttpResponseRedirect(f"{reverse('rentals:detail', args=[rental.pk])}?print=1")
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -355,6 +357,8 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             )
         else:
             messages.success(self.request, f'Locação #{rental.number} atualizada.')
+        if self.request.POST.get('save_and_print') == '1':
+            return HttpResponseRedirect(f"{reverse('rentals:detail', args=[rental.pk])}?print=1")
         return HttpResponseRedirect(rental.get_absolute_url())
 
 
