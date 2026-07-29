@@ -42,3 +42,11 @@ Do not commit local artifacts such as `venv/`, `node_modules/`, `db.sqlite3`, `.
 - Deploy with the Easypanel MCP, monitor the deployment action until it reaches a terminal state, then check service/build logs and the application health endpoint.
 - The container entrypoint applies Django migrations and collects static files before starting Gunicorn.
 - Never print production secret values. Use masked environment inspection and report only variable names or whether required values are configured.
+
+## Rental Form UI/UX Conventions
+
+- Data Grid table layout (`<tr>`) for high-density rental item entry. Switches to stacked responsive view (`< sm`) on mobile.
+- Keyboard-first shortcuts: `Enter` to navigate fields, `F2` to add new row, `Ctrl+S` to submit form.
+- Direct "Salvar e Imprimir" button sending `save_and_print=1` to immediately open print view after save.
+- Support item proof photo upload (`proof_photo_upload`) via expandable `tr.item-photo-row`.
+
