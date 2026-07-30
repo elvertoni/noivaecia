@@ -838,3 +838,13 @@ CSRF_TRUSTED_ORIGINS=https://<dominio-definitivo>,https://*.<dominio-definitivo>
 > **Não ligue `SECURE_HSTS_PRELOAD` antes disso.** O HSTS já está ativo com
 > `max-age=31536000`; preload é praticamente irreversível e trava o domínio em HTTPS na
 > lista embutida dos navegadores por um ano.
+
+---
+
+## 13. Cutover do sistema legado (dados)
+
+Esta seção cobre a migração de **infra**. A migração dos **dados** do BRcom (VB6/Access),
+quando a loja parar de usar o sistema antigo em definitivo, está em
+[`runbook-cutover-legado.md`](runbook-cutover-legado.md) — inclui a decisão de fazer
+re-import completo em vez de delta incremental, a sequência do cutover e as armadilhas
+conhecidas.
