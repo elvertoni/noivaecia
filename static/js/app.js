@@ -333,6 +333,24 @@
         this.value = formatBRDecimal(this.value);
       }
     });
+
+    // Select all on the click that brings focus in, so overwriting the value
+    // works the same by mouse as it already does via Tab. A second click
+    // while already focused still repositions the caret normally.
+    var justFocused = false;
+    input.addEventListener('mousedown', function () {
+      justFocused = document.activeElement !== input;
+    });
+    input.addEventListener('focus', function () {
+      if (!justFocused) this.select();
+    });
+    input.addEventListener('mouseup', function (event) {
+      if (justFocused) {
+        event.preventDefault();
+        this.select();
+        justFocused = false;
+      }
+    });
   }
 
   function normalizeFormDecimals(form) {
