@@ -4,7 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 
-from core.ui import INPUT_CLASS, configure_br_decimal_field
+from core.ui import DATE_INPUT_FORMATS, INPUT_CLASS, configure_br_decimal_field
 
 from .models import Category, Product
 
@@ -93,7 +93,7 @@ class AvailabilityQueryForm(forms.Form):
     date = forms.DateField(
         label='Data de consulta',
         required=False,
-        input_formats=('%d/%m/%Y', '%Y-%m-%d'),
+        input_formats=DATE_INPUT_FORMATS,
         error_messages={'invalid': 'Informe uma data válida.'},
         help_text='Deixe em branco para consultar a disponibilidade de hoje.',
         widget=forms.TextInput(attrs={

@@ -88,7 +88,6 @@ class CompanyForm(forms.ModelForm):
         })
         self.fields['phones'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 3542-1234',
-            'type': 'tel',
             'inputmode': 'tel',
             'autocomplete': 'tel',
         })

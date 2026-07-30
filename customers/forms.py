@@ -156,7 +156,6 @@ class CustomerForm(forms.ModelForm):
         self.fields['phone_home'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 99999-1234',
             'maxlength': '20',
-            'type': 'tel',
             'inputmode': 'tel',
             'autocomplete': 'off',
             'data-mask': 'phone',
@@ -168,7 +167,6 @@ class CustomerForm(forms.ModelForm):
         self.fields['phone_mobile'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 99123-4567',
             'maxlength': '20',
-            'type': 'tel',
             'inputmode': 'tel',
             'autocomplete': 'tel',
             'data-mask': 'phone',
@@ -176,7 +174,6 @@ class CustomerForm(forms.ModelForm):
         self.fields['phone_work'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 3542-5678',
             'maxlength': '20',
-            'type': 'tel',
             'inputmode': 'tel',
             'autocomplete': 'tel',
             'data-mask': 'phone',
