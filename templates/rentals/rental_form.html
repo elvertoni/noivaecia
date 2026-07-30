@@ -118,7 +118,7 @@
                 <th class="w-10 px-3 py-2.5 text-center">#</th>
                 <th class="px-3 py-2.5">Produto / Código</th>
                 <th class="px-3 py-2.5">Descrição / Ajustes</th>
-                <th class="w-28 px-3 py-2.5 text-right">Valor (R$)</th>
+                <th class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
                 <th class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
             </thead>
@@ -770,9 +770,13 @@
     const index = parseInt(totalForms.value, 10);
     const fragment = tpl.content.cloneNode(true);
     updateFormsetFragment(fragment, index);
+    // The template holds two rows (the item row + its hidden photo row), so grab
+    // the item row itself before appending — `container.lastElementChild` would
+    // be the photo row and every wiring call below would silently no-op.
+    const row = fragment.querySelector('.item-form');
+    if (!row) return null;
     container.appendChild(fragment);
     totalForms.value = index + 1;
-    const row = container.lastElementChild;
     markRentalDateInputs(row);
     markRentalDecimalInputs(row);
     attachProductSearch(row);
