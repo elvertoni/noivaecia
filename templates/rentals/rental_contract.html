@@ -10,27 +10,25 @@
     body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #111; line-height: 1.15; }
     
     .copy-container {
-      height: 100vh;
-      max-height: 287mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      min-height: 100vh;
     }
 
     .copy {
-      height: 138mm;
-      overflow: hidden;
+      flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       border-bottom: 1px dashed #888;
-      padding-bottom: 4mm;
+      padding-bottom: 2mm;
       position: relative;
     }
     .copy:last-child {
       border-bottom: none;
       padding-bottom: 0;
-      padding-top: 4mm;
+      padding-top: 2mm;
     }
 
     .cut-notice {
