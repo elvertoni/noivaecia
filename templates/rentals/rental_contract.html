@@ -17,14 +17,13 @@
     }
 
     .copy {
-      height: 139mm;
+      min-height: 139mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       border-bottom: 1px dashed #777;
       padding-bottom: 2mm;
       position: relative;
-      overflow: hidden;
     }
     .copy:last-child {
       border-bottom: none;
@@ -305,16 +304,17 @@
       <table class="payment-matrix">
         <thead>
           <tr>
-            <th style="width:11%">1ª ENTRADA</th>
-            <th style="width:9%">2ª</th>
-            <th style="width:9%">3ª</th>
-            <th style="width:9%">4ª</th>
-            <th style="width:9%">5ª</th>
-            <th style="width:9%">6ª</th>
-            <th style="width:9%">7ª</th>
-            <th style="width:9%">8ª</th>
-            <th style="width:9%">9ª</th>
-            <th style="width:14%">VALOR TOTAL</th>
+            <th style="width:10%">1ª ENTRADA</th>
+            <th style="width:8%">2ª</th>
+            <th style="width:8%">3ª</th>
+            <th style="width:8%">4ª</th>
+            <th style="width:8%">5ª</th>
+            <th style="width:8%">6ª</th>
+            <th style="width:8%">7ª</th>
+            <th style="width:8%">8ª</th>
+            <th style="width:8%">9ª</th>
+            <th style="width:8%">10ª</th>
+            <th style="width:12%">VALOR TOTAL</th>
           </tr>
         </thead>
         <tbody>
@@ -328,6 +328,7 @@
             <td>{% if receivables.6 %}R$ {{ receivables.6.amount|brl }}{% else %}*{% endif %}</td>
             <td>{% if receivables.7 %}R$ {{ receivables.7.amount|brl }}{% else %}*{% endif %}</td>
             <td>{% if receivables.8 %}R$ {{ receivables.8.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.9 %}R$ {{ receivables.9.amount|brl }}{% else %}*{% endif %}</td>
             <td style="font-weight:bold;">R$ {{ payment_totals.amount|default:rental.final_value|brl }}</td>
           </tr>
         </tbody>
@@ -343,7 +344,7 @@
         <p>3. Em caso de dano (manchas, rasgos, furos na barra, ou bijuteria perdida, intencional ou não), o locatário pagará os custos de conserto ou o valor de reposição dos itens acima a quantia de (____________________).</p>
         <p>4. O atraso na devolução sujeita o locatário à multa moratória no valor de <strong>{% if rental.penalty_value > 0 %}R$ {{ rental.penalty_value|brl }} por dia de atraso{% else %}{{ company.late_fee_rate|brl }}% por dia de atraso{% endif %}</strong>, além de juros moratórios e demais penalidades aplicáveis.</p>
         <p>5. Em decorrência da desistência, justificada ou não deste contrato; será cobrado o percentual de {{ company.cancellation_penalty_rate|default:50|brl }}% correspondente ao valor total da locação a Noivas & Cia.</p>
-        <p>6. A não devolução dos trajes em até 7 dias da data limite implica cobrança de {{ company.loss_penalty_rate|brl }}% do valor dos trajes.</p>
+        <p>6. A não devolução dos trajes e/ou acessórios locados em até sete dias corridos da data de devolução implica cobrança de {{ company.loss_penalty_rate|brl }}% correspondente ao valor da locação dos trajes.</p>
       </div>
     </div>
   </div>

@@ -386,6 +386,33 @@ class RentalContractPaymentPlanTests(TestCase):
         self.rental.refresh_from_db()
         self.assertEqual(self.rental.contract_version, 'v3')
 
+    def test_contract_payment_matrix_shows_all_ten_installments(self):
+        customer = Customer.objects.create(name='Joana Souza')
+        rental = Rental.objects.create(
+            number=103,
+            customer=customer,
+            pickup_date=date(2027, 3, 1),
+            return_date=date(2027, 3, 5),
+            total_value=Decimal('1000.00'),
+        )
+        create_rental_payment_plan(
+            rental,
+            installments=9,
+            first_due_date=date(2026, 8, 20),
+            down_payment_amount=Decimal('100.00'),
+            down_payment_date=date(2026, 7, 20),
+            down_payment_method=Payment.Method.PIX,
+        )
+        receivables = list(rental.receivables.order_by('due_date', 'pk'))
+        self.assertEqual(len(receivables), 10)
+
+        response = self.client.get(reverse('rentals:contract', args=[rental.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<th style="width:8%">10ª</th>', html=False)
+        last_installment = receivables[-1]
+        self.assertContains(response, f'R$ {last_installment.amount:.2f}'.replace('.', ','))
+
     def test_contract_distinguishes_partial_receipt_and_write_off(self):
         partial = Receivable.objects.create(
             rental=self.rental,
