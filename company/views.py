@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import UpdateView
 
-from core.mixins import ModuleAccessMixin
+from core.mixins import ActionRequiredMixin, ModuleAccessMixin
 
 from .forms import CompanyForm
 from .models import Company
@@ -26,13 +26,14 @@ class CompanyUpdateView(ModuleAccessMixin, SuccessMessageMixin, UpdateView):
         return Company.load()
 
 
-class CompanySendWhatsAppReportNowView(ModuleAccessMixin, View):
+class CompanySendWhatsAppReportNowView(ModuleAccessMixin, ActionRequiredMixin, View):
     """Trigger an immediate WhatsApp daily report send, bypassing the
     once-a-day-per-recipient lock that protects the background scheduler
     from resending every 30s. An explicit click here is a deliberate
     request, so it forces a resend to every configured recipient."""
 
     module_key = 'company'
+    action_key = 'notifications.send'
 
     def post(self, request, *args, **kwargs):
         company = Company.load()

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Manutenção · Noivas &amp; Cia{% endblock %}
 
@@ -28,20 +29,24 @@
           <p class="text-sm font-medium text-app-ink">Recalcular totais das locações</p>
           <p class="field-help">Soma novamente os itens de cada locação.</p>
         </div>
+        {% if request.user|has_action:'maintenance.recalculate' %}
         <form method="post" action="{% url 'maintenance:recalc_totals' %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-secondary">Executar</button>
         </form>
+        {% endif %}
       </div>
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>
           <p class="text-sm font-medium text-app-ink">Recalcular saldos dos recebimentos</p>
           <p class="field-help">Recalcula saldo = valor − recebido em cada parcela.</p>
         </div>
+        {% if request.user|has_action:'maintenance.recalculate' %}
         <form method="post" action="{% url 'maintenance:recalc_balances' %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-secondary">Executar</button>
         </form>
+        {% endif %}
       </div>
       <div class="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
         <div>

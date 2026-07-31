@@ -15,6 +15,7 @@ ACTIONS = [
     ('reports.export', 'Exportar relatórios (CSV)'),
     ('notifications.send', 'Enviar avisos por WhatsApp'),
     ('notifications.manage', 'Conectar/desconectar o WhatsApp'),
+    ('maintenance.recalculate', 'Executar rotinas de recálculo em massa'),
 ]
 
 ACTION_KEYS = [key for key, _ in ACTIONS]

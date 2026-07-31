@@ -4,7 +4,7 @@ from django.shortcuts import redirect
 from django.views.generic import TemplateView, View
 
 from billing.models import Receivable
-from core.mixins import ModuleAccessMixin
+from core.mixins import ActionRequiredMixin, ModuleAccessMixin
 from core.models import AuditLog
 from customers.models import Customer
 from rentals.models import Rental
@@ -33,8 +33,10 @@ class MaintenanceView(MaintenanceAccessMixin, TemplateView):
         return context
 
 
-class RecalculateRentalTotalsView(MaintenanceAccessMixin, View):
+class RecalculateRentalTotalsView(MaintenanceAccessMixin, ActionRequiredMixin, View):
     """Recompute every rental's total from its items (controlled routine)."""
+
+    action_key = 'maintenance.recalculate'
 
     def post(self, request, *args, **kwargs):
         count = 0
@@ -45,12 +47,14 @@ class RecalculateRentalTotalsView(MaintenanceAccessMixin, View):
         return redirect('maintenance:index')
 
 
-class RecalculateBalancesView(MaintenanceAccessMixin, View):
+class RecalculateBalancesView(MaintenanceAccessMixin, ActionRequiredMixin, View):
     """Recalculate receivable balances from Payment records with preview (R6.07).
 
     GET: preview — show count without changing data.
     POST: execute in a transaction, log to AuditLog.
     """
+
+    action_key = 'maintenance.recalculate'
 
     def get(self, request, *args, **kwargs):
         count = Receivable.objects.count()

@@ -53,11 +53,13 @@
       </div>
     </form>
 
+    {% if request.user|has_action:'notifications.send' %}
     <form method="post" action="{% url 'company:resend_whatsapp_report' %}" class="mt-2">
       {% csrf_token %}
       <button type="submit" class="btn btn-secondary">Reenviar relatório de hoje agora</button>
       <p class="page-description">Envia novamente para todos os números configurados, mesmo que já tenham recebido hoje.</p>
     </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

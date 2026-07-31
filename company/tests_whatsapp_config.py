@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import ModulePermission
+from accounts.models import ActionPermission, ModulePermission
 from company.forms import CompanyForm
 from company.models import Company
 from customers.models import Customer
@@ -176,6 +176,9 @@ class ResendWhatsAppReportViewTests(TestCase):
         self.company.save()
         self.user = User.objects.create_user(email='ana@test.com', password='pass')
         ModulePermission.objects.create(user=self.user, module_key='company', allowed=True)
+        ActionPermission.objects.create(
+            user=self.user, action_key='notifications.send', allowed=True,
+        )
         self.client.force_login(self.user)
         self.url = reverse('company:resend_whatsapp_report')
 
@@ -187,6 +190,13 @@ class ResendWhatsAppReportViewTests(TestCase):
 
     def test_user_without_company_module_gets_403(self):
         other = User.objects.create_user(email='other@test.com', password='pass')
+        self.client.force_login(other)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_user_without_notifications_send_action_gets_403(self):
+        other = User.objects.create_user(email='noaction@test.com', password='pass')
+        ModulePermission.objects.create(user=other, module_key='company', allowed=True)
         self.client.force_login(other)
         response = self.client.post(self.url)
         self.assertEqual(response.status_code, 403)
