@@ -117,7 +117,6 @@
               <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
                 <th class="w-10 px-3 py-2.5 text-center">#</th>
                 <th class="px-3 py-2.5">Produto / Código</th>
-                <th class="px-3 py-2.5">Descrição / Ajustes</th>
                 <th class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
                 <th class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
@@ -132,11 +131,11 @@
                     <span class="item-index text-xs font-semibold text-slate-600">#{{ forloop.counter }}</span>
                   </td>
                   <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Produto">
-                    {{ item_form.id }}
+                    {{ item_form.description }}
                     <div class="field-group product-search-field mb-0">
                       {{ item_form.product }}
                       <div class="relative">
-                        <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm"
+                        <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm w-full"
                                placeholder="Buscar por código ou descrição…"
                                autocomplete="off"
                                data-field-id="{{ item_form.product.id_for_label }}"
@@ -153,12 +152,6 @@
                       </div>
                       <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
                       {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
-                    </div>
-                  </td>
-                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Descrição">
-                    <div class="field-group mb-0">
-                      {{ item_form.description|render_field }}
-                      {% if item_form.description.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.description.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
                   <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Valor">
@@ -186,7 +179,7 @@
                 </tr>
                 <!-- Photo upload row (hidden by default) -->
                 <tr class="item-photo-row hidden bg-slate-50/50">
-                  <td colspan="5" class="px-4 py-2">
+                  <td colspan="4" class="px-4 py-2">
                     <div class="field-group mb-0">
                       <label class="field-label text-xs" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
                       {{ item_form.proof_photo_upload|render_field }}
@@ -358,11 +351,11 @@
       <span class="item-index text-xs font-semibold text-slate-600">#</span>
     </td>
     <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
-      {{ f.id }}
+      {{ f.description }}
       <div class="field-group product-search-field mb-0">
         {{ f.product }}
         <div class="relative">
-          <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm"
+          <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm w-full"
                  placeholder="Buscar por código ou descrição…"
                  autocomplete="off"
                  role="combobox"
@@ -376,11 +369,6 @@
           <button type="button" class="open-browse text-xs font-medium text-rose-600 hover:underline">Filtros avançados</button>
         </div>
         <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
-      </div>
-    </td>
-    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
-      <div class="field-group mb-0">
-        {{ f.description|render_field }}
       </div>
     </td>
     <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
@@ -407,7 +395,7 @@
   </tr>
   <!-- Photo upload row for new items (hidden by default) -->
   <tr class="item-photo-row hidden bg-slate-50/50">
-    <td colspan="5" class="px-4 py-2">
+    <td colspan="4" class="px-4 py-2">
       <div class="field-group mb-0">
         <label class="field-label text-xs" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
         {{ f.proof_photo_upload|render_field }}

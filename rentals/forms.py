@@ -257,6 +257,7 @@ class RentalItemForm(forms.ModelForm):
         # Hidden select populated by the AJAX product search; keep only the selected
         # product in the queryset to avoid rendering thousands of options per row.
         self.fields['product'].widget.attrs['class'] = 'hidden'
+        self.fields['description'].widget = forms.HiddenInput()
         product_id = None
         if self.is_bound:
             value = self.data.get(self.add_prefix('product'))

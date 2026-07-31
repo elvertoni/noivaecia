@@ -342,15 +342,15 @@
   }
 
   .nav-group {
-    @apply mt-5 first:mt-0;
+    @apply mt-4 first:mt-0;
   }
 
   .nav-section {
-    @apply px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400;
+    @apply mb-1.5 px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-widest text-rose-400;
   }
 
   .nav-sublinks {
-    @apply space-y-0.5 rounded-xl bg-white/[0.06] p-1.5 ring-1 ring-inset ring-white/[0.06];
+    @apply space-y-0.5 rounded-xl bg-white/[0.10] p-1.5 ring-1 ring-inset ring-white/[0.15];
   }
 
   .nav-link {
