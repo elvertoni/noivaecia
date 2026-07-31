@@ -1115,6 +1115,9 @@ class ClientCorrectionsTests(TestCase):
         self.assertIn('será cobrado o percentual de 50,00% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
         self.assertIn('6. A não devolução dos trajes', content)
+        # Multa por atraso exibida nos Dados da Locação e Cláusula 4
+        self.assertIn('Multa por atraso (diária)', content)
+        self.assertIn('por dia de atraso', content)
         # Assinatura com 1 testemunha
         self.assertIn('Testemunha', content)
         self.assertNotIn('Testemunha 2', content)
