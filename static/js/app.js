@@ -259,8 +259,26 @@
    * auto-inserts thousand-dot separators.
    */
   function maskDecimal(raw) {
+    var normalized = String(raw || '');
+    // A dot only ever reaches here as a thousands-grouping separator the
+    // mask itself inserted (always exactly 3 digits per group) — UNLESS the
+    // value was just pasted/autofilled from outside, where a dot is more
+    // likely a decimal point (e.g. "12.34"). Treating that as thousands
+    // would silently turn it into 1234 (100x the intended amount), so
+    // reclassify a non-3-digit-grouped dot as the decimal separator before
+    // stripping, mirroring the same heuristic parseBRDecimal already uses.
+    if (normalized.indexOf(',') === -1 && normalized.indexOf('.') !== -1) {
+      var dotParts = normalized.split('.');
+      var looksLikeThousands = dotParts.length > 1 && dotParts.slice(1).every(function (part) {
+        return /^\d{3}$/.test(part);
+      });
+      if (!looksLikeThousands) {
+        var lastDot = normalized.lastIndexOf('.');
+        normalized = normalized.slice(0, lastDot) + ',' + normalized.slice(lastDot + 1);
+      }
+    }
     // Strip everything except digits and comma
-    var s = raw.replace(/[^\d,]/g, '');
+    var s = normalized.replace(/[^\d,]/g, '');
     // Allow only one comma
     var commaIndex = s.indexOf(',');
     if (commaIndex !== -1) {
