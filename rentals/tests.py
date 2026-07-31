@@ -12,6 +12,7 @@ from PIL import Image
 from accounts.models import ActionPermission, ModulePermission
 from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
+from company.models import Company
 from customers.models import Customer
 from movements.models import Pickup
 from rentals.forms import RentalForm, RentalItemForm
@@ -77,6 +78,36 @@ class RentalModelTests(TestCase):
         self.assertEqual(rental.final_value, Decimal('405.00'))
         self.assertEqual(rental.discount_amount, Decimal('45.00'))
 
+    def test_final_value_with_custom_cash_discount_percent(self):
+        rental = Rental.objects.create(
+            number=102, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            total_value=Decimal('450'), cash_discount=True,
+            cash_discount_percent=Decimal('20'),
+        )
+        self.assertEqual(rental.final_value, Decimal('360.00'))
+        self.assertEqual(rental.discount_amount, Decimal('90.00'))
+
+    def test_final_value_with_custom_cash_discount_amount(self):
+        rental = Rental.objects.create(
+            number=103, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            total_value=Decimal('450'), cash_discount=True,
+            cash_discount_amount=Decimal('120'),
+        )
+        self.assertEqual(rental.final_value, Decimal('330.00'))
+        self.assertEqual(rental.discount_amount, Decimal('120.00'))
+
+    def test_cash_discount_amount_never_exceeds_total(self):
+        rental = Rental.objects.create(
+            number=104, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            total_value=Decimal('100'), cash_discount=True,
+            cash_discount_amount=Decimal('500'),
+        )
+        self.assertEqual(rental.final_value, Decimal('0.00'))
+        self.assertEqual(rental.discount_amount, Decimal('100.00'))
+
     def test_default_status_is_pending(self):
         rental = Rental.objects.create(
             number=2, customer=self.customer,
@@ -136,6 +167,31 @@ class RentalFormValidationTests(TestCase):
             {value for value, _label in form.fields['down_payment_method'].choices if value},
             set(Payment.Method.values),
         )
+
+    def test_cash_discount_rejects_percent_and_amount_together(self):
+        form = RentalForm(data=self._header_data(
+            cash_discount='on',
+            cash_discount_percent='20',
+            cash_discount_amount='50,00',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cash_discount_amount', form.errors)
+
+    def test_cash_discount_percent_above_100_is_rejected(self):
+        form = RentalForm(data=self._header_data(
+            cash_discount='on',
+            cash_discount_percent='150',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cash_discount_percent', form.errors)
+
+    def test_cash_discount_amount_requires_checkbox(self):
+        form = RentalForm(data=self._header_data(cash_discount_amount='50,00'))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cash_discount', form.errors)
 
     def test_new_item_value_starts_blank_instead_of_zero(self):
         form = RentalItemForm()
@@ -1020,3 +1076,75 @@ class RentalListPaginationTests(TestCase):
             response,
             '?q=Cliente&amp;status=pending&amp;page=2',
         )
+
+
+class ClientCorrectionsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='correcoes-cliente@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=self.user,
+            module_key='rentals',
+            allowed=True,
+        )
+        self.client.force_login(self.user)
+        self.company = Company.load()
+        self.customer = Customer.objects.create(name='Cliente Teste Correções')
+        self.rental = Rental.objects.create(
+            number=9999,
+            customer=self.customer,
+            pickup_date=date(2026, 8, 10),
+            return_date=date(2026, 8, 15),
+            status=Rental.Status.PENDING,
+            total_value=500,
+        )
+
+    def test_printed_contract_contains_updated_clauses_and_single_witness(self):
+        url = reverse('rentals:contract', args=[self.rental.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+
+        # Cláusula 1 com data de devolução
+        self.assertIn('data devolução (15/08/2026)', content)
+        # Cláusula 3 com espaço para quantia de reposição
+        self.assertIn('a quantia de (____________________)', content)
+        # Cláusula 5 com multa de 50% por desistência/rescisão
+        self.assertIn('será cobrado o percentual de 50,00% correspondente ao valor total da locação', content)
+        # Cláusula 6 com perda em 7 dias
+        self.assertIn('6. A não devolução dos trajes', content)
+        # Assinatura com 1 testemunha
+        self.assertIn('Testemunha', content)
+        self.assertNotIn('Testemunha 2', content)
+
+    def test_payment_plan_generation_supports_last_due_date(self):
+        from billing.services import generate_for_rental
+        receivables = generate_for_rental(
+            self.rental,
+            installments=3,
+            last_due_date=self.rental.pickup_date,
+        )
+        self.assertEqual(len(receivables), 3)
+        self.assertEqual(receivables[2].due_date, date(2026, 8, 10))
+        self.assertEqual(receivables[1].due_date, date(2026, 7, 10))
+        self.assertEqual(receivables[0].due_date, date(2026, 6, 10))
+
+    def test_payment_plan_last_due_date_with_single_installment(self):
+        from billing.services import generate_for_rental
+        receivables = generate_for_rental(
+            self.rental,
+            installments=1,
+            last_due_date=self.rental.pickup_date,
+        )
+        self.assertEqual(len(receivables), 1)
+        self.assertEqual(receivables[0].due_date, date(2026, 8, 10))
+
+    def test_create_rental_payment_plan_defaults_last_installment_to_pickup_date(self):
+        from billing.services import create_rental_payment_plan
+        result = create_rental_payment_plan(self.rental, installments=3)
+        future = result['future_receivables']
+        self.assertEqual(len(future), 3)
+        self.assertEqual(future[-1].due_date, self.rental.pickup_date)
+

@@ -21,6 +21,7 @@ NON_NEGATIVE_RATE_FIELDS = (
     'monthly_interest_rate',
     'damage_penalty_rate',
     'loss_penalty_rate',
+    'cancellation_penalty_rate',
 )
 
 
@@ -53,6 +54,7 @@ class CompanyForm(forms.ModelForm):
             'last_rental_number', 'daily_interest_rate',
             'late_fee_rate', 'monthly_interest_rate',
             'damage_penalty_rate', 'loss_penalty_rate',
+            'cancellation_penalty_rate',
             'footer_message',
             'whatsapp_reports_enabled', 'whatsapp_report_number',
             'whatsapp_report_time',

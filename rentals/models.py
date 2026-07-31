@@ -30,7 +30,15 @@ class Rental(TimeStampedModel):
     return_date = models.DateField('data de retorno', db_index=True)
     total_value = models.DecimalField('valor total', max_digits=10, decimal_places=2, default=0)
     penalty_value = models.DecimalField('multa', max_digits=10, decimal_places=2, default=0)
-    cash_discount = models.BooleanField('desconto à vista (10%)', default=False)
+    cash_discount = models.BooleanField('desconto à vista', default=False)
+    cash_discount_percent = models.DecimalField(
+        'desconto à vista (%)', max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text='Percentual customizado para esta locação. Em branco, usa o padrão de 10%.',
+    )
+    cash_discount_amount = models.DecimalField(
+        'desconto à vista (R$)', max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text='Valor fixo em reais. Preencha apenas um dos dois campos de desconto.',
+    )
     notes = models.TextField('observações', blank=True)
     status = models.CharField(
         'situação', max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
@@ -77,6 +85,24 @@ class Rental(TimeStampedModel):
             self.save(update_fields=['total_value', 'updated_at'])
         return total
 
+    @staticmethod
+    def compute_cash_discount(total, *, applied, percent=None, amount=None):
+        """Return ``(final_value, discount_amount)`` for a given total (R7.05).
+
+        A custom fixed ``amount`` takes precedence over ``percent`` (an
+        attendant may negotiate a bigger discount for a returning customer);
+        with neither set, falls back to the standard 10% rate.
+        """
+        total = total or Decimal('0')
+        if not applied:
+            return total, Decimal('0.00')
+        if amount is not None:
+            discount = min(amount, total)
+        else:
+            rate = (percent if percent is not None else CASH_DISCOUNT_RATE * 100) / Decimal('100')
+            discount = (total * rate).quantize(Decimal('0.01'))
+        return (total - discount).quantize(Decimal('0.01')), discount
+
     @property
     def final_value(self):
         """``total_value`` net of the cash discount, when applied (R7.05).
@@ -85,17 +111,24 @@ class Rental(TimeStampedModel):
         generate receivables/installments and shown on the printed contract.
         ``total_value`` itself stays the raw item sum (RF-15 contract).
         """
-        total = self.total_value or Decimal('0')
-        if self.cash_discount:
-            return (total * (Decimal('1') - CASH_DISCOUNT_RATE)).quantize(Decimal('0.01'))
-        return total
+        final, _ = self.compute_cash_discount(
+            self.total_value,
+            applied=self.cash_discount,
+            percent=self.cash_discount_percent,
+            amount=self.cash_discount_amount,
+        )
+        return final
 
     @property
     def discount_amount(self):
         """Amount subtracted by the cash discount, or zero when not applied."""
-        if not self.cash_discount:
-            return Decimal('0.00')
-        return (self.total_value or Decimal('0')) - self.final_value
+        _, discount = self.compute_cash_discount(
+            self.total_value,
+            applied=self.cash_discount,
+            percent=self.cash_discount_percent,
+            amount=self.cash_discount_amount,
+        )
+        return discount
 
 
 class RentalItem(TimeStampedModel):

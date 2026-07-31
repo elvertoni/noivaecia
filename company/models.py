@@ -1,5 +1,6 @@
 from datetime import time
 
+from django.core.validators import MaxValueValidator
 from django.db import models, transaction
 
 from core.models import TimeStampedModel
@@ -37,6 +38,12 @@ class Company(TimeStampedModel):
     loss_penalty_rate = models.DecimalField(
         'penalidade por perda/não devolução (%)', max_digits=5, decimal_places=2, default=100,
         help_text='Percentual do valor do item cobrado em caso de perda ou não devolução.',
+        validators=[MaxValueValidator(100)],
+    )
+    cancellation_penalty_rate = models.DecimalField(
+        'penalidade por desistência/rescisão (%)', max_digits=5, decimal_places=2, default=50,
+        help_text='Percentual do valor total cobrado em caso de desistência ou rescisão do contrato.',
+        validators=[MaxValueValidator(100)],
     )
     footer_message = models.CharField('mensagem de rodapé', max_length=255, blank=True)
 
@@ -75,6 +82,10 @@ class Company(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(loss_penalty_rate__gte=0),
                 name='company_loss_penalty_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(cancellation_penalty_rate__gte=0),
+                name='company_cancellation_penalty_rate_gte_0',
             ),
         ]
 

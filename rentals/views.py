@@ -23,7 +23,7 @@ from core.models import AuditLog
 from customers.models import _normalize_name
 
 from .forms import RentalCancelForm, RentalForm, RentalItemFormSet, RentalItemEditFormSet
-from .models import CASH_DISCOUNT_RATE, Rental, RentalItem
+from .models import Rental, RentalItem
 
 
 def check_item_availability(items, pickup_date, return_date, exclude_rental_id=None):
@@ -233,9 +233,11 @@ class RentalCreateView(RentalAccessMixin, CreateView):
         dp_method = form.cleaned_data.get('down_payment_method')
         dp_date = form.cleaned_data.get('down_payment_date')
         cash_discount = form.cleaned_data.get('cash_discount')
-        effective_total = (
-            (items_total * (Decimal('1') - CASH_DISCOUNT_RATE)).quantize(Decimal('0.01'))
-            if cash_discount else items_total
+        effective_total, _ = Rental.compute_cash_discount(
+            items_total,
+            applied=cash_discount,
+            percent=form.cleaned_data.get('cash_discount_percent'),
+            amount=form.cleaned_data.get('cash_discount_amount'),
         )
         remaining = effective_total - dp_amount
 

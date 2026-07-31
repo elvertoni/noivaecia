@@ -64,30 +64,35 @@ class PaymentPlanError(ValueError):
     """Raised when a rental payment plan would violate financial invariants."""
 
 
-def generate_for_rental(rental, installments=1, first_due_date=None, total_amount=None):
+def generate_for_rental(rental, installments=1, first_due_date=None, total_amount=None, last_due_date=None):
     """Create receivables splitting the rental total into N installments (RF-19/8.1.3).
 
     The total is divided evenly; any rounding remainder lands on the first
     installment so the sum matches the rental total exactly. Installments fall
-    due monthly starting at ``first_due_date`` (defaults to the return date).
+    due monthly starting at ``first_due_date`` (defaults to the return date) or
+    ending at ``last_due_date`` when specified.
     """
     installments = max(1, int(installments))
-    first_due_date = first_due_date or rental.return_date
     total = (
         Decimal(str(total_amount))
         if total_amount is not None
-        else rental.final_value
+        else Decimal(str(rental.final_value or 0))
     )
     if total < 0:
         raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
+
+    if last_due_date:
+        due_dates = [_add_months(last_due_date, -(installments - 1 - i)) for i in range(installments)]
+    else:
+        first_due = first_due_date or rental.return_date
+        due_dates = [_add_months(first_due, i) for i in range(installments)]
 
     base = (total / installments).quantize(Decimal('0.01'))
     remainder = total - base * installments
 
     created = []
-    for index in range(installments):
+    for index, due in enumerate(due_dates):
         amount = base + (remainder if index == 0 else Decimal('0'))
-        due = _add_months(first_due_date, index)
         created.append(
             Receivable.objects.create(rental=rental, due_date=due, amount=amount)
         )
@@ -302,12 +307,22 @@ def create_rental_payment_plan(
 
         future_receivables = []
         if remaining > 0:
-            future_receivables = generate_for_rental(
-                locked_rental,
-                installments=installments,
-                first_due_date=first_due_date or locked_rental.pickup_date,
-                total_amount=remaining,
-            )
+            if first_due_date:
+                future_receivables = generate_for_rental(
+                    locked_rental,
+                    installments=installments,
+                    first_due_date=first_due_date,
+                    total_amount=remaining,
+                )
+            else:
+                # Golden rule (client request): with no explicit first due
+                # date, the last installment must land on the pickup date.
+                future_receivables = generate_for_rental(
+                    locked_rental,
+                    installments=installments,
+                    last_due_date=locked_rental.pickup_date,
+                    total_amount=remaining,
+                )
 
     return {
         'entry_receivable': entry_receivable,

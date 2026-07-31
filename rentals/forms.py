@@ -5,7 +5,7 @@ from pathlib import Path
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -35,7 +35,9 @@ def _style(form):
         if isinstance(field, forms.DecimalField):
             configure_br_decimal_field(
                 field,
-                currency=field_name in {'down_payment_amount', 'penalty_value', 'value'},
+                currency=field_name in {
+                    'down_payment_amount', 'penalty_value', 'value', 'cash_discount_amount',
+                },
             )
         css = field.widget.attrs.get('class', '')
         classes = css.split()
@@ -112,8 +114,9 @@ class RentalForm(forms.ModelForm):
         widget=forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
         input_formats=DATE_INPUT_FORMATS,
         help_text=(
-            'Sem entrada, deixe em branco para usar a data de retirada. '
-            'As demais parcelas vencem mensalmente na mesma data.'
+            'Deixe em branco para distribuir as parcelas mensalmente com a '
+            'última vencendo na data de retirada. Se informado, as parcelas '
+            'passam a vencer mensalmente a partir desta data.'
         ),
     )
 
@@ -135,7 +138,10 @@ class RentalForm(forms.ModelForm):
 
     class Meta:
         model = Rental
-        fields = ('customer', 'pickup_date', 'return_date', 'penalty_value', 'cash_discount', 'notes')
+        fields = (
+            'customer', 'pickup_date', 'return_date', 'penalty_value', 'cash_discount',
+            'cash_discount_percent', 'cash_discount_amount', 'notes',
+        )
         widgets = {
             'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
             'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),
@@ -149,6 +155,13 @@ class RentalForm(forms.ModelForm):
         self.fields['cash_discount'].widget.attrs['class'] = (
             'rounded border-slate-300 text-rose-600 focus:ring-rose-500'
         )
+        self.fields['cash_discount_percent'].required = False
+        self.fields['cash_discount_percent'].min_value = Decimal('0')
+        self.fields['cash_discount_percent'].validators.append(MinValueValidator(Decimal('0')))
+        self.fields['cash_discount_percent'].validators.append(MaxValueValidator(Decimal('100')))
+        self.fields['cash_discount_amount'].required = False
+        self.fields['cash_discount_amount'].min_value = Decimal('0')
+        self.fields['cash_discount_amount'].validators.append(MinValueValidator(Decimal('0')))
         for field_name in ('pickup_date', 'return_date'):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
@@ -181,6 +194,18 @@ class RentalForm(forms.ModelForm):
         return_d = cleaned.get('return_date')
         if pickup and return_d and return_d <= pickup:
             self.add_error('return_date', 'Data de retorno deve ser posterior à data de retirada.')
+        discount_percent = cleaned.get('cash_discount_percent')
+        discount_amount = cleaned.get('cash_discount_amount')
+        if discount_percent is not None and discount_amount is not None:
+            self.add_error(
+                'cash_discount_amount',
+                'Informe o desconto em porcentagem OU em reais, não os dois.',
+            )
+        if (discount_percent is not None or discount_amount is not None) and not cleaned.get('cash_discount'):
+            self.add_error(
+                'cash_discount',
+                'Marque "desconto à vista" para aplicar o percentual ou valor informado.',
+            )
         dp_amount = cleaned.get('down_payment_amount')
         dp_method = cleaned.get('down_payment_method')
         dp_date = cleaned.get('down_payment_date')

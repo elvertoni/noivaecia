@@ -36,6 +36,7 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             'monthly_interest_rate': '1.00',
             'damage_penalty_rate': '50.00',
             'loss_penalty_rate': '100.00',
+            'cancellation_penalty_rate': '50.00',
             'footer_message': '',
             'whatsapp_reports_enabled': False,
             'whatsapp_report_number': '',

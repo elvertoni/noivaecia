@@ -74,8 +74,8 @@
             <div class="flex items-center justify-between gap-3 py-2">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-700">{{ forloop.counter }}</span>
-                <span class="truncate text-sm font-medium text-app-ink">
-                  {{ item.product_reference }} · {{ item.display_description|default:'Sem descrição' }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}
+                <span class="text-sm font-medium text-app-ink">
+                  <span class="inline-block rounded bg-rose-100 px-1.5 py-0.5 text-xs font-bold text-rose-800 me-1">{{ item.product_reference }}</span> {{ item.display_description|default:'Sem descrição' }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}
                 </span>
                 {% if item.description %}<span class="hidden sm:inline truncate text-xs text-app-muted ml-1">— {{ item.description }}</span>{% endif %}
               </div>
@@ -211,9 +211,22 @@
             <div>
               <label class="inline-flex items-center gap-2 text-xs font-medium text-app-muted cursor-pointer" for="{{ form.cash_discount.id_for_label }}">
                 {{ form.cash_discount }}
-                Desconto à vista (10%)
+                Desconto à vista
               </label>
+              <div class="mt-1.5 flex items-center gap-1">
+                <div class="w-16">{{ form.cash_discount_percent }}</div>
+                <span class="text-[10px] text-app-muted shrink-0">% ou</span>
+                <div class="w-24">{{ form.cash_discount_amount }}</div>
+              </div>
+              {% if form.cash_discount.errors or form.cash_discount_percent.errors or form.cash_discount_amount.errors %}
+                <p class="field-error">
+                  {{ form.cash_discount.errors|striptags }}
+                  {{ form.cash_discount_percent.errors|striptags }}
+                  {{ form.cash_discount_amount.errors|striptags }}
+                </p>
+              {% endif %}
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
+              <p class="text-[10px] text-app-muted mt-0.5">Em branco = 10% padrão.</p>
             </div>
             <div>
               <p class="text-xs font-medium text-app-muted">Multa diária por atraso</p>
@@ -1287,7 +1300,20 @@
 
     const applyDiscountCb = document.getElementById('{{ form.cash_discount.id_for_label }}');
     const isCashDiscount = applyDiscountCb ? applyDiscountCb.checked : false;
-    const discount = isCashDiscount ? (subtotal * 0.10) : 0;
+    const percentInput = document.getElementById('{{ form.cash_discount_percent.id_for_label }}');
+    const amountInput = document.getElementById('{{ form.cash_discount_amount.id_for_label }}');
+    const customAmount = amountInput ? parseBRDecimal(amountInput.value) : 0;
+    const customPercent = percentInput ? parseBRDecimal(percentInput.value) : 0;
+    let discount = 0;
+    if (isCashDiscount) {
+      if (customAmount > 0) {
+        discount = Math.min(customAmount, subtotal);
+      } else if (customPercent > 0) {
+        discount = subtotal * (customPercent / 100);
+      } else {
+        discount = subtotal * 0.10;
+      }
+    }
     const totalFinal = Math.max(0, subtotal - discount);
 
     const subtotalEl = document.getElementById('subtotal-display');
@@ -1327,6 +1353,14 @@
   const applyDiscountCb = document.getElementById('{{ form.cash_discount.id_for_label }}');
   if (applyDiscountCb) {
     applyDiscountCb.addEventListener('change', updateFinancialTotals);
+  }
+  const discountPercentInput = document.getElementById('{{ form.cash_discount_percent.id_for_label }}');
+  if (discountPercentInput) {
+    discountPercentInput.addEventListener('input', updateFinancialTotals);
+  }
+  const discountAmountInput = document.getElementById('{{ form.cash_discount_amount.id_for_label }}');
+  if (discountAmountInput) {
+    discountAmountInput.addEventListener('input', updateFinancialTotals);
   }
 
   // Initial calculation on page load
