@@ -34,6 +34,7 @@ class Company(TimeStampedModel):
     damage_penalty_rate = models.DecimalField(
         'penalidade por dano (%)', max_digits=5, decimal_places=2, default=50,
         help_text='Percentual do valor do item cobrado em caso de dano.',
+        validators=[MaxValueValidator(100)],
     )
     loss_penalty_rate = models.DecimalField(
         'penalidade por perda/não devolução (%)', max_digits=5, decimal_places=2, default=100,
