@@ -391,7 +391,12 @@ class AvailabilityOperationalLookupTests(TestCase):
         self.assertContains(response, 'data-enter-next="availability-code"')
         self.assertContains(response, 'data-submit-on-enter="true"')
         self.assertContains(response, "form.requestSubmit(submitButton)")
-        self.assertNotContains(response, 'availability-date')
+
+    def test_date_field_is_rendered_so_future_dates_can_be_checked(self):
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'id="availability-date"')
+        self.assertContains(response, 'name="date"')
 
 
 class AvailabilityAccessTests(TestCase):
