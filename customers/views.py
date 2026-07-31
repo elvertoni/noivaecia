@@ -178,8 +178,9 @@ class CustomerDeleteView(ModuleAccessMixin, ActionRequiredMixin, DeleteView):
         return response
 
 
-class CustomerDeactivateView(ModuleAccessMixin, View):
+class CustomerDeactivateView(ModuleAccessMixin, ActionRequiredMixin, View):
     module_key = 'customers'
+    action_key = 'customers.deactivate'
 
     def post(self, request, pk):
         customer = get_object_or_404(Customer, pk=pk)

@@ -344,8 +344,21 @@ class CustomerDeleteGuardTests(TestCase):
 class CustomerDeactivateTests(TestCase):
     def setUp(self):
         self.user = _make_user()
+        ActionPermission.objects.create(
+            user=self.user, action_key='customers.deactivate', allowed=True,
+        )
         self.client.force_login(self.user)
         self.customer = _make_customer()
+
+    def test_deactivate_requires_action_permission(self):
+        other = User.objects.create_user(email='noaction@test.com', password='pass')
+        ModulePermission.objects.create(user=other, module_key='customers', allowed=True)
+        self.client.force_login(other)
+        url = reverse('customers:deactivate', args=[self.customer.pk])
+
+        response = self.client.post(url, {'is_active': '0'})
+
+        self.assertEqual(response.status_code, 403)
 
     def test_deactivate_active_customer(self):
         url = reverse('customers:deactivate', args=[self.customer.pk])

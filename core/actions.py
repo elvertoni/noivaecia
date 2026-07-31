@@ -6,6 +6,7 @@ Each entry is (key, label). ``key`` matches ``accounts.ActionPermission.action_k
 
 ACTIONS = [
     ('customers.delete', 'Excluir clientes'),
+    ('customers.deactivate', 'Ativar/inativar clientes'),
     ('catalog.delete', 'Excluir categorias e produtos'),
     ('rentals.delete', 'Excluir locações'),
     ('rentals.cancel', 'Cancelar locações'),
