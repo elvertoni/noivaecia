@@ -4,392 +4,364 @@
 <head>
   <meta charset="UTF-8">
   <title>Contrato de Locação #{{ rental.number }} · {{ company.name }}</title>
-  <style>
-    @page { size: A4 portrait; margin: 8mm 9mm; }
+<style>
+    @page { size: A4 portrait; margin: 5mm 7mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #111; }
-    .copy { page-break-after: always; padding-bottom: 4px; }
-    .copy:last-child { page-break-after: auto; }
-
-    /* ── Compressão para duas vias; conteúdo excedente nunca é cortado ── */
-    .single-page-a4 {
-      --copy-height: 131mm;
-      --cut-gap: 10mm;
-      font-size: 8.5pt;
-    }
-    .single-page-a4 .copy {
-      min-height: var(--copy-height);
-      page-break-after: avoid;
-      break-after: avoid;
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #111; line-height: 1.15; }
+    
+    .copy-container {
+      height: 100vh;
+      max-height: 287mm;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
+      justify-content: space-between;
     }
-    .single-page-a4 .copy:first-child {
-      margin-bottom: var(--cut-gap);
-      padding-bottom: 0;
+
+    .copy {
+      height: 138mm;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-bottom: 1px dashed #888;
+      padding-bottom: 4mm;
       position: relative;
     }
-    /* Corredor de corte entre as duas vias */
-    .single-page-a4 .copy:first-child::after {
-      content: "✂ Corte aqui";
+    .copy:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+      padding-top: 4mm;
+    }
+
+    .cut-notice {
       position: absolute;
-      bottom: -6mm;
-      left: 0;
-      right: 0;
-      text-align: center;
-      font-size: 7pt;
-      color: #4b5563;
+      bottom: -3mm;
+      left: 50%;
+      transform: translateX(-50%);
       background: #fff;
-      display: block;
-      height: 4mm;
-      line-height: 4mm;
-      border-top: 1px dashed #6b7280;
+      padding: 0 8px;
+      font-size: 6.5pt;
+      color: #666;
     }
-    .single-page-a4 .header {
-      padding-bottom: 2px;
-      margin-bottom: 3px;
-    }
-    .single-page-a4 .header-left h1 { font-size: 11pt; }
-    .single-page-a4 .header-left p { font-size: 7.5pt; }
-    .single-page-a4 .header-right { font-size: 7.5pt; }
-    .single-page-a4 .header-right strong { font-size: 9.5pt; }
-    .single-page-a4 .contract-title-row { margin-bottom: 4px; }
-    .single-page-a4 .contract-title { font-size: 10.5pt; }
-    .single-page-a4 .copy-label { margin-top: 1px; }
-    .single-page-a4 .print-summary-grid {
-      display: grid;
-      grid-template-columns: 1.35fr 1fr;
-      gap: 6px;
-      align-items: start;
-    }
-    .single-page-a4 .section { margin-bottom: 4px; }
-    .single-page-a4 .section-title { font-size: 8pt; margin-bottom: 3px; padding-bottom: 0px; }
-    .single-page-a4 .row { gap: 6px; margin-bottom: 2px; }
-    .single-page-a4 .field label { font-size: 7pt; }
-    .single-page-a4 .field span { font-size: 9pt; min-height: 12px; }
-    .single-page-a4 table { font-size: 8pt; }
-    .single-page-a4 table thead th { font-size: 7.5pt; padding: 2px 4px; }
-    .single-page-a4 table tbody td { padding: 2px 4px; }
-    .single-page-a4 table tfoot td { padding: 2px 4px; }
-    .single-page-a4 .clauses {
-      font-size: 7pt;
-      line-height: 1.25;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .single-page-a4 .clauses p { margin-bottom: 0px; }
-    .single-page-a4 .signatures { margin-top: 6px; gap: 12px; }
-    .single-page-a4 .sig-line { margin-top: 14px; font-size: 7.5pt; }
 
     /* ── Header ─────────────────────────────────────────────────── */
     .header {
-      border-bottom: 2px solid #9f1239;
-      padding-bottom: 4px;
-      margin-bottom: 6px;
+      border-bottom: 1.5px solid #9f1239;
+      padding-bottom: 2px;
+      margin-bottom: 3px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
     }
-    .header-left h1 { font-size: 13pt; font-weight: 700; color: #9f1239; }
-    .header-left p { font-size: 8.5pt; color: #444; margin-top: 1px; }
-    .header-right { text-align: right; font-size: 8.5pt; color: #444; line-height: 1.4; }
-    .header-right strong { font-size: 10.5pt; color: #111; }
+    .header-left h1 { font-size: 10.5pt; font-weight: 700; color: #9f1239; line-height: 1.1; }
+    .header-left p { font-size: 7pt; color: #444; margin-top: 1px; }
+    .header-right { text-align: right; font-size: 7pt; color: #444; line-height: 1.2; }
+    .header-right strong { font-size: 9pt; color: #111; }
 
     /* ── Contract title ─────────────────────────────────────────── */
     .contract-title-row {
       text-align: center;
-      margin-bottom: 7px;
+      margin-bottom: 3px;
     }
     .contract-title {
       text-align: center;
-      font-size: 12pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    /* ── Sections ────────────────────────────────────────────────── */
-    .section { margin-bottom: 6px; }
-    .section-title {
-      font-size: 9pt;
+      font-size: 9.5pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+    }
+    .copy-label {
+      text-align: center;
+      font-size: 7.5pt;
+      color: #666;
+      font-style: italic;
+    }
+
+    /* ── Sections ────────────────────────────────────────────────── */
+    .section { margin-bottom: 3px; }
+    .section-title {
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
       color: #9f1239;
-      border-bottom: 1px solid #ccc;
+      border-bottom: 1px solid #ddd;
       padding-bottom: 1px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     /* ── Fields ──────────────────────────────────────────────────── */
-    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
-    .field { flex: 1; min-width: 90px; }
-    .field .field-caption { font-size: 7.5pt; color: #555; display: block; text-transform: uppercase; letter-spacing: 0.02em; }
-    .field span { font-size: 10pt; font-weight: 600; border-bottom: 1px solid #bbb; display: block; min-height: 14px; padding-bottom: 1px; }
-    .print-summary-grid { display: block; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+    .field { flex: 1; min-width: 70px; }
+    .field .field-caption { font-size: 6.5pt; color: #555; display: block; text-transform: uppercase; }
+    .field span { font-size: 8pt; font-weight: 600; border-bottom: 1px solid #ccc; display: block; min-height: 11px; }
+    .print-summary-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 6px;
+      align-items: start;
+    }
 
     /* ── Tables ──────────────────────────────────────────────────── */
-    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
     table thead th {
-      background: #f5f5f5;
+      background: #f8f8f8;
       color: #333;
-      font-size: 8pt;
+      font-size: 7pt;
       font-weight: 700;
       text-align: left;
       text-transform: uppercase;
-      padding: 3px 5px;
-      border: 1px solid #999;
+      padding: 1.5px 4px;
+      border: 1px solid #bbb;
     }
     table tbody td {
-      padding: 3px 5px;
-      border: 1px solid #ccc;
+      padding: 1.5px 4px;
+      border: 1px solid #ddd;
       vertical-align: top;
     }
     table tfoot td {
-      padding: 3px 5px;
-      border: 1px solid #999;
+      padding: 1.5px 4px;
+      border: 1px solid #bbb;
       font-weight: 700;
-      background: #f5f5f5;
+      background: #f8f8f8;
     }
     .text-right { text-align: right; }
 
     /* ── Clauses ─────────────────────────────────────────────────── */
-    .clauses { font-size: 8pt; color: #333; line-height: 1.35; }
-    .clauses p { margin-bottom: 2px; }
+    .clauses {
+      font-size: 6.5pt;
+      color: #333;
+      line-height: 1.2;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .clauses p { margin-bottom: 0px; }
 
     /* ── Signatures ──────────────────────────────────────────────── */
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 16px;
-      gap: 16px;
-      flex-wrap: wrap;
+      margin-top: 4px;
+      gap: 12px;
     }
-    .sig-block { flex: 1; min-width: 120px; text-align: center; }
+    .sig-block { flex: 1; text-align: center; }
     .sig-line {
       border-top: 1px solid #333;
-      padding-top: 3px;
-      font-size: 8.5pt;
-      color: #444;
-      margin-top: 28px;
-    }
-
-    /* ── Copy label ──────────────────────────────────────────────── */
-    .copy-label {
-      text-align: center;
-      font-size: 8pt;
-      color: #777;
-      margin-top: 3px;
-      font-style: italic;
+      padding-top: 1px;
+      font-size: 7pt;
+      color: #333;
+      margin-top: 12px;
     }
 
     /* ── Print button ────────────────────────────────────────────── */
-    .no-print { display: block; text-align: center; margin-bottom: 16px; padding: 12px; }
-    @media print { .no-print { display: none !important; } }
+    .no-print { display: block; text-align: center; margin-bottom: 10px; padding: 8px; }
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .copy-container { height: 100vh; page-break-inside: avoid; break-inside: avoid; }
+    }
   </style>
 </head>
-<body class="{% if rental.items.all|length <= 10 %}single-page-a4{% endif %}">
+<body>
 
 <div class="no-print">
-  <button onclick="window.print()" style="padding:8px 20px;background:#9f1239;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11pt;">Imprimir contrato</button>
+  <button onclick="window.print()" style="padding:8px 20px;background:#9f1239;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11pt;font-weight:bold;">Imprimir contrato (2 vias em 1 folha A4)</button>
   <a href="{% url 'rentals:detail' rental.pk %}" style="margin-left:12px;font-size:10pt;color:#9f1239;">Voltar</a>
-  <p style="margin-top:6px;font-size:9pt;color:#555;">Contrato {{ contract_version }} — gerado em {% now "d/m/Y H:i" %}</p>
+  <p style="margin-top:4px;font-size:8.5pt;color:#555;">Contrato {{ contract_version }} — gerado em {% now "d/m/Y H:i" %}</p>
 </div>
 
 {% with items=rental.items.all %}
+<div class="copy-container">
 {% for copy_label in copy_labels %}
 <div class="copy">
 
   <!-- ══ Cabeçalho ══════════════════════════════════════════════ -->
-  <div class="header">
-    <div class="header-left">
-      <h1>{{ company.name }}</h1>
-      <p>{{ company.address }}{% if company.city %} · {{ company.city }}{% endif %}</p>
-      <p>{% if company.cnpj %}CNPJ: {{ company.cnpj }}{% endif %}{% if company.phones %} · Tel: {{ company.phones }}{% endif %}</p>
+  <div>
+    <div class="header">
+      <div class="header-left">
+        <h1>{{ company.name }}</h1>
+        <p>{{ company.address }}{% if company.city %} · {{ company.city }}{% endif %}{% if company.cnpj %} · CNPJ: {{ company.cnpj }}{% endif %}{% if company.phones %} · Tel: {{ company.phones }}{% endif %}</p>
+      </div>
+      <div class="header-right">
+        <strong>Nº {{ rental.number }}</strong> | Data: {% now "d/m/Y" %}
+      </div>
     </div>
-    <div class="header-right">
-      <strong>Nº {{ rental.number }}</strong><br>
-      Data: {% now "d/m/Y" %}<br>
-      Versão {{ contract_version }}
+
+    <div class="contract-title-row">
+      <div class="contract-title">Contrato de Locação de Traje</div>
+      <div class="copy-label">{{ copy_label }}</div>
     </div>
-  </div>
 
-  <div class="contract-title-row">
-    <div class="contract-title">Contrato de Locação de Traje</div>
-    <div class="copy-label">{{ copy_label }}</div>
-  </div>
+    <!-- ══ Locatário & Dados da Locação ═══════════════════════════ -->
+    <div class="print-summary-grid">
+      <div class="section">
+        <div class="section-title">Locatário</div>
+        <div class="row">
+          <div class="field" style="flex:2">
+            <span class="field-caption">Nome</span>
+            <span>{{ rental.customer.name }}</span>
+          </div>
+          <div class="field">
+            <span class="field-caption">CPF</span>
+            <span>{{ rental.customer.cpf|default:'—' }}</span>
+          </div>
+          <div class="field">
+            <span class="field-caption">RG</span>
+            <span>{{ rental.customer.rg|default:'—' }}</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field" style="flex:2">
+            <span class="field-caption">Endereço</span>
+            <span>{{ rental.customer.address|default:'—' }}</span>
+          </div>
+          <div class="field">
+            <span class="field-caption">Cidade</span>
+            <span>{{ rental.customer.city|default:'—' }}</span>
+          </div>
+          <div class="field">
+            <span class="field-caption">Celular</span>
+            <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
+          </div>
+        </div>
+      </div>
 
-  <!-- ══ Locatário ══════════════════════════════════════════════ -->
-  <div class="print-summary-grid">
+      <!-- ══ Dados da locação ═══════════════════════════════════════ -->
+      <div class="section">
+        <div class="section-title">Dados da locação</div>
+        <div class="row">
+          <div class="field">
+            <span class="field-caption">Retirada</span>
+            <span><strong>{{ rental.pickup_date|date:"d/m/Y" }}</strong></span>
+          </div>
+          <div class="field">
+            <span class="field-caption">Devolução</span>
+            <span><strong>{{ rental.return_date|date:"d/m/Y" }}</strong></span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <span class="field-caption">Multa por atraso (diária)</span>
+            <span><strong>R$ {{ rental.penalty_value|brl }}</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Itens locados ══════════════════════════════════════════ -->
     <div class="section">
-      <div class="section-title">Locatário</div>
-      <div class="row">
-        <div class="field" style="flex:3">
-          <span class="field-caption">Nome</span>
-          <span>{{ rental.customer.name }}</span>
-        </div>
-        <div class="field">
-          <span class="field-caption">CPF</span>
-          <span>{{ rental.customer.cpf|default:'—' }}</span>
-        </div>
-        <div class="field">
-          <span class="field-caption">RG</span>
-          <span>{{ rental.customer.rg|default:'—' }}</span>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field" style="flex:2">
-          <span class="field-caption">Endereço</span>
-          <span>{{ rental.customer.address|default:'—' }}</span>
-        </div>
-        <div class="field">
-          <span class="field-caption">Cidade</span>
-          <span>{{ rental.customer.city|default:'—' }}</span>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <span class="field-caption">Celular</span>
-          <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
-        </div>
-        <div class="field">
-          <span class="field-caption">Telefone alternativo</span>
-          <span>
-            {% if rental.customer.phone_home or rental.customer.alternate_phone_contact %}
-              {% if rental.customer.alternate_phone_contact %}{{ rental.customer.alternate_phone_contact }}{% endif %}{% if rental.customer.alternate_phone_contact and rental.customer.phone_home %} / {% endif %}{% if rental.customer.phone_home %}{{ rental.customer.phone_home }}{% endif %}
-            {% else %}
-              —
-            {% endif %}
-          </span>
-        </div>
-      </div>
+      <div class="section-title">Itens locados</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:15%">Código</th>
+            <th>Descrição — Cor — Tamanho</th>
+            <th class="text-right" style="width:16%">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item.product_reference }}</td>
+            <td>{{ item.display_description }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
+            <td class="text-right">R$ {{ item.value|brl }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" style="text-align:center;color:#888;">Sem itens.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          {% if rental.cash_discount %}
+          <tr>
+            <td colspan="2" class="text-right">Subtotal das peças</td>
+            <td class="text-right">R$ {{ rental.total_value|brl }}</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="text-right">Desconto à vista</td>
+            <td class="text-right">- R$ {{ rental.discount_amount|brl }}</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="text-right"><strong>Valor total</strong></td>
+            <td class="text-right"><strong>R$ {{ rental.final_value|brl }}</strong></td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="2" class="text-right">Valor total</td>
+            <td class="text-right">R$ {{ rental.total_value|brl }}</td>
+          </tr>
+          {% endif %}
+        </tfoot>
+      </table>
     </div>
 
-    <!-- ══ Dados da locação ═══════════════════════════════════════ -->
+    <!-- ══ Condições de pagamento ═════════════════════════════════ -->
+    {% if receivables %}
     <div class="section">
-      <div class="section-title">Dados da locação</div>
-      <div class="row">
-        <div class="field">
-          <span class="field-caption">Retirada dos trajes</span>
-          <strong>{{ rental.pickup_date|date:"d/m/Y" }}</strong>
-        </div>
-        <div class="field">
-          <span class="field-caption">Devolução dos trajes</span>
-          <strong>{{ rental.return_date|date:"d/m/Y" }}</strong>
-        </div>
-      </div>
+      <div class="section-title">Condições de pagamento</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:12%">Parcela</th>
+            <th style="width:18%">Vencimento</th>
+            <th class="text-right" style="width:18%">Valor</th>
+            <th class="text-right" style="width:18%">Recebido</th>
+            <th class="text-right" style="width:18%">Saldo</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in receivables %}
+          <tr>
+            <td style="text-align:center; font-weight:bold;">
+              {% if forloop.first %}
+                Entrada
+              {% else %}
+                {{ forloop.counter0 }}ª parcela
+              {% endif %}
+            </td>
+            <td>{{ rec.due_date|date:"d/m/Y" }}</td>
+            <td class="text-right">R$ {{ rec.amount|brl }}</td>
+            <td class="text-right">R$ {{ rec.paid_amount|brl }}</td>
+            <td class="text-right">R$ {{ rec.balance|brl }}</td>
+            <td>
+              {% if rec.is_written_off %}
+                Baixada
+              {% elif rec.is_paid %}
+                Quitada{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
+              {% elif rec.paid_amount > 0 %}
+                Parcial{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
+              {% else %}
+                Em aberto
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" class="text-right">Totais</td>
+            <td class="text-right">R$ {{ payment_totals.amount|brl }}</td>
+            <td class="text-right">R$ {{ payment_totals.paid|brl }}</td>
+            <td class="text-right">R$ {{ payment_totals.balance|brl }}</td>
+            <td>{% if payment_totals.balance <= 0 %}Sem saldo{% else %}Saldo pendente{% endif %}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
-  </div>
+    {% endif %}
 
-  <!-- ══ Itens locados ══════════════════════════════════════════ -->
-  <div class="section">
-    <div class="section-title">Itens locados</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:14%">Código</th>
-          <th>Descrição — Cor — Tamanho</th>
-          <th class="text-right" style="width:14%">Valor</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in items %}
-        <tr>
-          <td>{{ item.product_reference }}</td>
-          <td>{{ item.display_description }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
-          <td class="text-right">R$ {{ item.value|brl }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="3" style="text-align:center;color:#888;">Sem itens.</td></tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        {% if rental.cash_discount %}
-        <tr>
-          <td colspan="2" class="text-right">Subtotal das peças</td>
-          <td class="text-right">R$ {{ rental.total_value|brl }}</td>
-        </tr>
-        <tr>
-          <td colspan="2" class="text-right">Desconto à vista</td>
-          <td class="text-right">- R$ {{ rental.discount_amount|brl }}</td>
-        </tr>
-        <tr>
-          <td colspan="2" class="text-right"><strong>Valor total</strong></td>
-          <td class="text-right"><strong>R$ {{ rental.final_value|brl }}</strong></td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="2" class="text-right">Valor total</td>
-          <td class="text-right">R$ {{ rental.total_value|brl }}</td>
-        </tr>
-        {% endif %}
-      </tfoot>
-    </table>
-  </div>
-
-  <!-- ══ Condições de pagamento ═════════════════════════════════ -->
-  {% if receivables %}
-  <div class="section">
-    <div class="section-title">Condições de pagamento</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:7%">Nº</th>
-          <th style="width:19%">Vencimento</th>
-          <th class="text-right" style="width:18%">Valor</th>
-          <th class="text-right" style="width:18%">Recebido</th>
-          <th class="text-right" style="width:18%">Saldo</th>
-          <th>Situação</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for rec in receivables %}
-        <tr>
-          <td style="text-align:center">{{ forloop.counter }}ª</td>
-          <td>{{ rec.due_date|date:"d/m/Y" }}</td>
-          <td class="text-right">R$ {{ rec.amount|brl }}</td>
-          <td class="text-right">R$ {{ rec.paid_amount|brl }}</td>
-          <td class="text-right">R$ {{ rec.balance|brl }}</td>
-          <td>
-            {% if rec.is_written_off %}
-              Baixada
-            {% elif rec.is_paid %}
-              Quitada{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
-            {% elif rec.paid_amount > 0 %}
-              Recebida parcialmente{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
-            {% else %}
-              Em aberto
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2" class="text-right">Totais</td>
-          <td class="text-right">R$ {{ payment_totals.amount|brl }}</td>
-          <td class="text-right">R$ {{ payment_totals.paid|brl }}</td>
-          <td class="text-right">R$ {{ payment_totals.balance|brl }}</td>
-          <td>{% if payment_totals.balance <= 0 %}Sem saldo em aberto{% else %}Saldo em aberto{% endif %}</td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-  {% endif %}
-
-  <!-- ══ Termos e condições ═════════════════════════════════════ -->
-  <div class="section">
-    <div class="section-title">Termos e condições</div>
-    <div class="clauses">
-      <p>1. Todas as peças locadas devem ser devolvidas até a data de retorno estipulada acima data devolução ({{ rental.return_date|date:"d/m/Y" }}).</p>
-      <p>2. O locatário recebe os itens em perfeito estado e se compromete a devolvê-los nas mesmas condições.</p>
-      <p>3. Em caso de dano (manchas, rasgos, furos na barra, ou bijuteria perdida, intencional ou não), o locatário pagará os custos de conserto ou o valor de reposição dos itens acima a quantia de (____________________).</p>
-      <p>4. O atraso na devolução sujeita o locatário a multa moratória de {{ company.late_fee_rate|brl }}% sobre o valor total da locação, além de juros de mora de {{ company.monthly_interest_rate|brl }}% ao mês e correção monetária pelo INPC/IBGE.</p>
-      <p>5. Em decorrência da desistência, justificada ou não deste contrato; será cobrado o percentual de {{ company.cancellation_penalty_rate|default:50|brl }}% correspondente ao valor total da locação a Noivas & Cia.</p>
-      <p>6. A não devolução dos trajes e/ou acessórios locados em até sete dias corridos da data de devolução implica cobrança de {{ company.loss_penalty_rate|brl }}% correspondente ao valor da locação dos trajes.</p>
-      {% if company.footer_message %}<p>{{ company.footer_message }}</p>{% endif %}
+    <!-- ══ Termos e condições ═════════════════════════════════════ -->
+    <div class="section">
+      <div class="section-title">Termos e condições</div>
+      <div class="clauses">
+        <p>1. Todas as peças locadas devem ser devolvidas até a data de retorno estipulada acima data devolução ({{ rental.return_date|date:"d/m/Y" }}).</p>
+        <p>2. O locatário recebe os itens em perfeito estado e se compromete a devolvê-los nas mesmas condições.</p>
+        <p>3. Em caso de dano (manchas, rasgos, furos na barra, ou bijuteria perdida, intencional ou não), o locatário pagará os custos de conserto ou o valor de reposição dos itens acima a quantia de (____________________).</p>
+        <p>4. O atraso na devolução sujeita o locatário à multa moratória no valor de <strong>R$ {{ rental.penalty_value|brl }} por dia de atraso</strong>, além das penalidades legais aplicáveis.</p>
+        <p>5. Em decorrência da desistência, justificada ou não deste contrato; será cobrado o percentual de {{ company.cancellation_penalty_rate|default:50|brl }}% correspondente ao valor total da locação a Noivas & Cia.</p>
+        <p>6. A não devolução dos trajes em até 7 dias da data limite implica cobrança de {{ company.loss_penalty_rate|brl }}% do valor dos trajes.</p>
+      </div>
     </div>
   </div>
 
@@ -397,26 +369,30 @@
   <div class="signatures">
     <div class="sig-block">
       <div class="sig-line">
-        Locatário(a): {{ rental.customer.name }}<br>
-        CPF: {{ rental.customer.cpf|default:'____________________' }}
+        Locatário(a): {{ rental.customer.name }}
       </div>
     </div>
     <div class="sig-block">
       <div class="sig-line">
-        {{ company.name }}<br>
-        CNPJ: {{ company.cnpj|default:'____________________' }}
+        {{ company.name }}
+      </div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line">
+        Testemunha
       </div>
     </div>
   </div>
-  <div class="signatures" style="margin-top: 8px;">
-    <div class="sig-block" style="max-width: 50%; margin: 0 auto;">
-      <div class="sig-line">Testemunha</div>
-    </div>
-  </div>
+
+  {% if forloop.first %}
+  <div class="cut-notice">✂ Corte aqui — Via da Empresa abaixo</div>
+  {% endif %}
 
 </div>
 {% endfor %}
+</div>
 {% endwith %}
 
 </body>
 </html>
+
