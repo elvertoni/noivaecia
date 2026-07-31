@@ -5,134 +5,140 @@
   <meta charset="UTF-8">
   <title>Contrato de Locação #{{ rental.number }} · {{ company.name }}</title>
 <style>
-    @page { size: A4 portrait; margin: 5mm 7mm; }
+    @page { size: A4 portrait; margin: 4mm 6mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #111; line-height: 1.15; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #111; line-height: 1.1; }
     
     .copy-container {
       display: flex;
       flex-direction: column;
+      height: 285mm;
       justify-content: space-between;
-      min-height: 100vh;
     }
 
     .copy {
-      flex: 1;
+      height: 139mm;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      border-bottom: 1px dashed #888;
+      border-bottom: 1px dashed #777;
       padding-bottom: 2mm;
       position: relative;
+      overflow: hidden;
     }
     .copy:last-child {
       border-bottom: none;
       padding-bottom: 0;
-      padding-top: 2mm;
+      padding-top: 1mm;
     }
 
     .cut-notice {
       position: absolute;
-      bottom: -3mm;
+      bottom: -2.5mm;
       left: 50%;
       transform: translateX(-50%);
       background: #fff;
-      padding: 0 8px;
-      font-size: 6.5pt;
-      color: #666;
+      padding: 0 6px;
+      font-size: 6pt;
+      color: #555;
     }
 
     /* ── Header ─────────────────────────────────────────────────── */
     .header {
       border-bottom: 1.5px solid #9f1239;
-      padding-bottom: 2px;
-      margin-bottom: 3px;
+      padding-bottom: 1px;
+      margin-bottom: 2px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
     }
-    .header-left h1 { font-size: 10.5pt; font-weight: 700; color: #9f1239; line-height: 1.1; }
-    .header-left p { font-size: 7pt; color: #444; margin-top: 1px; }
-    .header-right { text-align: right; font-size: 7pt; color: #444; line-height: 1.2; }
-    .header-right strong { font-size: 9pt; color: #111; }
+    .header-left h1 { font-size: 10pt; font-weight: 700; color: #9f1239; line-height: 1; }
+    .header-left p { font-size: 6.5pt; color: #444; margin-top: 1px; }
+    .header-right { text-align: right; font-size: 6.5pt; color: #444; line-height: 1.1; }
+    .header-right strong { font-size: 8.5pt; color: #111; }
 
     /* ── Contract title ─────────────────────────────────────────── */
     .contract-title-row {
       text-align: center;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .contract-title {
       text-align: center;
-      font-size: 9.5pt;
+      font-size: 8.5pt;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
     }
     .copy-label {
       text-align: center;
-      font-size: 7.5pt;
+      font-size: 7pt;
       color: #666;
       font-style: italic;
     }
 
     /* ── Sections ────────────────────────────────────────────────── */
-    .section { margin-bottom: 3px; }
+    .section { margin-bottom: 2px; }
     .section-title {
-      font-size: 7.5pt;
+      font-size: 7pt;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.02em;
       color: #9f1239;
       border-bottom: 1px solid #ddd;
       padding-bottom: 1px;
-      margin-bottom: 2px;
+      margin-bottom: 1.5px;
     }
 
     /* ── Fields ──────────────────────────────────────────────────── */
-    .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
-    .field { flex: 1; min-width: 70px; }
-    .field .field-caption { font-size: 6.5pt; color: #555; display: block; text-transform: uppercase; }
-    .field span { font-size: 8pt; font-weight: 600; border-bottom: 1px solid #ccc; display: block; min-height: 11px; }
+    .row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1px; }
+    .field { flex: 1; min-width: 60px; }
+    .field .field-caption { font-size: 6pt; color: #555; display: block; text-transform: uppercase; }
+    .field span { font-size: 7.5pt; font-weight: 600; border-bottom: 1px solid #ccc; display: block; min-height: 10px; }
     .print-summary-grid {
       display: grid;
       grid-template-columns: 1.4fr 1fr;
-      gap: 6px;
+      gap: 4px;
       align-items: start;
     }
 
     /* ── Tables ──────────────────────────────────────────────────── */
-    table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
+    table { width: 100%; border-collapse: collapse; font-size: 7pt; }
     table thead th {
       background: #f8f8f8;
       color: #333;
-      font-size: 7pt;
+      font-size: 6.5pt;
       font-weight: 700;
       text-align: left;
       text-transform: uppercase;
-      padding: 1.5px 4px;
+      padding: 1px 3px;
       border: 1px solid #bbb;
     }
     table tbody td {
-      padding: 1.5px 4px;
+      padding: 1px 3px;
       border: 1px solid #ddd;
       vertical-align: top;
     }
     table tfoot td {
-      padding: 1.5px 4px;
+      padding: 1px 3px;
       border: 1px solid #bbb;
       font-weight: 700;
       background: #f8f8f8;
     }
     .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    /* ── Payment Matrix (Model JPG) ─────────────────────────────── */
+    .payment-matrix th { text-align: center; font-size: 6.5pt; padding: 1px 2px; }
+    .payment-matrix td { text-align: center; font-size: 7pt; padding: 1.5px 2px; }
 
     /* ── Clauses ─────────────────────────────────────────────────── */
     .clauses {
-      font-size: 6.5pt;
-      color: #333;
-      line-height: 1.25;
+      font-size: 6pt;
+      color: #222;
+      line-height: 1.15;
       display: flex;
       flex-direction: column;
-      gap: 1.5px;
+      gap: 1px;
     }
     .clauses p { margin-bottom: 0px; }
 
@@ -140,24 +146,24 @@
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 4px;
-      gap: 12px;
+      margin-top: 3px;
+      gap: 10px;
     }
     .sig-block { flex: 1; text-align: center; }
     .sig-line {
       border-top: 1px solid #333;
       padding-top: 1px;
-      font-size: 7pt;
+      font-size: 6.5pt;
       color: #333;
-      margin-top: 12px;
+      margin-top: 10px;
     }
 
     /* ── Print button ────────────────────────────────────────────── */
-    .no-print { display: block; text-align: center; margin-bottom: 10px; padding: 8px; }
+    .no-print { display: block; text-align: center; margin-bottom: 8px; padding: 6px; }
     @media print {
       body { background: white; }
       .no-print { display: none !important; }
-      .copy-container { height: 100vh; page-break-inside: avoid; break-inside: avoid; }
+      .copy-container { height: 285mm; max-height: 285mm; page-break-inside: avoid; break-inside: avoid; }
     }
   </style>
 </head>
@@ -174,8 +180,8 @@
 {% for copy_label in copy_labels %}
 <div class="copy">
 
-  <!-- ══ Cabeçalho ══════════════════════════════════════════════ -->
   <div>
+    <!-- ══ Cabeçalho ══════════════════════════════════════════════ -->
     <div class="header">
       <div class="header-left">
         <h1>{{ company.name }}</h1>
@@ -293,61 +299,40 @@
       </table>
     </div>
 
-    <!-- ══ Condições de pagamento ═════════════════════════════════ -->
-    {% if receivables %}
+    <!-- ══ Condições de pagamento (Modelo da cliente em colunas horizontais) ════════════════════════════ text-center ═ -->
     <div class="section">
       <div class="section-title">Condições de pagamento</div>
-      <table>
+      <table class="payment-matrix">
         <thead>
           <tr>
-            <th style="width:12%">Parcela</th>
-            <th style="width:18%">Vencimento</th>
-            <th class="text-right" style="width:18%">Valor</th>
-            <th class="text-right" style="width:18%">Recebido</th>
-            <th class="text-right" style="width:18%">Saldo</th>
-            <th>Situação</th>
+            <th style="width:11%">1ª ENTRADA</th>
+            <th style="width:9%">2ª</th>
+            <th style="width:9%">3ª</th>
+            <th style="width:9%">4ª</th>
+            <th style="width:9%">5ª</th>
+            <th style="width:9%">6ª</th>
+            <th style="width:9%">7ª</th>
+            <th style="width:9%">8ª</th>
+            <th style="width:9%">9ª</th>
+            <th style="width:14%">VALOR TOTAL</th>
           </tr>
         </thead>
         <tbody>
-          {% for rec in receivables %}
           <tr>
-            <td style="text-align:center; font-weight:bold;">
-              {% if forloop.first %}
-                Entrada
-              {% else %}
-                {{ forloop.counter0 }}ª parcela
-              {% endif %}
-            </td>
-            <td>{{ rec.due_date|date:"d/m/Y" }}</td>
-            <td class="text-right">R$ {{ rec.amount|brl }}</td>
-            <td class="text-right">R$ {{ rec.paid_amount|brl }}</td>
-            <td class="text-right">R$ {{ rec.balance|brl }}</td>
-            <td>
-              {% if rec.is_written_off %}
-                Baixada
-              {% elif rec.is_paid %}
-                Quitada{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
-              {% elif rec.paid_amount > 0 %}
-                Parcial{% if rec.last_payment_date %} em {{ rec.last_payment_date|date:"d/m/Y" }}{% endif %}
-              {% else %}
-                Em aberto
-              {% endif %}
-            </td>
+            <td>{% if receivables.0 %}R$ {{ receivables.0.amount|brl }}{% else %}—{% endif %}</td>
+            <td>{% if receivables.1 %}R$ {{ receivables.1.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.2 %}R$ {{ receivables.2.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.3 %}R$ {{ receivables.3.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.4 %}R$ {{ receivables.4.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.5 %}R$ {{ receivables.5.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.6 %}R$ {{ receivables.6.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.7 %}R$ {{ receivables.7.amount|brl }}{% else %}*{% endif %}</td>
+            <td>{% if receivables.8 %}R$ {{ receivables.8.amount|brl }}{% else %}*{% endif %}</td>
+            <td style="font-weight:bold;">R$ {{ payment_totals.amount|default:rental.final_value|brl }}</td>
           </tr>
-          {% endfor %}
         </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="2" class="text-right">Totais</td>
-            <td class="text-right">R$ {{ payment_totals.amount|brl }}</td>
-            <td class="text-right">R$ {{ payment_totals.paid|brl }}</td>
-            <td class="text-right">R$ {{ payment_totals.balance|brl }}</td>
-            <td>{% if payment_totals.balance <= 0 %}Sem saldo{% else %}Saldo pendente{% endif %}</td>
-          </tr>
-        </tfoot>
       </table>
     </div>
-    {% endif %}
 
     <!-- ══ Termos e condições ═════════════════════════════════════ -->
     <div class="section">
