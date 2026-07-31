@@ -147,6 +147,18 @@
     @apply pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center px-3 text-sm font-medium text-slate-600;
   }
 
+  .percent-field {
+    @apply relative block;
+  }
+
+  .percent-field > .field-input {
+    @apply pr-8;
+  }
+
+  .percent-suffix {
+    @apply pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center px-3 text-sm font-medium text-slate-600;
+  }
+
   /* Dense rental-items grid: the value column is narrow, so the default 44px
      prefix gutter would clip the amount. Tighten it and right-align the
      number so a column of values reads like the legacy screen. */

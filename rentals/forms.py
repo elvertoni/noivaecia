@@ -38,6 +38,7 @@ def _style(form):
                 currency=field_name in {
                     'down_payment_amount', 'penalty_value', 'value', 'cash_discount_amount',
                 },
+                percent=field_name == 'cash_discount_percent',
             )
         css = field.widget.attrs.get('class', '')
         classes = css.split()

@@ -70,7 +70,7 @@ class CompanyForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
             if isinstance(field, forms.DecimalField):
-                configure_br_decimal_field(field)
+                configure_br_decimal_field(field, percent=name in NON_NEGATIVE_RATE_FIELDS)
                 if name in NON_NEGATIVE_RATE_FIELDS:
                     field.min_value = Decimal('0')
                     field.validators.append(MinValueValidator(Decimal('0')))

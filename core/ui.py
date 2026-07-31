@@ -119,6 +119,43 @@ class BRMoneyInput(BRDecimalInput):
         )
 
 
+class BRPercentInput(BRDecimalInput):
+    """Brazilian decimal input with a visible and accessible '%' suffix.
+
+    Percent-rate fields (interest, penalties, discounts) previously shared
+    the exact same bare styling as plain numbers and currency amounts, so a
+    typed "50" was indistinguishable from a R$ 50 value at a glance.
+    """
+
+    def __init__(self, attrs=None):
+        defaults = {'data-percent-br': 'true'}
+        if attrs:
+            defaults.update(attrs)
+        super().__init__(attrs=defaults)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        attrs = dict(attrs or {})
+        input_id = attrs.get('id')
+        percent_description_id = None
+        if input_id:
+            percent_description_id = f'{input_id}-percent'
+            described_by = attrs.get('aria-describedby', '').split()
+            if percent_description_id not in described_by:
+                described_by.append(percent_description_id)
+            attrs['aria-describedby'] = ' '.join(described_by)
+
+        input_html = super().render(name, value, attrs, renderer)
+        description = (
+            format_html('<span id="{}" class="sr-only">Valor em porcentagem</span>', percent_description_id)
+            if percent_description_id else ''
+        )
+        return format_html(
+            '<span class="percent-field">{}<span class="percent-suffix" aria-hidden="true">%</span>{}</span>',
+            input_html,
+            description,
+        )
+
+
 def normalize_br_decimal(value):
     """Return a Decimal-compatible value for pt-BR and dot-decimal inputs.
 
@@ -170,7 +207,7 @@ class BRMoneyField(BRDecimalField):
         super().__init__(*args, **kwargs)
 
 
-def configure_br_decimal_field(field, *, currency=False):
+def configure_br_decimal_field(field, *, currency=False, percent=False):
     """Apply Brazilian parsing and the appropriate widget to model form fields."""
     if not isinstance(field, forms.DecimalField):
         return
@@ -184,6 +221,11 @@ def configure_br_decimal_field(field, *, currency=False):
         field.to_python = to_python
         field._br_decimal_parser_enabled = True
 
-    widget_class = BRMoneyInput if currency else BRDecimalInput
+    if currency:
+        widget_class = BRMoneyInput
+    elif percent:
+        widget_class = BRPercentInput
+    else:
+        widget_class = BRDecimalInput
     if not isinstance(field.widget, widget_class):
         field.widget = widget_class(attrs=field.widget.attrs.copy())
