@@ -294,7 +294,8 @@ class RentalCreateView(RentalAccessMixin, CreateView):
                         user=self.request.user,
                     )
         except PaymentPlanError as exc:
-            form.add_error(None, str(exc))
+            field = exc.field if exc.field in form.fields else None
+            form.add_error(field, str(exc))
             return self.form_invalid(form)
 
         self.object = rental

@@ -63,6 +63,10 @@ def interest_breakdown(receivable, on_date=None, company=None):
 class PaymentPlanError(ValueError):
     """Raised when a rental payment plan would violate financial invariants."""
 
+    def __init__(self, message, field=None):
+        super().__init__(message)
+        self.field = field
+
 
 def generate_for_rental(rental, installments=1, first_due_date=None, total_amount=None, last_due_date=None):
     """Create receivables splitting the rental total into N installments (RF-19/8.1.3).
@@ -248,26 +252,44 @@ def create_rental_payment_plan(
     installments = int(installments or 0)
 
     if entry_amount < 0:
-        raise PaymentPlanError('O valor da entrada não pode ser negativo.')
+        raise PaymentPlanError(
+            'O valor da entrada não pode ser negativo.', field='down_payment_amount',
+        )
     if entry_amount > total:
-        raise PaymentPlanError('O valor da entrada não pode superar o total da locação.')
+        raise PaymentPlanError(
+            'O valor da entrada não pode superar o total da locação.',
+            field='down_payment_amount',
+        )
 
     remaining = total - entry_amount
     if entry_amount > 0:
         if not down_payment_date:
-            raise PaymentPlanError('Informe a data em que a entrada foi recebida.')
+            raise PaymentPlanError(
+                'Informe a data em que a entrada foi recebida.', field='down_payment_date',
+            )
         if down_payment_date > timezone.localdate():
-            raise PaymentPlanError('A data da entrada não pode estar no futuro.')
+            raise PaymentPlanError(
+                'A data da entrada não pode estar no futuro.', field='down_payment_date',
+            )
         if down_payment_method not in Payment.Method.values:
-            raise PaymentPlanError('Informe uma forma de recebimento válida para a entrada.')
+            raise PaymentPlanError(
+                'Informe uma forma de recebimento válida para a entrada.',
+                field='down_payment_method',
+            )
     if remaining > 0 and installments < 1:
-        raise PaymentPlanError('Informe ao menos uma parcela futura para o saldo restante.')
+        raise PaymentPlanError(
+            'Informe ao menos uma parcela futura para o saldo restante.',
+            field='installment_count',
+        )
     if entry_amount > 0 and remaining > 0:
         if not first_due_date:
-            raise PaymentPlanError('Informe a data do próximo pagamento.')
+            raise PaymentPlanError(
+                'Informe a data do próximo pagamento.', field='first_due_date',
+            )
         if first_due_date <= down_payment_date:
             raise PaymentPlanError(
-                'O próximo vencimento deve ser posterior à data da entrada.'
+                'O próximo vencimento deve ser posterior à data da entrada.',
+                field='first_due_date',
             )
 
     with transaction.atomic():
