@@ -114,14 +114,19 @@
           </div>
         {% endif %}
 
-        <!-- High-Density Items Table Shell -->
-        <div class="mt-4 table-shell overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <!--
+          Items grid. Deliberately NOT a scroll container: `overflow-x` here also
+          forces `overflow-y` to auto (CSS cannot mix `auto` with `visible`), which
+          trapped the product dropdown inside the box and stacked a third scrollbar
+          on top of the page's. The columns are 40px + fluid + 144px + 80px and the
+          table stacks into cards below `sm`, so horizontal scroll was never needed.
+        -->
+        <div class="mt-4 rounded-xl border border-slate-200 bg-white shadow-sm">
           <table class="data-table w-full text-left border-collapse">
             <thead class="hidden sm:table-header-group">
               <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
                 <th class="w-10 px-3 py-2.5 text-center">#</th>
                 <th class="px-3 py-2.5">Produto / Código</th>
-                <th class="w-36 px-3 py-2.5">Quem vai usar</th>
                 <th class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
                 <th class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
@@ -159,12 +164,6 @@
                       {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
-                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Quem vai usar">
-                    <div class="field-group mb-0">
-                      {{ item_form.wearer_name|render_field }}
-                      {% if item_form.wearer_name.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.wearer_name.errors|striptags }}</p>{% endif %}
-                    </div>
-                  </td>
                   <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Valor">
                     <div class="field-group mb-0">
                       {{ item_form.value|render_field }}
@@ -190,7 +189,7 @@
                 </tr>
                 <!-- Photo upload row (hidden by default) -->
                 <tr class="item-photo-row hidden bg-slate-50/50">
-                  <td colspan="5" class="px-4 py-2">
+                  <td colspan="4" class="px-4 py-2">
                     <div class="field-group mb-0">
                       <label class="field-label text-xs" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
                       {{ item_form.proof_photo_upload|render_field }}
@@ -378,11 +377,6 @@
     </td>
     <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
       <div class="field-group mb-0">
-        {{ f.wearer_name|render_field }}
-      </div>
-    </td>
-    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
-      <div class="field-group mb-0">
         {{ f.value|render_field }}
       </div>
     </td>
@@ -405,7 +399,7 @@
   </tr>
   <!-- Photo upload row for new items (hidden by default) -->
   <tr class="item-photo-row hidden bg-slate-50/50">
-    <td colspan="5" class="px-4 py-2">
+    <td colspan="4" class="px-4 py-2">
       <div class="field-group mb-0">
         <label class="field-label text-xs" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
         {{ f.proof_photo_upload|render_field }}

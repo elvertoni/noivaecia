@@ -1221,54 +1221,6 @@ class ClientCorrectionsTests(TestCase):
 
         self.assertNotIn('Quem vai usar', content)
 
-    def _add_item(self, wearer_name=''):
-        category, _ = Category.objects.get_or_create(prefix='TER', defaults={'name': 'Ternos'})
-        product = Product.objects.create(
-            category=category, code=self.rental.items.count() + 1,
-            description='Terno', color='Preto', size='48', value=Decimal('300.00'),
-        )
-        return RentalItem.objects.create(
-            rental=self.rental, product=product, value=Decimal('300.00'),
-            wearer_name=wearer_name,
-        )
-
-    def test_printed_contract_shows_per_item_wearer_when_items_differ(self):
-        self._add_item(wearer_name='José Francisco')
-        self._add_item(wearer_name='Fernanda')
-
-        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
-        content = response.content.decode('utf-8')
-
-        self.assertIn('<th style="width:18%">Quem vai usar</th>', content)
-        self.assertIn('José Francisco', content)
-        self.assertIn('Fernanda', content)
-
-    def test_printed_contract_omits_wearer_column_when_no_item_has_it(self):
-        self._add_item()
-
-        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
-        content = response.content.decode('utf-8')
-
-        self.assertNotIn('<th style="width:18%">Quem vai usar</th>', content)
-
-    def test_rental_item_form_accepts_wearer_name(self):
-        category = Category.objects.create(name='Ternos', prefix='TER')
-        product = Product.objects.create(
-            category=category, code=1, description='Terno', color='Preto',
-            size='48', value=Decimal('300.00'),
-        )
-        form = RentalItemForm(data={
-            'product': product.pk,
-            'description': '',
-            'value': '300,00',
-            'wearer_name': 'José Francisco',
-        })
-        self.assertTrue(form.is_valid(), form.errors)
-        item = form.save(commit=False)
-        item.rental = self.rental
-        item.save()
-        self.assertEqual(item.wearer_name, 'José Francisco')
-
     def test_payment_plan_generation_supports_last_due_date(self):
         from billing.services import generate_for_rental
         receivables = generate_for_rental(

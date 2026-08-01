@@ -167,6 +167,12 @@ class RentalForm(forms.ModelForm):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
         self.fields['customer'].widget.attrs['class'] = 'hidden'
+        # ...but never let it render the HTML `required` attribute. The element is
+        # display:none, and a browser cannot focus a hidden control to report a
+        # constraint violation, so Chrome aborts the submit with no visible
+        # message at all — the Save button just appears dead. The field stays
+        # required server-side; its error renders next to the visible search box.
+        self.fields['customer'].widget.use_required_attribute = lambda initial: False
         # Limit queryset to at most the relevant customer (huge performance gain)
         customer_id = None
         if self.instance and self.instance.pk:
@@ -241,7 +247,7 @@ class RentalItemForm(forms.ModelForm):
 
     class Meta:
         model = RentalItem
-        fields = ('product', 'description', 'value', 'wearer_name')
+        fields = ('product', 'description', 'value')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -250,7 +256,6 @@ class RentalItemForm(forms.ModelForm):
         _style(self)
         self.fields['value'].min_value = Decimal('0')
         self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
-        self.fields['wearer_name'].widget.attrs['placeholder'] = 'Se não for o(a) locatário(a)'
         # A new line must not silently become a R$ 0,00 item.  Leaving this
         # blank lets the picker copy the product's suggested price, while
         # non-JavaScript users still receive the normal required-field error.

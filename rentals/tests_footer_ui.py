@@ -1,3 +1,4 @@
+import re
 from html.parser import HTMLParser
 
 from django.contrib.auth import get_user_model
@@ -5,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
+from rentals.forms import RentalForm
 
 
 User = get_user_model()
@@ -128,3 +130,74 @@ class RentalFooterUITests(TestCase):
         )
         self.assertContains(self.response, 'Multa por atraso (valor único)')
         self.assertNotContains(self.response, 'Multa diária por atraso')
+
+
+class RentalFormSubmittabilityTests(TestCase):
+    """Guards against controls the browser refuses to validate (RF-15).
+
+    A `required` attribute on a `display:none` control makes Chrome abort the
+    submit with no visible message — the Save button simply appears dead. The
+    customer select is hidden behind a JS combobox, so it must never carry it.
+    """
+
+    def setUp(self):
+        user = User.objects.create_user(
+            email='submittability@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=user, module_key='rentals', allowed=True,
+        )
+        self.client.force_login(user)
+        self.html = self.client.get(reverse('rentals:create')).content.decode()
+
+    def test_no_control_is_both_hidden_and_html_required(self):
+        offenders = [
+            tag for tag in re.findall(r'<(?:select|input|textarea)[^>]*>', self.html)
+            if 'class="hidden"' in tag or 'class="hidden ' in tag
+            if ' required' in tag
+        ]
+
+        self.assertEqual(
+            offenders, [],
+            'Um controle escondido com `required` trava o submit sem mensagem: '
+            f'{offenders}',
+        )
+
+    def test_customer_select_keeps_server_side_validation(self):
+        form = RentalForm()
+
+        self.assertTrue(form.fields['customer'].required)
+
+
+class RentalItemsGridScrollTests(TestCase):
+    """The items grid must not be a scroll container (RF-16).
+
+    `overflow-x` also promotes `overflow-y` to auto, which clipped the product
+    dropdown inside the grid and stacked a third scrollbar on the page.
+    """
+
+    def setUp(self):
+        user = User.objects.create_user(
+            email='grid-scroll@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=user, module_key='rentals', allowed=True,
+        )
+        self.client.force_login(user)
+        self.html = self.client.get(reverse('rentals:create')).content.decode()
+
+    def test_items_grid_wrapper_has_no_overflow_container(self):
+        wrapper = re.search(
+            r'<div class="[^"]*"[^>]*>\s*<table class="data-table', self.html,
+        )
+        self.assertIsNotNone(wrapper, 'wrapper do grid de itens não encontrado')
+        classes = wrapper.group(0)
+
+        self.assertNotIn('overflow', classes)
+        self.assertNotIn('table-shell', classes)
+
+    def test_items_grid_no_longer_offers_a_wearer_column(self):
+        self.assertNotIn('Quem vai usar</th>', self.html)
+        self.assertNotIn('items-0-wearer_name', self.html)

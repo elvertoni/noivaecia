@@ -174,8 +174,11 @@
     @apply min-h-11;
   }
 
+  /* z-[25] sits above the fixed action bar (z-20) and below the mobile sidebar
+     backdrop (z-30): at z-20 the later-in-DOM action bar painted over any
+     dropdown opened near the bottom of the form. */
   .autocomplete-results {
-    @apply absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-app-border bg-white py-1 text-sm shadow-lg;
+    @apply absolute z-[25] mt-1 max-h-60 w-full overflow-auto rounded-lg border border-app-border bg-white py-1 text-sm shadow-lg;
   }
 
   .autocomplete-option {

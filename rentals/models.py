@@ -203,11 +203,6 @@ class RentalItem(TimeStampedModel):
     proof_photo_size = models.PositiveIntegerField('tamanho da foto', default=0)
     proof_photo_width = models.PositiveIntegerField('largura da foto', default=0)
     proof_photo_height = models.PositiveIntegerField('altura da foto', default=0)
-    wearer_name = models.CharField(
-        'quem vai usar', max_length=150, blank=True,
-        help_text='Preencha quando quem vai usar esta peça não é o(a) locatário(a) '
-                  '(ex.: esposa loca o terno para o marido usar).',
-    )
 
     class Meta:
         verbose_name = 'item da locação'
