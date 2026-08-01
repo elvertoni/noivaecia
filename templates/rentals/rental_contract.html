@@ -284,6 +284,7 @@
           <tr>
             <th style="width:15%">Código</th>
             <th>Descrição — Cor — Tamanho</th>
+            {% if items_have_wearer %}<th style="width:18%">Quem vai usar</th>{% endif %}
             <th class="text-right" style="width:16%">Valor</th>
           </tr>
         </thead>
@@ -292,10 +293,11 @@
           <tr>
             <td>{{ item.product_reference }}</td>
             <td>{{ item.display_description }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
+            {% if items_have_wearer %}<td>{{ item.wearer_name|default:'—' }}</td>{% endif %}
             <td class="text-right">R$ {{ item.value|brl }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="3" style="text-align:center;color:#888;">Sem itens.</td></tr>
+          <tr><td colspan="{% if items_have_wearer %}4{% else %}3{% endif %}" style="text-align:center;color:#888;">Sem itens.</td></tr>
           {% endfor %}
         </tbody>
         <tfoot>
