@@ -14,7 +14,7 @@ from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
-from movements.models import Pickup
+from movements.models import Pickup, Return
 from rentals.forms import RentalForm, RentalItemForm
 from rentals.models import Rental, RentalItem
 from rentals.signals import sync_rental_total
@@ -1143,12 +1143,48 @@ class ClientCorrectionsTests(TestCase):
         self.assertIn('será cobrado o percentual de 50,00% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
         self.assertIn('6. A não devolução dos trajes', content)
-        # Multa por atraso exibida nos Dados da Locação e Cláusula 4
-        self.assertIn('Multa por atraso (diária)', content)
-        self.assertIn('por dia de atraso', content)
+        # Multa exibida nos Dados da Locação (rótulo simplificado) e na Cláusula 4
+        self.assertIn('<span class="field-caption">Multa</span>', content)
+        self.assertIn('4. O atraso na devolução sujeita o locatário à multa.', content)
         # Assinatura com 1 testemunha
         self.assertIn('Testemunha', content)
         self.assertNotIn('Testemunha 2', content)
+
+    def test_printed_contract_shows_damage_amount_when_return_recorded(self):
+        Pickup.objects.create(rental=self.rental, pickup_date=date(2026, 8, 10))
+        Return.objects.create(
+            rental=self.rental,
+            return_date=date(2026, 8, 15),
+            damage_amount=Decimal('80.00'),
+        )
+
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        self.assertIn('a quantia de R$ 80,00.', content)
+        self.assertNotIn('a quantia de (____________________)', content)
+
+    def test_printed_contract_shows_blank_when_no_damage_recorded(self):
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        self.assertIn('a quantia de (____________________)', content)
+
+    def test_printed_contract_shows_wearer_name_when_set(self):
+        self.rental.wearer_name = 'Julio Cesar'
+        self.rental.save(update_fields=['wearer_name'])
+
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        self.assertIn('Quem vai usar', content)
+        self.assertIn('Julio Cesar', content)
+
+    def test_printed_contract_hides_wearer_field_when_blank(self):
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        self.assertNotIn('Quem vai usar', content)
 
     def test_payment_plan_generation_supports_last_due_date(self):
         from billing.services import generate_for_rental

@@ -140,8 +140,8 @@ class RentalForm(forms.ModelForm):
     class Meta:
         model = Rental
         fields = (
-            'customer', 'pickup_date', 'return_date', 'penalty_value', 'cash_discount',
-            'cash_discount_percent', 'cash_discount_amount', 'notes',
+            'customer', 'pickup_date', 'return_date', 'penalty_value', 'wearer_name',
+            'cash_discount', 'cash_discount_percent', 'cash_discount_amount', 'notes',
         )
         widgets = {
             'pickup_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy()),

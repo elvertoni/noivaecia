@@ -99,33 +99,19 @@ class RentalFooterUITests(TestCase):
         self.assertContains(self.response, 'Salvar e Imprimir')
         self.assertContains(self.response, 'id="add-item-footer"')
 
-    def test_add_item_actions_remain_in_the_items_section(self):
+    def test_only_the_footer_add_item_button_is_rendered(self):
         items_position = self.html.index('id="itens"')
-        top_add_position = self.html.index('id="add-item"')
-        bottom_add_position = self.html.index('id="add-item-bottom"')
         action_bar_position = self.html.index('id="rental-action-bar"')
         footer_add_position = self.html.index('id="add-item-footer"')
 
-        self.assertLess(items_position, top_add_position)
-        self.assertLess(top_add_position, bottom_add_position)
-        self.assertLess(bottom_add_position, action_bar_position)
+        self.assertLess(items_position, action_bar_position)
         self.assertLess(action_bar_position, footer_add_position)
-        self.assertEqual(
-            self.elements['add-item']['attrs'].get('aria-controls'),
-            'item-forms',
-        )
-        self.assertEqual(
-            self.elements['add-item-bottom']['attrs'].get('aria-controls'),
-            'item-forms',
-        )
         self.assertEqual(
             self.elements['add-item-footer']['attrs'].get('aria-controls'),
             'item-forms',
         )
-        self.assertTrue({
-            'w-full',
-            'sm:w-auto',
-        }.issubset(self.classes_for('add-item')))
+        self.assertNotIn('add-item', self.elements)
+        self.assertNotIn('add-item-bottom', self.elements)
 
     def test_totals_script_defines_and_updates_daily_penalty(self):
         self.assertContains(

@@ -62,6 +62,12 @@
           {{ form.penalty_value|render_field }}
           {% if form.penalty_value.errors %}<p class="field-error" role="alert">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.wearer_name.id_for_label }}">{{ form.wearer_name.label }} <span class="font-normal text-app-muted">(opcional)</span></label>
+          {{ form.wearer_name|render_field }}
+          <p class="field-help mt-0.5">Preencha quando quem vai usar a peça não é o(a) locatário(a).</p>
+          {% if form.wearer_name.errors %}<p class="field-error" role="alert">{{ form.wearer_name.errors|striptags }}</p>{% endif %}
+        </div>
       </div>
 
       <!-- Prévia dos itens locados -->
@@ -98,9 +104,6 @@
             <h2 class="section-title">Itens da locação</h2>
             <p class="field-help mt-0.5">Busque cada peça pelo código ou descrição. A disponibilidade na data de retirada é verificada automaticamente.</p>
           </div>
-          <button type="button" id="add-item" class="btn btn-primary min-h-9 w-full shrink-0 px-3 py-1.5 sm:w-auto" aria-controls="item-forms">
-            <span aria-hidden="true">+</span> Adicionar item
-          </button>
         </div>
 
         {{ items.management_form }}
@@ -232,12 +235,6 @@
           </div>
         </div>
 
-        {# Mirror of the header button — follows the flow so the user never scrolls up. #}
-        <div class="mt-4">
-          <button type="button" id="add-item-bottom" class="btn btn-secondary w-full justify-center" aria-controls="item-forms">
-            <span aria-hidden="true">+</span> Adicionar item
-          </button>
-        </div>
       </div>
 
       {% if not form.instance.pk %}

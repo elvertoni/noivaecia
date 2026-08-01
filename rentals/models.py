@@ -30,6 +30,10 @@ class Rental(TimeStampedModel):
     return_date = models.DateField('data de retorno', db_index=True)
     total_value = models.DecimalField('valor total', max_digits=10, decimal_places=2, default=0)
     penalty_value = models.DecimalField('multa', max_digits=10, decimal_places=2, default=0)
+    wearer_name = models.CharField(
+        'quem vai usar', max_length=150, blank=True,
+        help_text='Preencha quando quem vai usar a peça não é o(a) locatário(a) (ex.: esposa loca o terno para o marido usar).',
+    )
     cash_discount = models.BooleanField('desconto à vista', default=False)
     cash_discount_percent = models.DecimalField(
         'desconto à vista (%)', max_digits=5, decimal_places=2, null=True, blank=True,
