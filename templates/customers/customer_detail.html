@@ -17,6 +17,7 @@
       <p class="page-description">
         {% if customer.city %}{{ customer.city }}{% endif %}
         {% if customer.cpf %} · CPF {{ customer.cpf }}{% endif %}
+        {% if customer.cnpj %} · CNPJ {{ customer.cnpj }}{% endif %}
         {% if customer.phone_mobile %} · {{ customer.phone_mobile }}{% endif %}
         {% if customer.phone_home %}
           · Alternativo: {{ customer.phone_home }}{% if customer.alternate_phone_contact %} ({{ customer.alternate_phone_contact }}){% endif %}

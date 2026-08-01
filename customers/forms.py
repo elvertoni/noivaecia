@@ -55,8 +55,28 @@ def _validate_cpf(cpf):
     return True
 
 
+def _validate_cnpj(cnpj):
+    d = _digits(cnpj)
+    if len(d) != 14 or len(set(d)) == 1:
+        return False
+    for check_position, weights in (
+        (12, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]),
+        (13, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]),
+    ):
+        soma = sum(int(d[i]) * weights[i] for i in range(check_position))
+        resto = soma % 11
+        digito = 0 if resto < 2 else 11 - resto
+        if digito != int(d[check_position]):
+            return False
+    return True
+
+
 def _format_cpf(d):
     return f'{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}'
+
+
+def _format_cnpj(d):
+    return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
 
 
 def _format_phone(d):
@@ -97,11 +117,12 @@ class CustomerForm(forms.ModelForm):
         model = Customer
         fields = (
             'name', 'address', 'district', 'state', 'city',
-            'rg', 'cpf', 'phone_mobile', 'phone_home',
+            'rg', 'cpf', 'cnpj', 'phone_mobile', 'phone_home',
             'alternate_phone_contact', 'phone_work', 'notes',
         )
         help_texts = {
             'rg': 'Digite como consta no documento; letras e pontuação serão preservadas.',
+            'cnpj': 'Preencha para clientes pessoa jurídica (locação para empresas).',
             'alternate_phone_contact': (
                 'Informe de quem é o número ou a relação com o cliente.'
             ),
@@ -154,6 +175,13 @@ class CustomerForm(forms.ModelForm):
             'autocomplete': 'off',
             'data-mask': 'cpf',
         })
+        self.fields['cnpj'].widget.attrs.update({
+            'placeholder': 'Ex.: 00.000.000/0000-00',
+            'maxlength': '18',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'data-mask': 'cnpj',
+        })
         self.fields['phone_home'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 99999-1234',
             'maxlength': '20',
@@ -191,6 +219,19 @@ class CustomerForm(forms.ModelForm):
         if not _validate_cpf(d):
             raise forms.ValidationError('CPF inválido. Verifique os dígitos informados.')
         return _format_cpf(d)
+
+    def clean_cnpj(self):
+        cnpj = self.cleaned_data.get('cnpj', '').strip()
+        if not cnpj:
+            return cnpj
+        if not re.fullmatch(r'[\d./\-\s]+', cnpj):
+            raise forms.ValidationError(
+                'CNPJ inválido. Use apenas números e a pontuação do CNPJ.'
+            )
+        d = _digits(cnpj)
+        if not _validate_cnpj(d):
+            raise forms.ValidationError('CNPJ inválido. Verifique os dígitos informados.')
+        return _format_cnpj(d)
 
     def clean_city(self):
         city = self.cleaned_data.get('city', '').strip()

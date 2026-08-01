@@ -1298,3 +1298,54 @@ class ClientCorrectionsTests(TestCase):
         self.assertEqual(len(future), 3)
         self.assertEqual(future[-1].due_date, self.rental.pickup_date)
 
+
+
+class RentalContractCompanyCustomerTests(TestCase):
+    """A company rental prints the CNPJ where an individual shows CPF/RG."""
+
+    def setUp(self):
+        user = User.objects.create_user(
+            email='contrato-cnpj@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(user=user, module_key='rentals', allowed=True)
+        self.client.force_login(user)
+        Company.load()
+
+    def _contract_for(self, customer, number):
+        rental = Rental.objects.create(
+            number=number,
+            customer=customer,
+            pickup_date=date(2026, 9, 10),
+            return_date=date(2026, 9, 15),
+            total_value=Decimal('500.00'),
+        )
+        response = self.client.get(reverse('rentals:contract', args=[rental.pk]))
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode('utf-8')
+
+    def test_company_customer_prints_cnpj_instead_of_cpf_and_rg(self):
+        company_customer = Customer.objects.create(
+            name='Construtora Alfa Ltda',
+            cnpj='11.222.333/0001-81',
+        )
+
+        content = self._contract_for(company_customer, number=8801)
+
+        self.assertIn('<span class="field-caption">CNPJ</span>', content)
+        self.assertIn('11.222.333/0001-81', content)
+        self.assertNotIn('<span class="field-caption">CPF</span>', content)
+        self.assertNotIn('<span class="field-caption">RG</span>', content)
+
+    def test_individual_customer_still_prints_cpf_and_rg(self):
+        individual = Customer.objects.create(
+            name='Maria Silva',
+            cpf='529.982.247-25',
+            rg='8.241.995-0',
+        )
+
+        content = self._contract_for(individual, number=8802)
+
+        self.assertIn('<span class="field-caption">CPF</span>', content)
+        self.assertIn('<span class="field-caption">RG</span>', content)
+        self.assertNotIn('<span class="field-caption">CNPJ</span>', content)

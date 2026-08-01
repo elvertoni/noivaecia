@@ -67,6 +67,14 @@
         </div>
       </div>
 
+      {# CNPJ — clientes pessoa jurídica #}
+      <div class="field-group">
+        <label class="field-label" for="{{ form.cnpj.id_for_label }}">CNPJ <span class="font-normal text-app-muted">(opcional)</span></label>
+        {{ form.cnpj|render_field }}
+        {% if form.cnpj.help_text %}<p id="{{ form.cnpj.auto_id }}-help" class="field-help">{{ form.cnpj.help_text }}</p>{% endif %}
+        {% if form.cnpj.errors %}<p id="{{ form.cnpj.auto_id }}-error" class="field-error" role="alert">{{ form.cnpj.errors|striptags }}</p>{% endif %}
+      </div>
+
       {# Celular (principal) #}
       <div class="field-group">
         <label class="field-label" for="{{ form.phone_mobile.id_for_label }}">Celular</label>
@@ -155,6 +163,15 @@
     return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
   }
 
+  function maskCNPJ(v) {
+    const d = onlyDigits(v).slice(0, 14);
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return d.slice(0,2) + '.' + d.slice(2);
+    if (d.length <= 8) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5);
+    if (d.length <= 12) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '/' + d.slice(8);
+    return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '/' + d.slice(8,12) + '-' + d.slice(12);
+  }
+
   function maskPhone(v) {
     let d = onlyDigits(v);
     if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
@@ -177,7 +194,7 @@
     return v;
   }
 
-  const MASKS = { cpf: maskCPF, phone: maskPhone };
+  const MASKS = { cpf: maskCPF, cnpj: maskCNPJ, phone: maskPhone };
 
   const rgInput = document.querySelector('[data-rg-format="true"]');
   if (rgInput) {

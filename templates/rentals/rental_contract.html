@@ -204,6 +204,12 @@
             <span class="field-caption">Nome</span>
             <span>{{ rental.customer.name }}</span>
           </div>
+          {% if rental.customer.cnpj %}
+          <div class="field">
+            <span class="field-caption">CNPJ</span>
+            <span>{{ rental.customer.cnpj }}</span>
+          </div>
+          {% else %}
           <div class="field">
             <span class="field-caption">CPF</span>
             <span>{{ rental.customer.cpf|default:'—' }}</span>
@@ -212,6 +218,7 @@
             <span class="field-caption">RG</span>
             <span>{{ rental.customer.rg|default:'—' }}</span>
           </div>
+          {% endif %}
         </div>
         <div class="row">
           <div class="field" style="flex:2">

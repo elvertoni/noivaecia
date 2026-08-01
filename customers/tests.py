@@ -317,3 +317,107 @@ class CustomerLegacyFieldTests(TestCase):
         Customer.objects.create(name='Ghost', is_placeholder=True)
         self.assertEqual(Customer.objects.filter(is_placeholder=True).count(), 1)
         self.assertEqual(Customer.objects.filter(is_placeholder=False).count(), 1)
+
+
+class CustomerCnpjTests(TestCase):
+    """Company customers (locação para empresas) carry a CNPJ instead of a CPF."""
+
+    BASE_DATA = {
+        'name': 'Construtora Alfa Ltda',
+        'address': '',
+        'district': '',
+        'state': 'PR',
+        'city': 'Bandeirantes',
+        'rg': '',
+        'cpf': '',
+        'phone_home': '',
+        'alternate_phone_contact': '',
+        'phone_mobile': '',
+        'phone_work': '',
+        'notes': '',
+    }
+
+    def _form(self, cnpj):
+        return CustomerForm(data={**self.BASE_DATA, 'cnpj': cnpj})
+
+    def test_accepts_and_formats_unpunctuated_cnpj(self):
+        form = self._form('11222333000181')
+
+        self.assertTrue(form.is_valid(), form.errors)
+        customer = form.save()
+        self.assertEqual(customer.cnpj, '11.222.333/0001-81')
+        self.assertEqual(customer.cnpj_digits, '11222333000181')
+
+    def test_accepts_already_punctuated_cnpj(self):
+        form = self._form('11.222.333/0001-81')
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['cnpj'], '11.222.333/0001-81')
+
+    def test_rejects_cnpj_with_wrong_check_digits(self):
+        form = self._form('11222333000199')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cnpj', form.errors)
+
+    def test_rejects_cnpj_with_repeated_digits(self):
+        form = self._form('11111111111111')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cnpj', form.errors)
+
+    def test_rejects_cnpj_with_letters(self):
+        form = self._form('11.222.333/000A-81')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('cnpj', form.errors)
+
+    def test_cnpj_stays_optional_for_individuals(self):
+        form = CustomerForm(data={**self.BASE_DATA, 'name': 'Maria Silva', 'cnpj': ''})
+
+        self.assertTrue(form.is_valid(), form.errors)
+        customer = form.save()
+        self.assertEqual(customer.cnpj, '')
+        self.assertEqual(customer.cnpj_digits, '')
+
+
+class CustomerCnpjLookupTests(TestCase):
+    """A company must be findable by its CNPJ, punctuated or not."""
+
+    def setUp(self):
+        user = get_user_model().objects.create_user(
+            email='cnpj-lookup@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=user, module_key='customers', allowed=True,
+        )
+        ModulePermission.objects.create(
+            user=user, module_key='rentals', allowed=True,
+        )
+        self.client.force_login(user)
+        self.company = Customer.objects.create(
+            name='Construtora Alfa Ltda',
+            cnpj='11.222.333/0001-81',
+        )
+
+    def test_list_search_finds_company_by_unpunctuated_cnpj(self):
+        response = self.client.get(reverse('customers:list'), {'q': '11222333000181'})
+
+        self.assertContains(response, 'Construtora Alfa Ltda')
+
+    def test_list_search_finds_company_by_punctuated_cnpj(self):
+        response = self.client.get(
+            reverse('customers:list'), {'q': '11.222.333/0001-81'},
+        )
+
+        self.assertContains(response, 'Construtora Alfa Ltda')
+
+    def test_rental_picker_labels_company_with_its_cnpj(self):
+        response = self.client.get(reverse('customers:search'), {'q': '11222333000181'})
+
+        results = response.json()['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['text'], 'Construtora Alfa Ltda')
+        self.assertIn('CNPJ 11.222.333/0001-81', results[0]['sub'])
+        self.assertNotIn('CPF', results[0]['sub'])

@@ -29,6 +29,10 @@ class Customer(TimeStampedModel):
     city = models.CharField('cidade', max_length=100, blank=True, default='Bandeirantes')
     rg = models.CharField('RG', max_length=20, blank=True)
     cpf = models.CharField('CPF', max_length=14, blank=True)
+    # The store also rents to companies, so a customer may carry a CNPJ instead
+    # of (or alongside) a CPF. Both stay optional — the 18k imported legacy
+    # records have neither in many cases.
+    cnpj = models.CharField('CNPJ', max_length=18, blank=True)
     # Kept under its legacy Python/database name so imported residential
     # numbers remain available while the UI uses the broader business concept
     # of an alternate contact number.
@@ -42,6 +46,7 @@ class Customer(TimeStampedModel):
     phone_mobile = models.CharField('celular', max_length=20, blank=True)
     phone_work = models.CharField('telefone comercial', max_length=20, blank=True)
     cpf_digits = models.CharField('CPF (só dígitos)', max_length=14, blank=True, db_index=True)
+    cnpj_digits = models.CharField('CNPJ (só dígitos)', max_length=18, blank=True, db_index=True)
     rg_digits = models.CharField('RG (só dígitos)', max_length=20, blank=True, db_index=True)
     phone_home_digits = models.CharField('tel. alternativo (só dígitos)', max_length=20, blank=True)
     phone_mobile_digits = models.CharField('celular (só dígitos)', max_length=20, blank=True, db_index=True)
@@ -62,12 +67,14 @@ class Customer(TimeStampedModel):
         indexes = [
             models.Index(fields=('name',), name='customer_name_idx'),
             models.Index(fields=('cpf_digits',), name='customer_cpf_digits_idx'),
+            models.Index(fields=('cnpj_digits',), name='customer_cnpj_digits_idx'),
             models.Index(fields=('rg_digits',), name='customer_rg_digits_idx'),
             models.Index(fields=('phone_mobile_digits',), name='customer_mobile_digits_idx'),
         ]
 
     def save(self, *args, **kwargs):
         self.cpf_digits = _digits_only(self.cpf)
+        self.cnpj_digits = _digits_only(self.cnpj)
         self.rg_digits = _digits_only(self.rg)
         self.phone_home_digits = _digits_only(self.phone_home)
         self.phone_mobile_digits = _digits_only(self.phone_mobile)
