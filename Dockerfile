@@ -42,6 +42,16 @@ RUN DJANGO_SECRET_KEY=build-time-only DJANGO_ALLOWED_HOSTS=localhost python mana
 RUN mkdir -p /app/data /app/staticfiles /app/media \
     && chmod +x /app/docker-entrypoint.sh
 
+# Non-root runtime user. NOTE: on an existing deploy, /app/data and /app/media
+# are named volumes already populated with files owned by root (every prior
+# release ran as root) — switching USER here without first chowning those
+# volumes on the host/container breaks writes (backups, uploaded photos,
+# sqlite fallback). Run once against the live volumes before/at this rollout:
+#   docker exec -u root <container> chown -R appuser:appuser /app/data /app/media
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid appuser --no-create-home appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 STOPSIGNAL SIGTERM
