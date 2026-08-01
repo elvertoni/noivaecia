@@ -60,6 +60,7 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.penalty_value.id_for_label }}">{{ form.penalty_value.label }}</label>
           {{ form.penalty_value|render_field }}
+          <p class="text-[10px] text-app-muted mt-0.5">Valor único, não diária.</p>
           {% if form.penalty_value.errors %}<p class="field-error" role="alert">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
@@ -225,7 +226,7 @@
               <p class="text-[10px] text-app-muted mt-0.5">Em branco = 10% padrão.</p>
             </div>
             <div>
-              <p class="text-xs font-medium text-app-muted">Multa diária por atraso</p>
+              <p class="text-xs font-medium text-app-muted">Multa por atraso (valor único)</p>
               <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">

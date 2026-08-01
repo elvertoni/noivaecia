@@ -45,6 +45,26 @@ def brl(value):
 
 
 @register.filter
+def pct(value):
+    """Format a percentage rate: 50 -> '50', 12.5 -> '12,5', 0 -> '0'.
+
+    Rates are stored as DecimalField(decimal_places=2), so ``brl`` would print
+    a contract clause as '50,00%'. Trailing zeros are dropped so the printed
+    contract reads the way the rate was configured.
+    """
+    if value is None or value == '':
+        value = 0
+    try:
+        rate = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return value
+    rate = rate.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP).normalize()
+    if rate == rate.to_integral_value():
+        rate = rate.to_integral_value()
+    return f'{rate:f}'.replace('.', ',')
+
+
+@register.filter
 def br_date_text(value):
     """Display ISO/BR date strings as dd/mm/YYYY, leaving legacy text intact."""
     parsed = parse_br_date(value)

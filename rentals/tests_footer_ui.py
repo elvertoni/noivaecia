@@ -113,7 +113,7 @@ class RentalFooterUITests(TestCase):
         self.assertNotIn('add-item', self.elements)
         self.assertNotIn('add-item-bottom', self.elements)
 
-    def test_totals_script_defines_and_updates_daily_penalty(self):
+    def test_totals_script_defines_and_updates_penalty(self):
         self.assertContains(
             self.response,
             "const penaltyEl = document.getElementById('penalty-display');",
@@ -126,4 +126,5 @@ class RentalFooterUITests(TestCase):
             self.response,
             'subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}`',
         )
-        self.assertContains(self.response, 'Multa diária por atraso')
+        self.assertContains(self.response, 'Multa por atraso (valor único)')
+        self.assertNotContains(self.response, 'Multa diária por atraso')

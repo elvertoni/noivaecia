@@ -29,7 +29,11 @@ class Rental(TimeStampedModel):
     pickup_date = models.DateField('data de retirada', db_index=True)
     return_date = models.DateField('data de retorno', db_index=True)
     total_value = models.DecimalField('valor total', max_digits=10, decimal_places=2, default=0)
-    penalty_value = models.DecimalField('multa', max_digits=10, decimal_places=2, default=0)
+    penalty_value = models.DecimalField(
+        'multa por atraso', max_digits=10, decimal_places=2, default=0,
+        help_text='Valor único cobrado se a devolução atrasar, qualquer que seja o '
+                  'número de dias. Não é uma diária.',
+    )
     wearer_name = models.CharField(
         'quem vai usar', max_length=150, blank=True,
         help_text='Preencha quando quem vai usar a peça não é o(a) locatário(a) (ex.: esposa loca o terno para o marido usar).',

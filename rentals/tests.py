@@ -1136,19 +1136,55 @@ class ClientCorrectionsTests(TestCase):
         content = response.content.decode('utf-8')
 
         # Cláusula 1 com data de devolução
-        self.assertIn('data devolução (15/08/2026)', content)
+        self.assertIn('data de devolução estipulada acima (15/08/2026)', content)
         # Cláusula 3 com espaço para quantia de reposição
-        self.assertIn('a quantia de (____________________)', content)
-        # Cláusula 5 com multa de 50% por desistência/rescisão
-        self.assertIn('será cobrado o percentual de 50,00% correspondente ao valor total da locação', content)
+        self.assertIn('na quantia de R$ (____________________)', content)
+        # Cláusula 5 com multa de 50% por desistência/rescisão — sem centavos
+        self.assertIn('será cobrado o percentual de 50% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
         self.assertIn('6. A não devolução dos trajes', content)
-        # Multa exibida nos Dados da Locação (rótulo simplificado) e na Cláusula 4
-        self.assertIn('<span class="field-caption">Multa</span>', content)
-        self.assertIn('4. O atraso na devolução sujeita o locatário à multa.', content)
+        self.assertIn('implica cobrança de 100% correspondente', content)
+        # Sem multa cadastrada: bloco dos Dados da Locação omitido e cláusula 4
+        # não promete um valor que o contrato não mostra.
+        self.assertNotIn('Multa por atraso (valor único)', content)
+        self.assertIn(
+            '4. O atraso na devolução sujeita o locatário à multa acordada com a '
+            'Noivas & Cia, cobrada uma única vez, independentemente do número '
+            'de dias de atraso.',
+            content,
+        )
         # Assinatura com 1 testemunha
         self.assertIn('Testemunha', content)
         self.assertNotIn('Testemunha 2', content)
+
+    def test_printed_contract_states_penalty_is_charged_once(self):
+        self.rental.penalty_value = Decimal('960.00')
+        self.rental.save(update_fields=['penalty_value'])
+
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        self.assertIn('Multa por atraso (valor único)', content)
+        self.assertIn(
+            '4. O atraso na devolução sujeita o locatário à multa de R$ 960,00, '
+            'cobrada uma única vez, independentemente do número de dias de atraso.',
+            content,
+        )
+        self.assertNotIn('diária', content)
+
+    def test_printed_contract_percentages_follow_configured_rates(self):
+        self.company.cancellation_penalty_rate = Decimal('0')
+        self.company.loss_penalty_rate = Decimal('12.50')
+        self.company.save(update_fields=[
+            'cancellation_penalty_rate', 'loss_penalty_rate',
+        ])
+
+        response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
+        content = response.content.decode('utf-8')
+
+        # A 0% rate must print as 0%, not fall back to the old hardcoded 50%.
+        self.assertIn('será cobrado o percentual de 0% correspondente', content)
+        self.assertIn('implica cobrança de 12,5% correspondente', content)
 
     def test_printed_contract_shows_damage_amount_when_return_recorded(self):
         Pickup.objects.create(rental=self.rental, pickup_date=date(2026, 8, 10))
@@ -1168,7 +1204,7 @@ class ClientCorrectionsTests(TestCase):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('a quantia de (____________________)', content)
+        self.assertIn('na quantia de R$ (____________________)', content)
 
     def test_printed_contract_shows_wearer_name_when_set(self):
         self.rental.wearer_name = 'Julio Cesar'
