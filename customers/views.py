@@ -28,6 +28,24 @@ def _digits(value):
     return re.sub(r'\D', '', value or '')
 
 
+def _warn_if_duplicate_cpf(request, customer):
+    if not customer.cpf_digits:
+        return
+
+    duplicate = (
+        Customer.objects.filter(cpf_digits=customer.cpf_digits, is_active=True)
+        .exclude(pk=customer.pk)
+        .order_by('name')
+        .first()
+    )
+    if duplicate:
+        messages.warning(
+            request,
+            f'Já existe outro cliente com este CPF: {duplicate.name}. '
+            'Confira antes de continuar.',
+        )
+
+
 def _parse_history_date(value):
     """Accept ISO and Brazilian dates from the customer-history filter."""
     return parse_br_date(value)
@@ -122,6 +140,11 @@ class CustomerCreateView(ModuleAccessMixin, SuccessMessageMixin, CreateView):
     success_url = reverse_lazy('customers:list')
     success_message = 'Cliente cadastrado com sucesso.'
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        _warn_if_duplicate_cpf(self.request, self.object)
+        return response
+
 
 class CustomerUpdateView(ModuleAccessMixin, SuccessMessageMixin, UpdateView):
     module_key = 'customers'
@@ -130,6 +153,11 @@ class CustomerUpdateView(ModuleAccessMixin, SuccessMessageMixin, UpdateView):
     template_name = 'customers/customer_form.html'
     success_url = reverse_lazy('customers:list')
     success_message = 'Cliente atualizado com sucesso.'
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        _warn_if_duplicate_cpf(self.request, self.object)
+        return response
 
 
 class CustomerDeleteView(ModuleAccessMixin, ActionRequiredMixin, DeleteView):

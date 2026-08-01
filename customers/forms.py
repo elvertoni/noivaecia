@@ -2,6 +2,7 @@ import re
 
 from django import forms
 
+from core.management.commands.normalize_cities import normalize as normalize_city
 from core.ui import INPUT_CLASS
 
 from .models import Customer
@@ -190,6 +191,12 @@ class CustomerForm(forms.ModelForm):
         if not _validate_cpf(d):
             raise forms.ValidationError('CPF inválido. Verifique os dígitos informados.')
         return _format_cpf(d)
+
+    def clean_city(self):
+        city = self.cleaned_data.get('city', '').strip()
+        if not city:
+            return city
+        return normalize_city(city) or city
 
     def clean_rg(self):
         rg = self.cleaned_data.get('rg', '').strip()

@@ -34,7 +34,7 @@ class CategoryForm(forms.ModelForm):
         case-sensitive duplicate therefore looks like one category in the UI
         while remaining two distinct records in the database.
         """
-        prefix = self.cleaned_data['prefix'].upper()
+        prefix = self.cleaned_data['prefix'].strip().upper()
         duplicate = Category.objects.filter(prefix__iexact=prefix)
         if self.instance.pk:
             duplicate = duplicate.exclude(pk=self.instance.pk)

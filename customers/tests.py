@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
@@ -61,6 +62,31 @@ class CustomerCrudTests(TestCase):
         self.assertEqual(customer.rg, '8.241.995-0')
         self.assertEqual(customer.rg_digits, '82419950')
         self.assertEqual(customer.alternate_phone_contact, 'Esposo João')
+
+    def test_create_customer_warns_but_allows_active_duplicate_cpf(self):
+        Customer.objects.create(name='Cliente existente', cpf='529.982.247-25')
+
+        response = self.client.post(reverse('customers:create'), {
+            'name': 'Cliente novo',
+            'address': '',
+            'district': '',
+            'state': 'PR',
+            'city': 'Bandeirantes',
+            'rg': '',
+            'cpf': '529.982.247-25',
+            'phone_mobile': '',
+            'phone_home': '',
+            'alternate_phone_contact': '',
+            'phone_work': '',
+            'notes': '',
+        })
+
+        self.assertRedirects(response, reverse('customers:list'))
+        self.assertTrue(Customer.objects.filter(name='Cliente novo').exists())
+        self.assertIn(
+            'Já existe outro cliente com este CPF: Cliente existente. Confira antes de continuar.',
+            [str(message) for message in get_messages(response.wsgi_request)],
+        )
 
     def test_update_customer_changes_alternate_phone_identification(self):
         customer = Customer.objects.create(
@@ -141,6 +167,23 @@ class CustomerCrudTests(TestCase):
 
 
 class CustomerFormNormalizationTests(TestCase):
+    def test_normalizes_city_with_existing_command_rules(self):
+        form = CustomerForm(data={
+            'name': 'Maria Silva',
+            'state': 'SP',
+            'city': '  sao paulo  ',
+            'rg': '',
+            'cpf': '',
+            'phone_home': '',
+            'phone_mobile': '',
+            'phone_work': '',
+            'notes': '',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        customer = form.save()
+        self.assertEqual(customer.city, 'São Paulo')
+
     def test_preserves_real_rg_format_and_updates_digit_lookup(self):
         form = CustomerForm(data={
             'name': 'Maria Silva',

@@ -43,6 +43,12 @@ class CatalogFormValidationTests(TestCase):
         self.assertTrue(form.is_valid())
         self.assertEqual(form.cleaned_data['prefix'], 'TRN')
 
+    def test_category_prefix_is_trimmed_before_uppercasing(self):
+        form = CategoryForm(data={'prefix': ' vf ', 'name': 'Vestidos de festa'})
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['prefix'], 'VF')
+
     def test_product_value_cannot_be_negative(self):
         form = ProductForm(data={
             'category': self.category.pk,
