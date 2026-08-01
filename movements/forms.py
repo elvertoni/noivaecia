@@ -4,7 +4,13 @@ from django import forms
 from django.utils import timezone
 
 from billing.models import Payment
-from core.ui import BRMoneyField, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from core.ui import (
+    BRMoneyField,
+    DATE_INPUT_ATTRS,
+    DATE_INPUT_FORMATS,
+    INPUT_CLASS,
+    configure_br_decimal_field,
+)
 
 from .models import Pickup, Return
 
@@ -50,7 +56,7 @@ class ReturnForm(forms.ModelForm):
 
     class Meta:
         model = Return
-        fields = ('return_date',)
+        fields = ('return_date', 'damage_amount', 'damage_notes')
         widgets = {'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, rental=None, **kwargs):
@@ -58,6 +64,11 @@ class ReturnForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['return_date'].input_formats = DATE_INPUT_FORMATS
         self.fields['return_date'].widget.attrs['class'] = INPUT_CLASS
+        configure_br_decimal_field(self.fields['damage_amount'], currency=True)
+        self.fields['damage_amount'].min_value = Decimal('0')
+        self.fields['damage_amount'].widget.attrs['class'] = INPUT_CLASS
+        self.fields['damage_notes'].widget.attrs.setdefault('rows', 2)
+        self.fields['damage_notes'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_amount'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_method'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_date'].widget.attrs['class'] = INPUT_CLASS

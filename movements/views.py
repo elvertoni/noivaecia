@@ -305,6 +305,10 @@ class ReturnListView(MovementsAccessMixin, ListView):
         date_from = parse_br_date(self.request.GET.get('date_from'))
         date_to = parse_br_date(self.request.GET.get('date_to'))
         rentals = ctx[self.context_object_name]
+        ctx['completed_returns'] = (
+            Return.objects.select_related('rental__customer')
+            .order_by('-return_date', '-pk')[:30]
+        )
         product_ids = {item.product_id for rental in rentals for item in rental.items.all()}
         upcoming = find_upcoming_pickups(product_ids, today, within_days=self.URGENT_PICKUP_WINDOW_DAYS)
         for rental in rentals:

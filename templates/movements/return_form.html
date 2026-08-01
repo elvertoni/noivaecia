@@ -62,6 +62,18 @@
       {# Return date #}
       {% include 'includes/form_field.html' with field=form.return_date only %}
 
+      {# Optional damage record #}
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+        <div>
+          <h3 class="text-sm font-semibold text-app-ink">Danos ou reposição <span class="text-app-muted font-normal">(opcional)</span></h3>
+          <p class="mt-1 text-xs text-app-muted">Registre o valor cobrado ou acordado e uma breve descrição para manter o histórico da devolução.</p>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {% include 'includes/form_field.html' with field=form.damage_amount only %}
+          {% include 'includes/form_field.html' with field=form.damage_notes only %}
+        </div>
+      </div>
+
       {# Optional payment section (R10.05) #}
       {% if can_receive_on_return %}
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">

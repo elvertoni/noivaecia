@@ -131,6 +131,67 @@
     {% endfor %}
   </div>
 
+  {% if completed_returns %}
+    <section class="panel-spacious space-y-4">
+      <div>
+        <h2 class="section-title">Devoluções registradas</h2>
+        <p class="text-sm text-app-muted">Histórico recente dos valores e observações anotados no retorno.</p>
+      </div>
+
+      <div class="table-shell hidden md:block">
+        <table class="data-table">
+          <caption class="sr-only">Histórico recente de devoluções registradas</caption>
+          <thead>
+            <tr>
+              <th scope="col">Locação</th>
+              <th scope="col">Cliente</th>
+              <th scope="col">Devolvido em</th>
+              <th scope="col" class="text-right">Valor por danos</th>
+              <th scope="col">Observações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in completed_returns %}
+              <tr>
+                <td class="font-medium"><a href="{% url 'rentals:detail' record.rental.pk %}" class="text-link">#{{ record.rental.number }}</a></td>
+                <td>{{ record.rental.customer.name }}</td>
+                <td>{{ record.return_date|date:'d/m/Y' }}</td>
+                <td class="text-right whitespace-nowrap">
+                  {% if record.damage_amount is not None %}R$ {{ record.damage_amount|brl }}{% else %}—{% endif %}
+                </td>
+                <td>{{ record.damage_notes|default:'—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="space-y-3 md:hidden">
+        {% for record in completed_returns %}
+          <article class="rounded-xl border border-app-border bg-app-surface p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <a href="{% url 'rentals:detail' record.rental.pk %}" class="text-link">#{{ record.rental.number }}</a>
+                <p class="mt-1 text-sm font-medium text-app-ink">{{ record.rental.customer.name }}</p>
+              </div>
+              <p class="text-right text-xs text-app-muted">{{ record.return_date|date:'d/m/Y' }}</p>
+            </div>
+            <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt class="text-xs font-medium text-slate-600">Valor por danos</dt>
+                <dd class="mt-1 text-slate-900">{% if record.damage_amount is not None %}R$ {{ record.damage_amount|brl }}{% else %}—{% endif %}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium text-slate-600">Observações</dt>
+                <dd class="mt-1 text-slate-900">{{ record.damage_notes|default:'—' }}</dd>
+              </div>
+            </dl>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
   {% if is_paginated %}
     <div class="pagination">
       <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>

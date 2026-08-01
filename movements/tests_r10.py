@@ -269,6 +269,37 @@ class ReturnStatusUpdateTests(TestCase):
         self.assertTrue(Return.objects.filter(rental=self.rental).exists())
 
 
+# ── Damage/reimbursement tracking on return ────────────────────────────────────
+
+class ReturnDamageTrackingTests(TestCase):
+    def setUp(self):
+        _make_company()
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.rental = _make_rental(900, status='picked_up', return_date=TODAY)
+        Pickup.objects.create(rental=self.rental, pickup_date=TODAY - timedelta(days=1))
+
+    def test_return_persists_damage_amount_and_notes(self):
+        url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
+        response = self.client.post(url, {
+            'return_date': TODAY.isoformat(),
+            'damage_amount': '80,00',
+            'damage_notes': 'Mancha na barra do vestido.',
+        })
+        self.assertEqual(response.status_code, 302)
+        record = Return.objects.get(rental=self.rental)
+        self.assertEqual(record.damage_amount, Decimal('80.00'))
+        self.assertEqual(record.damage_notes, 'Mancha na barra do vestido.')
+
+    def test_return_without_damage_stays_backward_compatible(self):
+        url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
+        response = self.client.post(url, {'return_date': TODAY.isoformat()})
+        self.assertEqual(response.status_code, 302)
+        record = Return.objects.get(rental=self.rental)
+        self.assertIsNone(record.damage_amount)
+        self.assertEqual(record.damage_notes, '')
+
+
 # ── R10.06 Penalty receivable ─────────────────────────────────────────────────
 
 class ReturnPenaltyReceivableTests(TestCase):

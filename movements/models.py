@@ -36,6 +36,14 @@ class Return(TimeStampedModel):
     penalty_applied = models.DecimalField(
         'multa aplicada', max_digits=10, decimal_places=2, default=0
     )
+    damage_amount = models.DecimalField(
+        'valor cobrado por danos',
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    damage_notes = models.TextField('observações sobre danos', blank=True)
 
     class Meta:
         verbose_name = 'devolução'
