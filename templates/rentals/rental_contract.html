@@ -227,6 +227,14 @@
             <span>{{ rental.customer.phone_mobile|default:'—' }}</span>
           </div>
         </div>
+        {% if rental.customer.phone_home or rental.customer.alternate_phone_contact %}
+        <div class="row">
+          <div class="field">
+            <span class="field-caption">Telefone alternativo</span>
+            <span>{% if rental.customer.alternate_phone_contact %}{{ rental.customer.alternate_phone_contact }}{% endif %}{% if rental.customer.alternate_phone_contact and rental.customer.phone_home %} / {% endif %}{% if rental.customer.phone_home %}{{ rental.customer.phone_home }}{% endif %}</span>
+          </div>
+        </div>
+        {% endif %}
         {% if rental.wearer_name %}
         <div class="row">
           <div class="field">
@@ -242,11 +250,11 @@
         <div class="section-title">Dados da locação</div>
         <div class="row">
           <div class="field">
-            <span class="field-caption">Retirada</span>
+            <span class="field-caption">Retirada dos trajes</span>
             <span><strong>{{ rental.pickup_date|date:"d/m/Y" }}</strong></span>
           </div>
           <div class="field">
-            <span class="field-caption">Devolução</span>
+            <span class="field-caption">Devolução dos trajes</span>
             <span><strong>{{ rental.return_date|date:"d/m/Y" }}</strong></span>
           </div>
         </div>
@@ -342,8 +350,22 @@
             <td>{% if receivables.9 %}R$ {{ receivables.9.amount|brl }}{% else %}*{% endif %}</td>
             <td style="font-weight:bold;">R$ {{ payment_totals.amount|default:rental.final_value|brl }}</td>
           </tr>
+          <tr style="font-size:6pt;color:#555;">
+            <td>{{ receivables.0|receipt_status }}</td>
+            <td>{{ receivables.1|receipt_status }}</td>
+            <td>{{ receivables.2|receipt_status }}</td>
+            <td>{{ receivables.3|receipt_status }}</td>
+            <td>{{ receivables.4|receipt_status }}</td>
+            <td>{{ receivables.5|receipt_status }}</td>
+            <td>{{ receivables.6|receipt_status }}</td>
+            <td>{{ receivables.7|receipt_status }}</td>
+            <td>{{ receivables.8|receipt_status }}</td>
+            <td>{{ receivables.9|receipt_status }}</td>
+            <td></td>
+          </tr>
         </tbody>
       </table>
+      <p style="margin-top:2px;font-size:6.5pt;color:#333;">Recebido: R$ {{ payment_totals.paid|brl }} · Saldo em aberto: R$ {{ payment_totals.balance|brl }}</p>
     </div>
 
     <!-- ══ Termos e condições ═════════════════════════════════════ -->

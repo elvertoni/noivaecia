@@ -65,6 +65,24 @@ def pct(value):
 
 
 @register.filter
+def receipt_status(receivable):
+    """Per-installment status label for the printed contract's payment matrix."""
+    if not receivable:
+        return ''
+    if receivable.is_written_off:
+        return 'Baixada'
+    if receivable.is_paid:
+        if receivable.last_payment_date:
+            return f'Quitada em {receivable.last_payment_date:%d/%m/%Y}'
+        return 'Quitada'
+    if receivable.paid_amount:
+        if receivable.last_payment_date:
+            return f'Recebida parcialmente em {receivable.last_payment_date:%d/%m/%Y}'
+        return 'Recebida parcialmente'
+    return 'Em aberto'
+
+
+@register.filter
 def br_date_text(value):
     """Display ISO/BR date strings as dd/mm/YYYY, leaving legacy text intact."""
     parsed = parse_br_date(value)
