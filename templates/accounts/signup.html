@@ -97,13 +97,8 @@
 
       <fieldset class="field-group">
         <legend class="field-label">{{ form.module_permissions.label }}</legend>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {% for checkbox in form.module_permissions %}
-            <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50" for="{{ checkbox.id_for_label }}">
-              {{ checkbox.tag }}
-              {{ checkbox.choice_label }}
-            </label>
-          {% endfor %}
+        <div class="[&>div]:grid [&>div]:grid-cols-1 [&>div]:gap-3 [&>div]:!h-auto [&>div]:!w-full sm:[&>div]:grid-cols-2 [&_label]:flex [&_label]:min-h-11 [&_label]:cursor-pointer [&_label]:items-center [&_label]:gap-3 [&_label]:rounded-lg [&_label]:border [&_label]:border-slate-300 [&_label]:bg-white [&_label]:px-4 [&_label]:py-3 [&_label]:text-sm [&_label]:font-medium [&_label]:text-slate-700 [&_label]:transition-colors [&_label]:hover:bg-slate-50">
+          {{ form.module_permissions|render_field }}
         </div>
         {% if form.module_permissions.help_text %}<p id="{{ form.module_permissions.auto_id }}-help" class="field-help">{{ form.module_permissions.help_text }}</p>{% endif %}
         {% if form.module_permissions.errors %}<p id="{{ form.module_permissions.auto_id }}-error" class="field-error" role="alert">{{ form.module_permissions.errors|striptags }}</p>{% endif %}

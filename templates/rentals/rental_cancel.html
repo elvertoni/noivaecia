@@ -21,8 +21,8 @@
       {% csrf_token %}
       <div class="field-group">
         <label class="field-label" for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>
-        {{ form.reason }}
-        {% if form.reason.errors %}<p class="field-error" role="alert">{{ form.reason.errors|striptags }}</p>{% endif %}
+        {{ form.reason|render_field }}
+        {% if form.reason.errors %}<p id="{{ form.reason.auto_id }}-error" class="field-error" role="alert">{{ form.reason.errors|striptags }}</p>{% endif %}
       </div>
 
       <div class="form-actions">
