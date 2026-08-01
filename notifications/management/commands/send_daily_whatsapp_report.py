@@ -32,10 +32,6 @@ SENT_ACTION = 'whatsapp_daily_report'
 FAILED_ACTION = 'whatsapp_send_failed'
 CLAIMED_ACTION = 'whatsapp_report_claimed'
 FAILED_RETRY_DELAY = timedelta(minutes=5)
-# How long a "claimed" target blocks a concurrent run before being treated as
-# abandoned (e.g. the process that claimed it crashed before sending or
-# recording a result) and made eligible for retry again.
-CLAIM_GRACE_PERIOD = timedelta(minutes=3)
 
 
 def _digits(value):
@@ -271,25 +267,41 @@ class Command(BaseCommand):
         return failed_targets
 
     def _claimed_targets(self, on_date):
-        """Targets a concurrent (or very recent) run has already reserved.
+        """Targets reserved by a run whose final outcome is still unknown.
 
-        Only claims younger than ``CLAIM_GRACE_PERIOD`` count — an older one
-        means whatever process wrote it never followed up with a sent/failed
-        result (most likely it crashed), so the target is treated as free
-        again rather than blocked forever.
+        Claims are durable at-most-once reservations: a process can die after
+        Evolution accepts a message but before the success audit is written.
+        An explicit failure written after a claim releases only that target
+        for a later retry.
         """
-        claimed_after = timezone.now() - CLAIM_GRACE_PERIOD
         logs = AuditLog.objects.filter(
             action=CLAIMED_ACTION,
             metadata__reference_date=on_date.isoformat(),
-            created_at__gte=claimed_after,
-        ).only('metadata')
+        ).only('metadata', 'created_at')
+        failures = AuditLog.objects.filter(
+            action=FAILED_ACTION,
+            metadata__reference_date=on_date.isoformat(),
+        ).only('metadata', 'created_at')
+        failed_at = {}
+        for log in failures:
+            for target in (log.metadata or {}).get('targets', []):
+                if target:
+                    failed_at[str(target)] = max(
+                        failed_at.get(str(target), log.created_at),
+                        log.created_at,
+                    )
+
         claimed_targets = set()
         for log in logs:
             targets = (log.metadata or {}).get('targets', [])
             if isinstance(targets, list):
                 claimed_targets.update(
-                    str(target) for target in targets if target
+                    str(target)
+                    for target in targets
+                    if target and (
+                        failed_at.get(str(target)) is None
+                        or failed_at[str(target)] < log.created_at
+                    )
                 )
         return claimed_targets
 

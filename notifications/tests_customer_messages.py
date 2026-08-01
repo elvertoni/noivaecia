@@ -7,6 +7,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.test import TestCase
+from django.utils import timezone
 
 from catalog.models import Category, Product
 from company.models import Company
@@ -213,6 +214,16 @@ class PickupReminderQueueTests(TestCase):
         )
         queue = pickup_reminder_queue(TODAY)
         self.assertEqual(queue, [])
+
+    def test_pending_attempt_is_excluded(self):
+        customer = _make_customer(name='Envio Pendente')
+        rental = _make_rental(151, customer, Rental.Status.PENDING,
+                               pickup_date=TODAY + timedelta(days=1), return_date=TODAY + timedelta(days=7))
+        CustomerMessage.objects.create(
+            rental=rental, customer=customer, kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='5543999998888', status=CustomerMessage.Status.PENDING,
+        )
+        self.assertEqual(pickup_reminder_queue(TODAY), [])
 
     def test_failed_previous_attempt_remains_eligible(self):
         customer = _make_customer(name='Falha Antes')
@@ -444,6 +455,29 @@ class DispatchCustomerMessageTests(TestCase):
         self.assertEqual(
             CustomerMessage.objects.filter(rental=self.rental).count(), 2
         )
+
+    @mock.patch(f'{CMD}.evolution.send_text')
+    def test_crashed_send_does_not_retry_stale_pending_attempt(self, send_text):
+        send_text.side_effect = BaseException('process died after dispatch')
+        with self.assertRaises(BaseException):
+            dispatch_customer_message(self.rental, CustomerMessage.Kind.PICKUP_REMINDER)
+
+        pending = CustomerMessage.objects.get(rental=self.rental)
+        self.assertEqual(pending.status, CustomerMessage.Status.PENDING)
+        CustomerMessage.objects.filter(pk=pending.pk).update(
+            created_at=timezone.now() - timedelta(minutes=3),
+        )
+
+        send_text.reset_mock()
+        send_text.side_effect = None
+        send_text.return_value = 'MSGID-AFTER-CRASH'
+        result = dispatch_customer_message(
+            self.rental, CustomerMessage.Kind.PICKUP_REMINDER,
+        )
+
+        send_text.assert_not_called()
+        self.assertEqual(result.pk, pending.pk)
+        self.assertEqual(CustomerMessage.objects.filter(rental=self.rental).count(), 1)
 
 
 class RentalDeletionTests(TestCase):

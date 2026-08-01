@@ -11,7 +11,7 @@ from billing.models import Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from customers.models import Customer
-from notifications.services import build_daily_report
+from notifications.services import DAILY_REPORT_TEMPLATES, build_daily_report
 from rentals.models import Rental, RentalItem
 
 TODAY = date(2026, 7, 20)
@@ -60,6 +60,15 @@ class EmptyDayTests(TestCase):
         self.assertNotIn('📦', text)
         self.assertNotIn('👗', text)
         self.assertNotIn('💰', text)
+
+    def test_empty_report_uses_centralized_template(self):
+        with mock.patch.dict(
+            DAILY_REPORT_TEMPLATES,
+            {'empty': '{header}\n\nTexto centralizado'},
+        ):
+            text = build_daily_report(TODAY)
+
+        self.assertIn('Texto centralizado', text)
 
     @mock.patch('notifications.services.timezone.localdate', return_value=TODAY)
     def test_default_reference_date_uses_django_local_date(self, localdate):

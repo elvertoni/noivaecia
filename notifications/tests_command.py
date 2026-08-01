@@ -142,6 +142,14 @@ class SendDailyReportCommandTests(TestCase):
             },
         )
         AuditLog.objects.create(
+            user=None, action='whatsapp_report_claimed',
+            model_name='Company', object_id='1',
+            metadata={
+                'reference_date': '2026-07-20',
+                'targets': ['5543988887777'],
+            },
+        )
+        AuditLog.objects.create(
             user=None, action='whatsapp_send_failed',
             model_name='Company', object_id='1',
             metadata={
@@ -344,9 +352,9 @@ class SendDailyReportCommandTests(TestCase):
         self.assertIn('todos os destinos configurados', out)
 
     @mock.patch(f'{CMD}.evolution.send_text', return_value='MSGID1')
-    def test_stale_claim_past_grace_period_is_retried(self, send_text):
-        # A claim old enough to have plausibly come from a crashed run must
-        # not block the report forever.
+    def test_stale_claim_after_unknown_send_is_not_retried(self, send_text):
+        # A claim may represent a message accepted by Evolution before the
+        # process died, so age alone cannot make it safe to send again.
         claim = AuditLog.objects.create(
             user=None, action='whatsapp_report_claimed',
             model_name='Company', object_id='1',
@@ -361,7 +369,7 @@ class SendDailyReportCommandTests(TestCase):
 
         self.run_cmd('--date', '2026-07-20')
 
-        send_text.assert_called_once()
+        send_text.assert_not_called()
 
     @mock.patch(f'{CMD}.evolution.send_text')
     def test_dry_run_does_not_claim_targets(self, send_text):

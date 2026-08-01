@@ -23,7 +23,7 @@ from decimal import Decimal
 from string import Formatter
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.utils import timezone
 
 from notifications import evolution
@@ -33,6 +33,36 @@ from rentals.models import Rental
 
 MAX_ITEMS_PER_BLOCK = 15
 _WEEKDAY_ABBR_PT = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
+
+DAILY_REPORT_TEMPLATES = {
+    'header': '🗓️ *Noivas & Cia — resumo de {weekday}, {date}*',
+    'empty': '{header}\n\n✅ Sem entregas, retiradas ou vencimentos hoje.',
+    'no_items': 'sem itens',
+    'item_extra': '{summary} +{count}',
+    'truncated_items': '+{count} outros',
+    'delivery_item': '• #{number} {customer} — {summary} (retirado {pickup_date})',
+    'pickup_item': '• #{number} {customer} — {summary}',
+    'receivable_item': '• #{number} {customer} — {balance}',
+    'deliveries_heading': '📦 *Entregas a fazer hoje: {count}*',
+    'delivery_overdue': '⚠️ {count} {word}',
+    'pickups_heading': '👗 *Retiradas de hoje: {count}*',
+    'pickup_overdue': '⚠️ {count} {word}',
+    'receivables_heading': '💰 *A receber hoje: {total} ({count} {word})*',
+    'overdue_receivables': 'Vencidos em aberto: {total} ({count} {word})',
+}
+
+DAILY_REPORT_WORDS = {
+    'delivery_overdue_singular': 'devolução atrasada',
+    'delivery_overdue_plural': 'devoluções atrasadas',
+    'pickup_overdue_singular': 'retirada atrasada',
+    'pickup_overdue_plural': 'retiradas atrasadas',
+    'receivable_singular': 'título',
+    'receivable_plural': 'títulos',
+}
+
+
+def _render_daily_report_template(name, **context):
+    return DAILY_REPORT_TEMPLATES[name].format(**context)
 
 
 def _format_brl(value):
@@ -46,7 +76,9 @@ def _plural(count, singular, plural_form):
 
 def _format_header(on_date):
     weekday = _WEEKDAY_ABBR_PT[on_date.weekday()]
-    return f'🗓️ *Noivas & Cia — resumo de {weekday}, {on_date.strftime("%d/%m")}*'
+    return _render_daily_report_template(
+        'header', weekday=weekday, date=on_date.strftime('%d/%m'),
+    )
 
 
 def _truncate(lines):
@@ -55,21 +87,25 @@ def _truncate(lines):
     if len(lines) <= MAX_ITEMS_PER_BLOCK:
         return lines
     shown = lines[:MAX_ITEMS_PER_BLOCK]
-    shown.append(f'+{len(lines) - MAX_ITEMS_PER_BLOCK} outros')
+    shown.append(_render_daily_report_template(
+        'truncated_items', count=len(lines) - MAX_ITEMS_PER_BLOCK,
+    ))
     return shown
 
 
 def _item_summary(rental):
     items = list(rental.items.all())
     if not items:
-        return 'sem itens'
+        return DAILY_REPORT_TEMPLATES['no_items']
     first_item = items[0]
     summary = first_item.product_reference
     if first_item.display_description:
         summary = f'{summary} · {first_item.display_description}'
     extra = len(items) - 1
     if extra:
-        summary += f' +{extra}'
+        summary = _render_daily_report_template(
+            'item_extra', summary=summary, count=extra,
+        )
     return summary
 
 
@@ -84,8 +120,13 @@ def _deliveries_block(on_date):
     )
     rentals = list(qs)
     lines = [
-        f'• #{r.number} {r.customer.name} — {_item_summary(r)} '
-        f'(retirado {r.pickup_date.strftime("%d/%m")})'
+        _render_daily_report_template(
+            'delivery_item',
+            number=r.number,
+            customer=r.customer.name,
+            summary=_item_summary(r),
+            pickup_date=r.pickup_date.strftime('%d/%m'),
+        )
         for r in rentals
     ]
     overdue_count = Rental.objects.filter(
@@ -100,7 +141,12 @@ def _pickups_block(on_date):
     qs = report_a_retirar(date_from=on_date, date_to=on_date, max_results=None)
     rentals = list(qs)
     lines = [
-        f'• #{r.number} {r.customer.name} — {_item_summary(r)}'
+        _render_daily_report_template(
+            'pickup_item',
+            number=r.number,
+            customer=r.customer.name,
+            summary=_item_summary(r),
+        )
         for r in rentals
     ]
     yesterday = on_date - timedelta(days=1)
@@ -116,7 +162,12 @@ def _receivables_block(on_date):
     )
     due_rows = list(due_qs)
     lines = [
-        f'• #{rec.rental.number} {rec.rental.customer.name} — {_format_brl(rec.balance)}'
+        _render_daily_report_template(
+            'receivable_item',
+            number=rec.rental.number,
+            customer=rec.rental.customer.name,
+            balance=_format_brl(rec.balance),
+        )
         for rec in due_rows
     ]
     due_total = due_totals['t_balance'] or Decimal('0')
@@ -150,36 +201,64 @@ def build_daily_report(on_date=None):
         receivable_count, overdue_receivable_count,
     ])
     if nothing_to_report:
-        return f'{header}\n\n✅ Sem entregas, retiradas ou vencimentos hoje.'
+        return _render_daily_report_template('empty', header=header)
 
     parts = [header, '']
 
-    parts.append(f'📦 *Entregas a fazer hoje: {delivery_count}*')
+    parts.append(_render_daily_report_template(
+        'deliveries_heading', count=delivery_count,
+    ))
     parts.extend(delivery_lines)
     if delivery_overdue:
-        word = _plural(delivery_overdue, 'devolução atrasada', 'devoluções atrasadas')
-        parts.append(f'⚠️ {delivery_overdue} {word}')
+        word = _plural(
+            delivery_overdue,
+            DAILY_REPORT_WORDS['delivery_overdue_singular'],
+            DAILY_REPORT_WORDS['delivery_overdue_plural'],
+        )
+        parts.append(_render_daily_report_template(
+            'delivery_overdue', count=delivery_overdue, word=word,
+        ))
     parts.append('')
 
-    parts.append(f'👗 *Retiradas de hoje: {pickup_count}*')
+    parts.append(_render_daily_report_template(
+        'pickups_heading', count=pickup_count,
+    ))
     parts.extend(pickup_lines)
     if pickup_overdue:
-        word = _plural(pickup_overdue, 'retirada atrasada', 'retiradas atrasadas')
-        parts.append(f'⚠️ {pickup_overdue} {word}')
+        word = _plural(
+            pickup_overdue,
+            DAILY_REPORT_WORDS['pickup_overdue_singular'],
+            DAILY_REPORT_WORDS['pickup_overdue_plural'],
+        )
+        parts.append(_render_daily_report_template(
+            'pickup_overdue', count=pickup_overdue, word=word,
+        ))
     parts.append('')
 
-    titles_word = _plural(receivable_count, 'título', 'títulos')
-    parts.append(
-        f'💰 *A receber hoje: {_format_brl(receivable_total)} '
-        f'({receivable_count} {titles_word})*'
+    titles_word = _plural(
+        receivable_count,
+        DAILY_REPORT_WORDS['receivable_singular'],
+        DAILY_REPORT_WORDS['receivable_plural'],
     )
+    parts.append(_render_daily_report_template(
+        'receivables_heading',
+        total=_format_brl(receivable_total),
+        count=receivable_count,
+        word=titles_word,
+    ))
     parts.extend(receivable_lines)
     if overdue_receivable_count:
-        overdue_titles_word = _plural(overdue_receivable_count, 'título', 'títulos')
-        parts.append(
-            f'Vencidos em aberto: {_format_brl(overdue_receivable_total)} '
-            f'({overdue_receivable_count} {overdue_titles_word})'
+        overdue_titles_word = _plural(
+            overdue_receivable_count,
+            DAILY_REPORT_WORDS['receivable_singular'],
+            DAILY_REPORT_WORDS['receivable_plural'],
         )
+        parts.append(_render_daily_report_template(
+            'overdue_receivables',
+            total=_format_brl(overdue_receivable_total),
+            count=overdue_receivable_count,
+            word=overdue_titles_word,
+        ))
 
     return '\n'.join(parts).rstrip()
 
@@ -322,21 +401,23 @@ def render_return_message(rental, template=None):
     )
 
 
-def _already_sent_rental_ids(kind):
+def _already_attempted_rental_ids(kind):
     return CustomerMessage.objects.filter(
-        kind=kind, status=CustomerMessage.Status.SENT, rental__isnull=False,
+        kind=kind,
+        status__in=(CustomerMessage.Status.SENT, CustomerMessage.Status.PENDING),
+        rental__isnull=False,
     ).values_list('rental_id', flat=True)
 
 
 def pickup_reminder_queue(today=None):
     """Rentals eligible for the eve-of-pickup reminder: ``pending`` rentals
     whose ``pickup_date`` is tomorrow, with a valid phone and no prior
-    ``SENT`` pickup reminder for that rental."""
+    pickup reminder attempt for that rental."""
     today = today or timezone.localdate()
     target_date = today + timedelta(days=1)
     rentals = (
         Rental.objects.filter(status=Rental.Status.PENDING, pickup_date=target_date)
-        .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.PICKUP_REMINDER))
+        .exclude(pk__in=_already_attempted_rental_ids(CustomerMessage.Kind.PICKUP_REMINDER))
         .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
@@ -357,12 +438,12 @@ def pickup_reminder_queue(today=None):
 
 def return_reminder_queue(today=None):
     """Rentals eligible for the return-day reminder: ``picked_up`` rentals
-    whose ``return_date`` is today, with a valid phone and no prior ``SENT``
-    return reminder for that rental."""
+    whose ``return_date`` is today, with a valid phone and no prior return
+    reminder attempt for that rental."""
     today = today or timezone.localdate()
     rentals = (
         Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date=today)
-        .exclude(pk__in=_already_sent_rental_ids(CustomerMessage.Kind.RETURN_REMINDER))
+        .exclude(pk__in=_already_attempted_rental_ids(CustomerMessage.Kind.RETURN_REMINDER))
         .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
@@ -387,33 +468,24 @@ _MESSAGE_RENDERERS = {
 }
 
 
-# A ``pending`` row younger than this is treated as an in-flight send by a
-# concurrent/racing call (so it is not retried); one older than this is
-# assumed to have crashed before recording a final result and is safe to
-# retry. The stale ``pending`` row itself is left behind for manual review
-# rather than reused, keeping every send attempt append-only.
-_PENDING_GRACE_PERIOD = timedelta(minutes=2)
-
-
 def dispatch_customer_message(rental, kind, user=None, message_template=None):
     """Send (or record the failure to send) a customer WhatsApp message for
     ``rental``, and return the resulting ``CustomerMessage``.
 
-    Idempotent: a rental that already has a ``SENT`` ``CustomerMessage`` (or a
-    still-fresh ``PENDING`` one — see ``_PENDING_GRACE_PERIOD``) for ``kind``
-    is returned as-is, without calling the Evolution API again. An invalid
-    phone number short-circuits to a ``FAILED`` record without any network
-    call.
+    Idempotent: a rental that already has a ``SENT`` or ``PENDING``
+    ``CustomerMessage`` for ``kind`` is returned as-is, without calling the
+    Evolution API again. An invalid phone number short-circuits to a
+    ``FAILED`` record without any network call.
 
     The Evolution API call itself runs *outside* any database transaction:
     a ``PENDING`` record is committed first (inside a short transaction that
     also holds the row lock on ``rental``, so concurrent calls for the same
     rental/kind serialize against it), then the HTTP call happens with no
     transaction open, then the record is updated to its final ``SENT``/
-    ``FAILED`` state in a second short transaction. This way a DB failure
-    right after a real send can never leave us without a record that the
-    message actually went out — which is what used to risk a duplicate real
-    send on retry when the HTTP call happened before the row was written.
+    ``FAILED`` state in a second short transaction. A pending reservation is
+    never retried because a process can die after Evolution accepts the
+    message but before this final update; explicit API failures are recorded
+    as ``FAILED`` and remain eligible for a deliberate retry.
     """
     if kind not in _MESSAGE_RENDERERS:
         raise ValueError('Tipo de aviso inválido.')
@@ -424,12 +496,10 @@ def dispatch_customer_message(rental, kind, user=None, message_template=None):
             .select_related('customer')
             .get(pk=rental.pk)
         )
-        existing = CustomerMessage.objects.filter(rental=rental, kind=kind).filter(
-            Q(status=CustomerMessage.Status.SENT)
-            | Q(
-                status=CustomerMessage.Status.PENDING,
-                created_at__gte=timezone.now() - _PENDING_GRACE_PERIOD,
-            )
+        existing = CustomerMessage.objects.filter(
+            rental=rental,
+            kind=kind,
+            status__in=(CustomerMessage.Status.SENT, CustomerMessage.Status.PENDING),
         ).first()
         if existing:
             return existing

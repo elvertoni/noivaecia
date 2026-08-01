@@ -8,9 +8,10 @@ class CustomerMessage(TimeStampedModel):
     """Record of a single WhatsApp message sent to a customer about one of
     their rentals (pickup reminder or return follow-up).
 
-    One row per send attempt — including failed ones, so the reminder/return
-    queues in ``notifications.services`` can tell an already-notified rental
-    apart from one whose send failed and is still eligible for a retry.
+    One row per send attempt — including failed ones. A ``PENDING`` row is a
+    durable at-most-once reservation because Evolution may have accepted the
+    message before the process recorded its final result; only an explicit
+    ``FAILED`` result remains eligible for a retry.
     """
 
     class Kind(models.TextChoices):
