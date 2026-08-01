@@ -132,9 +132,7 @@
               </tr>
             </thead>
             <tbody id="item-forms" class="divide-y divide-slate-100 text-sm">
-              {% for item_form in items %}
-                {# Skip blank, unsaved rows on re-render so leftover empty items never pile up. #}
-                {% if not items.is_bound or item_form.instance.pk or item_form.has_changed %}
+              {% for item_form in items.visible_forms %}
                 <tr class="item-form flex flex-col gap-2 p-3 sm:table-row sm:p-0 transition-colors hover:bg-slate-50/80">
                   <td class="hidden sm:table-cell px-3 py-2 text-center font-medium text-slate-500 align-middle" data-label="#">
                     {{ item_form.id }}
@@ -145,7 +143,11 @@
                     <div class="field-group product-search-field mb-0">
                       {{ item_form.product }}
                       <div class="relative">
+                        {# Named so a failed save echoes the typed text back instead of wiping it.
+                           Not a form field — the formset ignores the extra key. #}
                         <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm w-full"
+                               name="{{ item_form.product.html_name }}_search"
+                               value="{{ item_form.typed_product_search }}"
                                placeholder="Buscar por código ou descrição…"
                                autocomplete="off"
                                data-field-id="{{ item_form.product.id_for_label }}"
@@ -198,7 +200,6 @@
                     </div>
                   </td>
                 </tr>
-                {% endif %}
               {% endfor %}
             </tbody>
           </table>
@@ -360,6 +361,7 @@
         {{ f.product }}
         <div class="relative">
           <input type="text" id="{{ f.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm w-full"
+                 name="{{ f.product.html_name }}_search"
                  placeholder="Buscar por código ou descrição…"
                  autocomplete="off"
                  role="combobox"

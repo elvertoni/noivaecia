@@ -287,11 +287,40 @@ class RentalItemForm(forms.ModelForm):
         else:
             self.fields['product'].queryset = Product.objects.none()
 
+    @property
+    def typed_product_search(self):
+        """Whatever was left in this row's product search box.
+
+        That box is a JS combobox, not a form field, so the text only survives
+        a re-render if it is echoed back explicitly.
+        """
+        if not self.is_bound:
+            return ''
+        return (self.data.get(f'{self.add_prefix("product")}_search') or '').strip()
+
+    def has_user_input(self):
+        """Whether anything was actually entered in this new row.
+
+        Broader than ``has_changed`` on purpose: this decides whether the row is
+        worth *showing* again, while ``has_changed`` decides whether it is worth
+        *validating*. A row someone typed a price or a product name into is not
+        the blank slot, even when it is too incomplete to save.
+        """
+        for field_name in ('product', 'value', 'description'):
+            if (self.data.get(self.add_prefix(field_name)) or '').strip():
+                return True
+        if self.files.get(self.add_prefix('proof_photo_upload')):
+            return True
+        return bool(self.typed_product_search)
+
     def has_changed(self):
         # An unsaved row with no product chosen is an empty row and must be
-        # ignored — never saved, never re-rendered. Without this, the model's
+        # ignored — never saved, never validated. Without this, the model's
         # ``value`` default (0) makes a blank form look "changed" (submitted
         # '' != initial 0), so leftover empty items pile up and block saving.
+        # Kept deliberately narrow: widening it here would turn a half-typed row
+        # into a hard validation error that blocks the whole save. Whether the
+        # row is re-rendered is decided by ``has_user_input`` instead.
         if not (self.instance and self.instance.pk):
             product = (self.data.get(self.add_prefix('product')) or '').strip()
             if not product:
@@ -349,6 +378,28 @@ class BaseRentalItemFormSet(forms.BaseInlineFormSet):
     def get_queryset(self):
         qs = super().get_queryset()
         return qs.filter(product__isnull=False).select_related('product__category')
+
+    @property
+    def visible_forms(self):
+        """The rows the items grid should render.
+
+        On an unbound formset that is simply every form. On a re-render after a
+        failed save it keeps saved rows plus anything the user typed into, so a
+        half-filled line survives with its input instead of silently vanishing
+        while they are still looking for what went wrong. Blank slots are
+        dropped so they never pile up, and the list is never empty — an items
+        grid with no row at all leaves nowhere to type.
+        """
+        if not self.is_bound:
+            return self.forms
+        kept = [
+            form for form in self.forms
+            if form.instance.pk
+            or form.has_changed()
+            or form.errors
+            or form.has_user_input()
+        ]
+        return kept or self.forms[:1]
 
     def clean(self):
         super().clean()

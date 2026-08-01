@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from html.parser import HTMLParser
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,10 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
+from catalog.models import Category, Product
+from customers.models import Customer
 from rentals.forms import RentalForm
+from rentals.models import Rental
 
 
 User = get_user_model()
@@ -201,3 +205,84 @@ class RentalItemsGridScrollTests(TestCase):
     def test_items_grid_no_longer_offers_a_wearer_column(self):
         self.assertNotIn('Quem vai usar</th>', self.html)
         self.assertNotIn('items-0-wearer_name', self.html)
+
+
+class RentalItemRowPersistenceTests(TestCase):
+    """A failed save must not silently discard rows the user typed into (RF-16)."""
+
+    def setUp(self):
+        user = User.objects.create_user(
+            email='row-persist@noivasecia.test',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(
+            user=user, module_key='rentals', allowed=True,
+        )
+        self.client.force_login(user)
+        self.customer = Customer.objects.create(name='Cliente Persistência')
+        category = Category.objects.create(prefix='SAP', name='Sapatos')
+        self.product = Product.objects.create(
+            category=category, code=1, description='SAPATO',
+            color='PRETO', size='40', value=Decimal('120.00'),
+        )
+
+    def _post(self, **overrides):
+        data = {
+            'customer': self.customer.pk,
+            'pickup_date': '10/08/2026',
+            'return_date': '15/08/2026',
+            'penalty_value': '100,00',
+            'wearer_name': '',
+            'notes': '',
+            'installment_count': '1',
+            'items-TOTAL_FORMS': '2',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '1',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-id': '',
+            'items-0-product': self.product.pk,
+            'items-0-value': '',          # forces the re-render
+            'items-1-id': '',
+            'items-1-product': '',
+            'items-1-value': '',
+        }
+        data.update(overrides)
+        return self.client.post(reverse('rentals:create'), data)
+
+    def test_typed_product_text_survives_a_failed_save(self):
+        response = self._post(**{'items-1-product_search': 'sapa'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="sapa"')
+
+    def test_row_with_only_a_typed_price_is_not_discarded(self):
+        response = self._post(**{'items-1-value': '80,00'})
+
+        rendered = response.context['items'].visible_forms
+        self.assertEqual(len(rendered), 2)
+
+    def test_untouched_blank_slot_is_not_re_rendered(self):
+        response = self._post()
+
+        rendered = response.context['items'].visible_forms
+        self.assertEqual(len(rendered), 1)
+
+    def test_grid_never_renders_without_a_row(self):
+        response = self._post(**{
+            'items-0-product': '',
+            'items-0-value': '',
+        })
+
+        rendered = response.context['items'].visible_forms
+        self.assertGreaterEqual(len(rendered), 1)
+
+    def test_typed_text_is_not_treated_as_a_form_field(self):
+        """The echoed input must never leak into the saved item."""
+        response = self._post(**{
+            'items-0-value': '120,00',
+            'items-0-product_search': 'texto qualquer',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        item = Rental.objects.get().items.get()
+        self.assertEqual(item.product_id, self.product.pk)
