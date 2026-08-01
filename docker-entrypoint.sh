@@ -1,25 +1,15 @@
 #!/bin/sh
 set -eu
 
-echo "Waiting for database..."
-python manage.py wait_for_db --timeout "${DB_WAIT_TIMEOUT:-30}"
-
 echo "Applying database migrations..."
 python manage.py migrate --noinput
-# collectstatic already ran at build time (same STATIC_ROOT) — rerunning here
-# only adds startup latency, since /app/staticfiles isn't a mounted volume.
+python manage.py collectstatic --noinput
 
 # Background scheduler for Ana's daily WhatsApp report (replicas=1, so a single
 # instance — no duplicate sends). Disable with WHATSAPP_SCHEDULER_ENABLED=0.
 if [ "${WHATSAPP_SCHEDULER_ENABLED:-1}" = "1" ]; then
   echo "Starting WhatsApp report scheduler..."
   sh scripts/report_scheduler.sh &
-fi
-
-# Recurring DB + media backup (disable with BACKUP_SCHEDULER_ENABLED=0).
-if [ "${BACKUP_SCHEDULER_ENABLED:-1}" = "1" ]; then
-  echo "Starting backup scheduler..."
-  sh scripts/backup_scheduler.sh &
 fi
 
 exec gunicorn noivas_cia.wsgi:application \

@@ -68,23 +68,6 @@ def _archive_media(media_root: Path, archive_path: Path) -> None:
         tar.add(media_root, arcname='media')
 
 
-def _prune_old_backups(output_dir: Path, keep_days: int, now) -> list:
-    """Delete backup files (and their manifests) older than ``keep_days``.
-
-    Only touches this command's own naming convention (``noivas-*``), so a
-    shared ``BACKUP_ROOT`` never loses unrelated files.
-    """
-    if keep_days <= 0 or not output_dir.exists():
-        return []
-    cutoff = now.timestamp() - keep_days * 86400
-    removed = []
-    for path in output_dir.glob('noivas-*'):
-        if path.is_file() and path.stat().st_mtime < cutoff:
-            path.unlink()
-            removed.append(str(path))
-    return removed
-
-
 def _validate_backup_location(output_dir: Path, media_root: Path) -> None:
     """Prevent a media archive from recursively including itself."""
     try:
@@ -109,12 +92,6 @@ class Command(BaseCommand):
             '--skip-media',
             action='store_true',
             help='Pula o backup do diretório de mídia.',
-        )
-        parser.add_argument(
-            '--prune-days',
-            type=int,
-            default=0,
-            help='Remove backups (deste comando) mais antigos que N dias após o novo backup ser criado. 0 desativa.',
         )
 
     def handle(self, *args, **options):
@@ -200,8 +177,3 @@ class Command(BaseCommand):
 
         self.stdout.write(manifest_json)
         self.stdout.write(self.style.SUCCESS(f'\nManifesto escrito em {manifest_path}'))
-
-        if options['prune_days']:
-            removed = _prune_old_backups(output_dir, options['prune_days'], now)
-            for path in removed:
-                self.stdout.write(f'Backup expirado removido: {path}')
