@@ -28,8 +28,13 @@ class PenaltyServiceTests(TestCase):
     def test_days_late_counts_days(self):
         self.assertEqual(compute_days_late(date(2026, 6, 15), date(2026, 6, 18)), 3)
 
-    def test_penalty_is_days_times_rate(self):
-        self.assertEqual(compute_penalty(self.rental, 3), Decimal('60'))
+    def test_penalty_is_flat_fee_once_late_regardless_of_days(self):
+        self.assertEqual(compute_penalty(self.rental, 1), Decimal('20'))
+        self.assertEqual(compute_penalty(self.rental, 3), Decimal('20'))
+        self.assertEqual(compute_penalty(self.rental, 30), Decimal('20'))
+
+    def test_penalty_is_zero_when_not_late(self):
+        self.assertEqual(compute_penalty(self.rental, 0), Decimal('0'))
 
 
 class MovementSignalTests(TestCase):

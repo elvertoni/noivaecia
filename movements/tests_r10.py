@@ -337,7 +337,7 @@ class ReturnPenaltyReceivableTests(TestCase):
 
         response = self.client.post(url, {
             'return_date': TODAY.isoformat(),
-            'payment_amount': '100,00',
+            'payment_amount': '20,00',
             'payment_method': 'cash',
             'payment_date': TODAY.isoformat(),
         })
@@ -347,13 +347,15 @@ class ReturnPenaltyReceivableTests(TestCase):
             rental=self.rental,
             legacy_notes='Multa de atraso na devolução',
         )
-        self.assertEqual(penalty.amount, Decimal('100'))
+        # Flat compensatory fee (rental.penalty_value) — not multiplied by
+        # the 5 days late.
+        self.assertEqual(penalty.amount, Decimal('20'))
         self.assertEqual(penalty.balance, Decimal('0'))
         self.assertEqual(
             Payment.objects.filter(receivable=penalty).aggregate(
                 total=Sum('amount'),
             )['total'],
-            Decimal('100'),
+            Decimal('20'),
         )
 
 
