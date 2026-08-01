@@ -125,6 +125,31 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('cnpj', form.errors)
 
+    def test_accepts_valid_phone(self):
+        form = CompanyForm(data=self._base_data(phones='(43) 3542-1234'))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['phones'], '(43) 3542-1234')
+
+    def test_accepts_multiple_phones_free_text(self):
+        form = CompanyForm(data=self._base_data(
+            phones='(43) 3542-1234 / (43) 99999-8888',
+        ))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_accepts_blank_phones(self):
+        form = CompanyForm(data=self._base_data(phones=''))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_rejects_non_phone_text(self):
+        form = CompanyForm(data=self._base_data(phones='abc'))
+        self.assertFalse(form.is_valid())
+        self.assertIn('phones', form.errors)
+
+    def test_rejects_too_few_digits(self):
+        form = CompanyForm(data=self._base_data(phones='123'))
+        self.assertFalse(form.is_valid())
+        self.assertIn('phones', form.errors)
+
     def test_toggle_defaults_to_false_when_absent(self):
         data = self._base_data()
         del data['whatsapp_reports_enabled']

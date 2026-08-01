@@ -99,6 +99,18 @@ class CompanyForm(forms.ModelForm):
             'autocomplete': 'tel',
         })
 
+    def clean_phones(self):
+        raw = self.cleaned_data.get('phones', '').strip()
+        if not raw:
+            return raw
+        if not re.fullmatch(r'[\d\s().+\-/,]+', raw):
+            raise ValidationError(
+                'Use apenas números e a pontuação usual de telefone (espaço, (), -, +, /, ,).'
+            )
+        if len(re.sub(r'\D', '', raw)) < 8:
+            raise ValidationError('Informe ao menos um telefone válido.')
+        return raw
+
     def clean_cnpj(self):
         raw = self.cleaned_data.get('cnpj', '').strip()
         if not raw:
