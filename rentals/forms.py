@@ -241,7 +241,7 @@ class RentalItemForm(forms.ModelForm):
 
     class Meta:
         model = RentalItem
-        fields = ('product', 'description', 'value')
+        fields = ('product', 'description', 'value', 'wearer_name')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -250,6 +250,7 @@ class RentalItemForm(forms.ModelForm):
         _style(self)
         self.fields['value'].min_value = Decimal('0')
         self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
+        self.fields['wearer_name'].widget.attrs['placeholder'] = 'Se não for o(a) locatário(a)'
         # A new line must not silently become a R$ 0,00 item.  Leaving this
         # blank lets the picker copy the product's suggested price, while
         # non-JavaScript users still receive the normal required-field error.

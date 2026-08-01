@@ -121,6 +121,7 @@
               <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
                 <th class="w-10 px-3 py-2.5 text-center">#</th>
                 <th class="px-3 py-2.5">Produto / Código</th>
+                <th class="w-36 px-3 py-2.5">Quem vai usar</th>
                 <th class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
                 <th class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
@@ -158,6 +159,12 @@
                       {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
+                  <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Quem vai usar">
+                    <div class="field-group mb-0">
+                      {{ item_form.wearer_name|render_field }}
+                      {% if item_form.wearer_name.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.wearer_name.errors|striptags }}</p>{% endif %}
+                    </div>
+                  </td>
                   <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Valor">
                     <div class="field-group mb-0">
                       {{ item_form.value|render_field }}
@@ -183,7 +190,7 @@
                 </tr>
                 <!-- Photo upload row (hidden by default) -->
                 <tr class="item-photo-row hidden bg-slate-50/50">
-                  <td colspan="4" class="px-4 py-2">
+                  <td colspan="5" class="px-4 py-2">
                     <div class="field-group mb-0">
                       <label class="field-label text-xs" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
                       {{ item_form.proof_photo_upload|render_field }}
@@ -371,6 +378,11 @@
     </td>
     <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
       <div class="field-group mb-0">
+        {{ f.wearer_name|render_field }}
+      </div>
+    </td>
+    <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top">
+      <div class="field-group mb-0">
         {{ f.value|render_field }}
       </div>
     </td>
@@ -393,7 +405,7 @@
   </tr>
   <!-- Photo upload row for new items (hidden by default) -->
   <tr class="item-photo-row hidden bg-slate-50/50">
-    <td colspan="4" class="px-4 py-2">
+    <td colspan="5" class="px-4 py-2">
       <div class="field-group mb-0">
         <label class="field-label text-xs" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
         {{ f.proof_photo_upload|render_field }}

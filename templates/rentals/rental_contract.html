@@ -174,7 +174,6 @@
   <p style="margin-top:4px;font-size:8.5pt;color:#555;">Contrato {{ contract_version }} — gerado em {% now "d/m/Y H:i" %}</p>
 </div>
 
-{% with items=rental.items.all %}
 <div class="copy-container">
 {% for copy_label in copy_labels %}
 <div class="copy">
@@ -254,7 +253,7 @@
         {% if rental.penalty_value %}
         <div class="row">
           <div class="field">
-            <span class="field-caption">Multa por atraso (valor único)</span>
+            <span class="field-caption">Multa</span>
             <span><strong>R$ {{ rental.penalty_value|brl }}</strong></span>
           </div>
         </div>
@@ -270,6 +269,7 @@
           <tr>
             <th style="width:15%">Código</th>
             <th>Descrição — Cor — Tamanho</th>
+            {% if items_have_wearer %}<th style="width:18%">Quem vai usar</th>{% endif %}
             <th class="text-right" style="width:16%">Valor</th>
           </tr>
         </thead>
@@ -278,29 +278,30 @@
           <tr>
             <td>{{ item.product_reference }}</td>
             <td>{{ item.display_description }}{% if item.display_color %} — {{ item.display_color }}{% endif %}{% if item.display_size %} — {{ item.display_size }}{% endif %}{% if item.description %} ({{ item.description }}){% endif %}</td>
+            {% if items_have_wearer %}<td>{{ item.wearer_name|default:'—' }}</td>{% endif %}
             <td class="text-right">R$ {{ item.value|brl }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="3" style="text-align:center;color:#888;">Sem itens.</td></tr>
+          <tr><td colspan="{% if items_have_wearer %}4{% else %}3{% endif %}" style="text-align:center;color:#888;">Sem itens.</td></tr>
           {% endfor %}
         </tbody>
         <tfoot>
           {% if rental.cash_discount %}
           <tr>
-            <td colspan="2" class="text-right">Subtotal das peças</td>
+            <td colspan="{% if items_have_wearer %}3{% else %}2{% endif %}" class="text-right">Subtotal das peças</td>
             <td class="text-right">R$ {{ rental.total_value|brl }}</td>
           </tr>
           <tr>
-            <td colspan="2" class="text-right">Desconto à vista</td>
+            <td colspan="{% if items_have_wearer %}3{% else %}2{% endif %}" class="text-right">Desconto à vista</td>
             <td class="text-right">- R$ {{ rental.discount_amount|brl }}</td>
           </tr>
           <tr>
-            <td colspan="2" class="text-right"><strong>Valor total</strong></td>
+            <td colspan="{% if items_have_wearer %}3{% else %}2{% endif %}" class="text-right"><strong>Valor total</strong></td>
             <td class="text-right"><strong>R$ {{ rental.final_value|brl }}</strong></td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="2" class="text-right">Valor total</td>
+            <td colspan="{% if items_have_wearer %}3{% else %}2{% endif %}" class="text-right">Valor total</td>
             <td class="text-right">R$ {{ rental.total_value|brl }}</td>
           </tr>
           {% endif %}
@@ -352,7 +353,7 @@
         <p>1. Todas as peças locadas devem ser devolvidas até a data de devolução estipulada acima ({{ rental.return_date|date:"d/m/Y" }}).</p>
         <p>2. O locatário recebe os itens em perfeito estado e se compromete a devolvê-los nas mesmas condições.</p>
         <p>3. Em caso de dano (manchas, rasgos, furos na barra, ou bijuteria perdida, intencional ou não), o locatário pagará os custos de conserto ou o valor de reposição dos itens acima, na quantia de {% if rental.return_record.damage_amount %}R$ {{ rental.return_record.damage_amount|brl }}{% else %}R$ (____________________){% endif %}.</p>
-        <p>4. O atraso na devolução sujeita o locatário {% if rental.penalty_value %}à multa de R$ {{ rental.penalty_value|brl }}, cobrada uma única vez, independentemente do número de dias de atraso{% else %}à multa acordada com a Noivas & Cia, cobrada uma única vez, independentemente do número de dias de atraso{% endif %}.</p>
+        <p>4. O atraso na devolução sujeita o locatário à multa, além de juros moratórios e demais penalidades aplicáveis.</p>
         <p>5. Em decorrência da desistência, justificada ou não deste contrato; será cobrado o percentual de {{ company.cancellation_penalty_rate|pct }}% correspondente ao valor total da locação a Noivas & Cia.</p>
         <p>6. A não devolução dos trajes e/ou acessórios locados em até sete dias corridos da data de devolução implica cobrança de {{ company.loss_penalty_rate|pct }}% correspondente ao valor da locação dos trajes.</p>
       </div>
@@ -385,7 +386,6 @@
 </div>
 {% endfor %}
 </div>
-{% endwith %}
 
 </body>
 </html>

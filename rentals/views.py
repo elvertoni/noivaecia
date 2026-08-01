@@ -554,6 +554,8 @@ class RentalContractView(RentalAccessMixin, TemplateView):
             rental.contract_printed_at = printed_at
 
         company = Company.load()
+        items = list(rental.items.all())
+        items_have_wearer = any(item.wearer_name for item in items)
         receivables = list(rental.receivables.order_by('due_date', 'pk'))
         payment_totals = {
             'amount': sum((receivable.amount for receivable in receivables), Decimal('0')),
@@ -563,6 +565,8 @@ class RentalContractView(RentalAccessMixin, TemplateView):
         return self.render_to_response(self.get_context_data(
             rental=rental,
             company=company,
+            items=items,
+            items_have_wearer=items_have_wearer,
             receivables=receivables,
             payment_totals=payment_totals,
             contract_version=CONTRACT_VERSION,
