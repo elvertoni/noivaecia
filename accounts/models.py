@@ -166,6 +166,25 @@ class ActionPermission(TimeStampedModel):
         return f'{self.user} · {self.action_key} · {self.allowed}'
 
 
+class LoginAttempt(TimeStampedModel):
+    """One row per failed login (RF-05 brute-force throttle).
+
+    Stored in the DB rather than the process cache because the app runs with
+    several gunicorn workers (separate processes, no shared memory) and no
+    Redis/cache backend — an in-memory counter would only ever see roughly
+    1/N of the real attempts.
+    """
+
+    email = models.EmailField('e-mail', db_index=True)
+
+    class Meta:
+        verbose_name = 'tentativa de login falha'
+        verbose_name_plural = 'tentativas de login falhas'
+
+    def __str__(self):
+        return f'{self.email} · {self.created_at:%d/%m/%Y %H:%M}'
+
+
 def _clear_cached_permission(instance, cache_name):
     user = instance._state.fields_cache.get('user')
     if user is not None:

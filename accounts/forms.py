@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from core.ui import INPUT_CLASS
 from core.modules import MODULES
 
+from . import login_throttle
 from .models import ModulePermission, User
 
 PASSWORD_CONFIRM_HELP_TEXT = 'Repita a senha para confirmar.'
@@ -115,6 +116,22 @@ class EmailAuthenticationForm(AuthenticationForm):
         self.fields['password'].widget.attrs['class'] = f'{INPUT_CLASS} pr-10'
         self.fields['password'].widget.attrs['autocomplete'] = 'current-password'
         self.fields['password'].widget.attrs['placeholder'] = 'Sua senha'
+
+    def clean(self):
+        email = self.cleaned_data.get('username')
+        if email and login_throttle.is_locked_out(email):
+            raise ValidationError(
+                login_throttle.LOCKOUT_MESSAGE, code='locked_out',
+            )
+        try:
+            cleaned = super().clean()
+        except ValidationError:
+            if email:
+                login_throttle.record_failed_attempt(email)
+            raise
+        if email:
+            login_throttle.clear_attempts(email)
+        return cleaned
 
 
 class EmailPasswordResetForm(PasswordResetForm):
