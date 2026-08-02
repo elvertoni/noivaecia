@@ -22,9 +22,14 @@ from core.ui import (
 from customers.models import Customer
 from .models import Rental, RentalItem
 
-# What the printed contract holds: 14 item lines, and one mandatory down payment
+# What the printed contract holds: 15 item lines, and one mandatory down payment
 # plus at most 8 future installments. Confirmed with the shop on 2026-08-02.
-MAX_ITEMS_PER_RENTAL = 14
+#
+# The 15 is measured, not guessed. Two copies share one A4 sheet of 285mm; the
+# pair takes 278.0mm with 14 items, 281.2mm with 15, and exactly 285.0mm with 16
+# — no margin left, so a longer description would push a copy onto a second
+# sheet. 15 also matches the legacy ceiling: the imported data tops out at 15.
+MAX_ITEMS_PER_RENTAL = 15
 MAX_FUTURE_INSTALLMENTS = 8
 
 MAX_PROOF_PHOTO_UPLOAD_SIZE = 8 * 1024 * 1024

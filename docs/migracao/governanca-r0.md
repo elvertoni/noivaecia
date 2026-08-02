@@ -105,9 +105,10 @@ Estas perguntas ainda precisam de validacao humana antes de concluir R0.06.
    1,2x a 3x o valor da locacao, escrito a mao pela cliente na clausula 3 do contrato
    antes da correcao. Ver `correcoes/PRD-CONSOLIDADO.md`.
 7. A loja ainda usa limite de 15 itens por locacao?
-   **RESPONDIDO 2026-08-02:** o contrato impresso comporta **14** pecas. O dado legado
-   tem 88 locacoes com 15 itens, entao o limite novo so bloqueia crescimento; as
-   antigas seguem editaveis. Divergencia 14 x 15 nao foi explicada pela cliente.
+   **RESPONDIDO 2026-08-02: sim, 15.** Medido no contrato renderizado: duas vias
+   dividem uma folha A4 de 285mm; o par ocupa 278,0mm com 14 itens, 281,2mm com 15 e
+   exatamente 285,0mm com 16 — sem margem. 15 tambem e o teto do dado legado.
+   `MAX_ITEMS_PER_RENTAL = 15` em `rentals/forms.py`.
 8. O contrato deve manter exatamente as clausulas do Crystal ou sera revisado?
 9. Titulos `pagar` sem locacao em `locado` devem aparecer como locacoes financeiras, saldos avulsos ou historico arquivado?
 10. Recebiveis quitados no legado com `valor_pago=0` devem exibir valor pago igual ao valor do titulo no novo sistema?

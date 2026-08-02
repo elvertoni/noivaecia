@@ -1420,11 +1420,11 @@ class RentalContractCompanyCustomerTests(TestCase):
 
 
 class ContractCapacityLimitsTests(TestCase):
-    """The printed contract holds 14 pieces and one entry plus 8 installments.
+    """The printed contract holds 15 pieces and one entry plus 8 installments.
 
-    Confirmed with the shop on 2026-08-02 after the customer pointed at an
-    overflowing contract on video. The cap has to tolerate imported legacy
-    rentals: 88 of them carry 15 items and must stay editable.
+    Measured on the rendered contract: two copies share one A4 sheet of 285mm,
+    and the pair takes 281.2mm with 15 items but exactly 285.0mm with 16 — no
+    margin left. 15 is also the ceiling in the imported legacy data.
     """
 
     def setUp(self):
@@ -1459,41 +1459,41 @@ class ContractCapacityLimitsTests(TestCase):
             data[f'items-{i}-DELETE'] = ''
         return data
 
-    def test_new_rental_accepts_fourteen_items(self):
-        response = self.client.post('/locacoes/nova/', self._payload(self.products[:14]))
+    def test_new_rental_accepts_fifteen_items(self):
+        response = self.client.post('/locacoes/nova/', self._payload(self.products[:15]))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Rental.objects.get().items.count(), 14)
+        self.assertEqual(Rental.objects.get().items.count(), 15)
 
-    def test_new_rental_rejects_fifteen_items(self):
-        response = self.client.post('/locacoes/nova/', self._payload(self.products[:15]))
+    def test_new_rental_rejects_sixteen_items(self):
+        response = self.client.post('/locacoes/nova/', self._payload(self.products[:16]))
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Rental.objects.exists())
-        self.assertContains(response, 'no máximo 14 peças')
+        self.assertContains(response, 'no máximo 15 peças')
 
-    def test_legacy_rental_over_the_limit_still_saves_without_new_items(self):
+    def test_rental_over_the_limit_still_saves_without_new_items(self):
         rental = Rental.objects.create(
             customer=self.customer, number=901,
             pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
             penalty_value=Decimal('0'),
         )
-        for product in self.products[:15]:
+        for product in self.products[:16]:
             RentalItem.objects.create(
                 rental=rental, product=product,
                 description=product.description, value=Decimal('10'),
             )
 
-        data = self._payload(self.products[:15])
-        data['items-INITIAL_FORMS'] = '15'
+        data = self._payload(self.products[:16])
+        data['items-INITIAL_FORMS'] = '16'
         for i, item in enumerate(rental.items.order_by('pk')):
             data[f'items-{i}-id'] = item.pk
-        data['items-TOTAL_FORMS'] = '15'
+        data['items-TOTAL_FORMS'] = '16'
 
         response = self.client.post(f'/locacoes/{rental.pk}/editar/', data)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(rental.items.count(), 15)
+        self.assertEqual(rental.items.count(), 16)
 
 
 class InstallmentCountLimitTests(TestCase):
