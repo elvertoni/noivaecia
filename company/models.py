@@ -42,7 +42,7 @@ class Company(TimeStampedModel):
         validators=[MaxValueValidator(100)],
     )
     cancellation_penalty_rate = models.DecimalField(
-        'penalidade por desistência/rescisão (%)', max_digits=5, decimal_places=2, default=50,
+        'penalidade por desistência/rescisão (%)', max_digits=5, decimal_places=2, default=100,
         help_text='Percentual do valor total cobrado em caso de desistência ou rescisão do contrato.',
         validators=[MaxValueValidator(100)],
     )

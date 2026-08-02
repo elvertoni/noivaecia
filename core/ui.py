@@ -155,6 +155,13 @@ class BRPercentInput(BRDecimalInput):
             description,
         )
 
+    def format_value(self, value):
+        """Drop the ",00" decimal noise for whole-number percentages."""
+        formatted = super().format_value(value)
+        if formatted and ',' in formatted:
+            formatted = formatted.rstrip('0').rstrip(',')
+        return formatted
+
 
 def normalize_br_decimal(value):
     """Return a Decimal-compatible value for pt-BR and dot-decimal inputs.

@@ -1212,8 +1212,8 @@ class ClientCorrectionsTests(TestCase):
         self.assertIn('data de devolução estipulada acima (15/08/2026)', content)
         # Cláusula 3 com espaço para quantia de reposição
         self.assertIn('na quantia de R$ (____________________)', content)
-        # Cláusula 5 com multa de 50% por desistência/rescisão — sem centavos
-        self.assertIn('será cobrado o percentual de 50% correspondente ao valor total da locação', content)
+        # Cláusula 5 com multa de 100% por desistência/rescisão — sem centavos
+        self.assertIn('será cobrado o percentual de 100% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
         self.assertIn('6. A não devolução dos trajes', content)
         self.assertIn('implica cobrança de 100% correspondente', content)
