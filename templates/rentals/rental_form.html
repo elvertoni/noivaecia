@@ -9,7 +9,7 @@
     <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
     {% if header_locked %}
       <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Esta locação possui recebimentos registrados. Cliente, datas e multa não podem ser alterados, mas os itens podem ser ajustados.
+        Esta locação possui recebimentos registrados. Cliente, datas e valor de reposição não podem ser alterados, mas os itens podem ser ajustados.
       </div>
     {% endif %}
 
@@ -60,7 +60,7 @@
         <div class="field-group">
           <label class="field-label" for="{{ form.penalty_value.id_for_label }}">{{ form.penalty_value.label }}</label>
           {{ form.penalty_value|render_field }}
-          <p class="text-[10px] text-app-muted mt-0.5">Valor único, não diária.</p>
+          <p class="text-[10px] text-app-muted mt-0.5">Custo de repor as peças. Sai na cláusula 3 do contrato.</p>
           {% if form.penalty_value.errors %}<p class="field-error" role="alert">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
@@ -217,9 +217,13 @@
                 {{ form.cash_discount }}
                 Desconto à vista
               </label>
+              {% comment %}
+                O desconto e informado so em reais. O percentual continua no POST
+                como hidden para nao zerar o valor de locacoes antigas que o usam;
+                quando ha valor em reais ele vence, conforme compute_cash_discount.
+              {% endcomment %}
               <div class="mt-1.5 flex items-center gap-1">
-                <div class="w-20">{{ form.cash_discount_percent|render_field }}</div>
-                <span class="text-[10px] text-app-muted shrink-0">ou</span>
+                {{ form.cash_discount_percent.as_hidden }}
                 <div class="w-24">{{ form.cash_discount_amount|render_field }}</div>
               </div>
               {% if form.cash_discount.errors or form.cash_discount_percent.errors or form.cash_discount_amount.errors %}
@@ -230,10 +234,10 @@
                 </p>
               {% endif %}
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
-              <p class="text-[10px] text-app-muted mt-0.5">Em branco = 10% padrão.</p>
+              <p class="text-[10px] text-app-muted mt-0.5">Em branco aplica o desconto padrão da empresa.</p>
             </div>
             <div>
-              <p class="text-xs font-medium text-app-muted">Multa por atraso (valor único)</p>
+              <p class="text-xs font-medium text-app-muted">Valor de reposição</p>
               <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">

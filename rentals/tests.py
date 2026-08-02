@@ -168,6 +168,17 @@ class RentalFormValidationTests(TestCase):
             set(Payment.Method.values),
         )
 
+    def test_next_payment_may_match_down_payment_date(self):
+        form = RentalForm(data=self._header_data(
+            installment_count='1',
+            first_due_date='30/07/2026',
+            down_payment_amount='300,00',
+            down_payment_method=Payment.Method.PIX,
+            down_payment_date='30/07/2026',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_cash_discount_rejects_percent_and_amount_together(self):
         form = RentalForm(data=self._header_data(
             cash_discount='on',
@@ -312,6 +323,65 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(receivables[1].due_date, date(2027, 1, 15))
         self.assertEqual(Payment.objects.count(), 1)
 
+    def test_create_rental_accepts_payment_dates_on_same_day(self):
+        CashAccount.objects.create(name='Caixa principal')
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'installment_count': '1',
+            'first_due_date': '2026-07-30',
+            'down_payment_amount': '300,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-30',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        rental = Rental.objects.get()
+        self.assertEqual(rental.receivables.count(), 1)
+        self.assertEqual(rental.receivables.get().balance, Decimal('0.00'))
+
+    def test_create_fully_paid_rental_without_future_due_date(self):
+        CashAccount.objects.create(name='Caixa principal')
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'down_payment_amount': '300,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-30',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        rental = Rental.objects.get()
+        receivables = list(rental.receivables.all())
+        self.assertEqual(len(receivables), 1)
+        self.assertEqual(receivables[0].amount, Decimal('300.00'))
+        self.assertEqual(receivables[0].balance, Decimal('0.00'))
+        self.assertFalse(
+            rental.receivables.filter(payments__isnull=True).exists()
+        )
+
     def test_create_rental_rejects_entry_above_items_total(self):
         response = self.client.post('/locacoes/nova/', {
             'customer': self.customer.pk,
@@ -348,7 +418,7 @@ class RentalCreateFlowTests(TestCase):
             'penalty_value': '0',
             'notes': '',
             'installment_count': '1',
-            'first_due_date': '2006-07-30',
+            'first_due_date': '2026-07-29',
             'down_payment_amount': '150,00',
             'down_payment_method': Payment.Method.PIX,
             'down_payment_date': '2026-07-30',
@@ -365,7 +435,10 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         form = response.context['form']
         self.assertIn('first_due_date', form.errors)
-        self.assertContains(response, 'O próximo vencimento deve ser posterior à data da entrada.')
+        self.assertContains(
+            response,
+            'O próximo vencimento não pode ser anterior à data da entrada.',
+        )
         self.assertFalse(Rental.objects.exists())
 
     def test_create_requires_at_least_one_item(self):
@@ -1163,7 +1236,7 @@ class ClientCorrectionsTests(TestCase):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('<span class="field-caption">Multa</span>', content)
+        self.assertIn('<span class="field-caption">Valor de reposição</span>', content)
         self.assertIn(
             '4. O atraso na devolução sujeita o locatário à multa, além de '
             'juros moratórios e demais penalidades aplicáveis.',
@@ -1344,3 +1417,104 @@ class RentalContractCompanyCustomerTests(TestCase):
         self.assertIn('<span class="field-caption">CPF</span>', content)
         self.assertIn('<span class="field-caption">RG</span>', content)
         self.assertNotIn('<span class="field-caption">CNPJ</span>', content)
+
+
+class ContractCapacityLimitsTests(TestCase):
+    """The printed contract holds 15 pieces and one entry plus 8 installments.
+
+    Measured on the rendered contract: two copies share one A4 sheet of 285mm,
+    and the pair takes 281.2mm with 15 items but exactly 285.0mm with 16 — no
+    margin left. 15 is also the ceiling in the imported legacy data.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='cap@test.com', password='x', is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.user)
+        Company.objects.create(name='Noivas & Cia', last_rental_number=0)
+        self.customer = Customer.objects.create(name='Cliente Teste')
+        cat = Category.objects.create(prefix='TR', name='Trajes')
+        self.products = [
+            Product.objects.create(category=cat, code=i, description=f'Peça {i}', value=10)
+            for i in range(1, 20)
+        ]
+
+    def _payload(self, product_list):
+        data = {
+            'customer': self.customer.pk,
+            'pickup_date': '2026-06-10',
+            'return_date': '2026-06-15',
+            'penalty_value': '0',
+            'notes': '',
+            'items-TOTAL_FORMS': str(len(product_list)),
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+        }
+        for i, product in enumerate(product_list):
+            data[f'items-{i}-product'] = product.pk
+            data[f'items-{i}-description'] = product.description
+            data[f'items-{i}-value'] = '10'
+            data[f'items-{i}-DELETE'] = ''
+        return data
+
+    def test_new_rental_accepts_fifteen_items(self):
+        response = self.client.post('/locacoes/nova/', self._payload(self.products[:15]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Rental.objects.get().items.count(), 15)
+
+    def test_new_rental_rejects_sixteen_items(self):
+        response = self.client.post('/locacoes/nova/', self._payload(self.products[:16]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Rental.objects.exists())
+        self.assertContains(response, 'no máximo 15 peças')
+
+    def test_rental_over_the_limit_still_saves_without_new_items(self):
+        rental = Rental.objects.create(
+            customer=self.customer, number=901,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            penalty_value=Decimal('0'),
+        )
+        for product in self.products[:16]:
+            RentalItem.objects.create(
+                rental=rental, product=product,
+                description=product.description, value=Decimal('10'),
+            )
+
+        data = self._payload(self.products[:16])
+        data['items-INITIAL_FORMS'] = '16'
+        for i, item in enumerate(rental.items.order_by('pk')):
+            data[f'items-{i}-id'] = item.pk
+        data['items-TOTAL_FORMS'] = '16'
+
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', data)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(rental.items.count(), 16)
+
+
+class InstallmentCountLimitTests(TestCase):
+    """Entry is mandatory and there are at most 8 future installments."""
+
+    def setUp(self):
+        Company.objects.create(name='Noivas & Cia', last_rental_number=0)
+        self.customer = Customer.objects.create(name='Cliente Teste')
+
+    def _form(self, count):
+        return RentalForm(data={
+            'customer': self.customer.pk,
+            'pickup_date': '10/06/2026',
+            'return_date': '15/06/2026',
+            'penalty_value': '0,00',
+            'notes': '',
+            'installment_count': str(count),
+        })
+
+    def test_eight_installments_is_accepted(self):
+        self.assertNotIn('installment_count', self._form(8).errors)
+
+    def test_nine_installments_is_rejected(self):
+        self.assertIn('installment_count', self._form(9).errors)

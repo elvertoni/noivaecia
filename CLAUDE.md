@@ -26,6 +26,22 @@ migration lives in `tools/db_transfer/`.
 Local venv lives in `venv/`; on Windows use `.\venv\Scripts\python.exe` for
 `manage.py` commands.
 
+### Local dev login (development only)
+
+To open the running app and check a screen or print the contract, log in at
+`/login/` with:
+
+- **`admin@noivascia.com.br` / `teste-contrato-2026`**
+
+This is the superuser of the **local `db.sqlite3` only** — that file is
+gitignored and never leaves the machine. It is **not** a production credential,
+and production must never be given this password. If the local database is
+recreated from a fresh import, set it again with
+`User.objects.get(email=...).set_password(...)`.
+
+The local SQLite is frequently behind on migrations: run
+`python manage.py migrate` before assuming a screen is broken.
+
 ```bash
 pip install -r requirements.txt   # Python deps
 npm install                       # Tailwind tooling

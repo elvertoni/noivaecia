@@ -218,7 +218,7 @@ Todos os movimentos de `movimento` são importados como `FinancialMovement` com 
 | Conceito | Origem | Status |
 |---|---|---|
 | **Juros financeiro** | Vencimento do título em `pagar`; taxa diária em `Company.daily_interest_rate`. | Implementado em `billing.services.compute_interest`. |
-| **Multa de atraso na devolução** | `locado.multa`, dias de atraso × valor; calculado por item/locação. | Implementado em `movements.services.compute_penalty`. |
+| **Valor de reposição** (era "multa de atraso") | `locado.multa` — **resolvido em 2026-08-02**: é o custo de repor as peças, constante por locação, valendo 1,2x a 3x o valor da locação. Não é diária nem depende de dias de atraso. | Mapeado para `Rental.penalty_value`, impresso na cláusula 3 do contrato. ⚠️ `movements.services.compute_penalty` ainda cobra esse valor como multa de atraso — divergência aberta. |
 | **Multa moratória financeira** | 2% sobre valor total (cláusula do contrato Crystal). | **Pendente** — delineada mas não separada do juros. |
 | **Penalidades contratuais** | 50%/100% por dano, perda, não devolução, desistência ou troca. | **Pendente** — delineada no PRD. |
 
