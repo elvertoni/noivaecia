@@ -1221,7 +1221,8 @@ class ClientCorrectionsTests(TestCase):
         # não promete um valor que o contrato não mostra.
         self.assertNotIn('<span class="field-caption">Multa</span>', content)
         self.assertIn(
-            '4. O atraso na devolução sujeita o locatário à multa, além de '
+            '4. O atraso na devolução sujeita o locatário à multa de 10% do valor '
+            'total da locação por dia de atraso, limitada a 7 dias, além de '
             'juros moratórios e demais penalidades aplicáveis.',
             content,
         )
@@ -1238,7 +1239,8 @@ class ClientCorrectionsTests(TestCase):
 
         self.assertIn('<span class="field-caption">Valor de reposição</span>', content)
         self.assertIn(
-            '4. O atraso na devolução sujeita o locatário à multa, além de '
+            '4. O atraso na devolução sujeita o locatário à multa de 10% do valor '
+            'total da locação por dia de atraso, limitada a 7 dias, além de '
             'juros moratórios e demais penalidades aplicáveis.',
             content,
         )

@@ -218,7 +218,8 @@ Todos os movimentos de `movimento` são importados como `FinancialMovement` com 
 | Conceito | Origem | Status |
 |---|---|---|
 | **Juros financeiro** | Vencimento do título em `pagar`; taxa diária em `Company.daily_interest_rate`. | Implementado em `billing.services.compute_interest`. |
-| **Valor de reposição** (era "multa de atraso") | `locado.multa` — **resolvido em 2026-08-02**: é o custo de repor as peças, constante por locação, valendo 1,2x a 3x o valor da locação. Não é diária nem depende de dias de atraso. | Mapeado para `Rental.penalty_value`, impresso na cláusula 3 do contrato. ⚠️ `movements.services.compute_penalty` ainda cobra esse valor como multa de atraso — divergência aberta. |
+| **Valor de reposição** (era "multa de atraso") | `locado.multa` — **resolvido em 2026-08-02**: é o custo de repor as peças, constante por locação, valendo 1,2x a 3x o valor da locação. Não é diária nem depende de dias de atraso. | Mapeado para `Rental.penalty_value`, impresso na cláusula 3 do contrato. Não alimenta mais o cálculo de atraso. |
+| **Multa por atraso na devolução** | **Definida pela cliente em 2026-08-02:** 10% do valor total da locação por dia de atraso, limitada a 7 dias (70%). A partir do 8º dia a peça é tratada como não devolvida e vale a cláusula 6 (`loss_penalty_rate`, 100%). | `Company.late_return_daily_rate` e `Company.late_return_max_days`; cálculo em `movements.services.compute_penalty`; percentual impresso na cláusula 4. |
 | **Multa moratória financeira** | 2% sobre valor total (cláusula do contrato Crystal). | **Pendente** — delineada mas não separada do juros. |
 | **Penalidades contratuais** | 50%/100% por dano, perda, não devolução, desistência ou troca. | **Pendente** — delineada no PRD. |
 

@@ -115,12 +115,12 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
         ).order_by('due_date')
         ctx['open_receivables'] = open_receivables
         ctx['total_open_balance'] = open_receivables.aggregate(s=Sum('balance'))['s'] or Decimal('0')
+        # The late fee no longer comes from penalty_value (that is the replacement
+        # price now), so ask the service whether a fee would actually apply today.
+        days_late_today = compute_days_late(self.rental.return_date, timezone.localdate())
         ctx['can_receive_on_return'] = (
             bool(open_receivables)
-            or (
-                self.rental.return_date < timezone.localdate()
-                and self.rental.penalty_value > 0
-            )
+            or compute_penalty(self.rental, days_late_today) > 0
         )
         return ctx
 

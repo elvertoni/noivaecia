@@ -2,14 +2,29 @@
 
 Centralizing this avoids the inconsistent-penalty risk flagged in PRD section 12.
 
-``penalty_value`` is a flat compensatory fee (cláusula penal compensatória),
-matching the legacy contract's ``locado.multa``: agreed once per rental, not a
-per-day rate. This was left ambiguous in the R2.07 migration policy pending
-client clarification ("diária? total?") — multiplying it by days_late let a
-value staff intended as a one-time fee balloon with every extra day late.
+The late-return fee is **a daily percentage of what the customer owes for the
+rental** — `Company.late_return_daily_rate` (10% by default) times
+`rental.final_value`, for at most `Company.late_return_max_days` days (7 by
+default). Confirmed with the shop on 2026-08-02.
+
+Two earlier readings were wrong and are worth naming, because both are easy to
+fall back into:
+
+- It is **not** ``rental.penalty_value``. That field holds the replacement price
+  of the garments, which the 2026-08 legacy migration showed to be 1.2x-3x the
+  rental itself; charging it for a single day late billed the customer the cost
+  of replacing everything. It now serves only clause 3 of the printed contract.
+- It is **not** flat. The previous version applied a one-time fee precisely to
+  stop a per-day multiplication from ballooning — the right instinct against the
+  wrong base. With the rental value as the base and a hard day cap, per-day works
+  and matches how the shop actually charges.
+
+The cap is what keeps the two contract clauses from overlapping: up to
+``late_return_max_days`` this is a late return (clause 4); past it the garment
+counts as not returned and clause 6 charges ``loss_penalty_rate`` instead.
 """
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 
 def compute_days_late(expected_return_date, actual_return_date):
@@ -18,8 +33,24 @@ def compute_days_late(expected_return_date, actual_return_date):
     return max(0, delta)
 
 
-def compute_penalty(rental, days_late):
-    """Flat late penalty: rental.penalty_value once if the return is late, else 0."""
+def compute_penalty(rental, days_late, company=None):
+    """Late-return fee: daily rate over the rental total, capped in days.
+
+    ``company`` is optional so callers that already loaded the singleton can pass
+    it instead of paying for a second query.
+    """
     if days_late <= 0:
         return Decimal('0')
-    return rental.penalty_value or Decimal('0')
+
+    if company is None:
+        from company.models import Company
+        company = Company.load()
+
+    billable_days = min(days_late, company.late_return_max_days)
+    if billable_days <= 0:
+        return Decimal('0')
+
+    rate = (company.late_return_daily_rate or Decimal('0')) / Decimal('100')
+    base = rental.final_value or Decimal('0')
+    penalty = base * rate * Decimal(billable_days)
+    return penalty.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)

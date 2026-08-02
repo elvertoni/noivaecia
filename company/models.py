@@ -46,6 +46,16 @@ class Company(TimeStampedModel):
         help_text='Percentual do valor total cobrado em caso de desistência ou rescisão do contrato.',
         validators=[MaxValueValidator(100)],
     )
+    late_return_daily_rate = models.DecimalField(
+        'multa por dia de atraso na devolução (%)', max_digits=5, decimal_places=2, default=10,
+        help_text='Percentual do valor total da locação cobrado por dia de atraso na devolução.',
+        validators=[MaxValueValidator(100)],
+    )
+    late_return_max_days = models.PositiveSmallIntegerField(
+        'dias de atraso cobrados', default=7,
+        help_text='Após esse número de dias a devolução deixa de ser atraso e passa a '
+                  'ser tratada como não devolução, cobrada pela penalidade de perda.',
+    )
     footer_message = models.CharField('mensagem de rodapé', max_length=255, blank=True)
 
     # WhatsApp daily report (RF-notifications)
@@ -79,6 +89,10 @@ class Company(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(damage_penalty_rate__gte=0),
                 name='company_damage_penalty_rate_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(late_return_daily_rate__gte=0),
+                name='company_late_return_daily_rate_gte_0',
             ),
             models.CheckConstraint(
                 condition=models.Q(loss_penalty_rate__gte=0),
