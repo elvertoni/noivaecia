@@ -44,3 +44,9 @@ docker-compose.override.yml
 # Temporary archive
 /GARANTIA/
 
+# Dados reais de cliente — nunca versionar (LGPD).
+# Dumps de producao, snapshots do Access legado e saida de analise local.
+/backups/
+/db-migration/
+/graphify-out/
+
