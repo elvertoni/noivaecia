@@ -217,9 +217,11 @@
                 {{ form.cash_discount }}
                 Desconto à vista
               </label>
-              {# O desconto e informado so em reais. O percentual continua no POST
-                 como hidden para nao zerar o valor de locacoes antigas que o usam;
-                 quando ha valor em reais ele vence, conforme compute_cash_discount. #}
+              {% comment %}
+                O desconto e informado so em reais. O percentual continua no POST
+                como hidden para nao zerar o valor de locacoes antigas que o usam;
+                quando ha valor em reais ele vence, conforme compute_cash_discount.
+              {% endcomment %}
               <div class="mt-1.5 flex items-center gap-1">
                 {{ form.cash_discount_percent.as_hidden }}
                 <div class="w-24">{{ form.cash_discount_amount|render_field }}</div>

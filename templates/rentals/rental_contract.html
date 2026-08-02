@@ -372,8 +372,10 @@
           </tr>
         </tbody>
       </table>
-      {# Com parcela unica ja quitada esta linha so repete a tabela acima. Com saldo
-         em aberto ela e a unica fonte do valor restante — nao pode sumir. #}
+      {% comment %}
+        Com parcela unica ja quitada esta linha so repete a tabela acima. Com saldo
+        em aberto ela e a unica fonte do valor restante — nao pode sumir.
+      {% endcomment %}
       {% if receivables|length > 1 or payment_totals.balance %}
       <p style="margin-top:2px;font-size:6.5pt;color:#333;">Recebido: R$ {{ payment_totals.paid|brl }} · Saldo em aberto: R$ {{ payment_totals.balance|brl }}</p>
       {% endif %}
