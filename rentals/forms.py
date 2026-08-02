@@ -227,10 +227,10 @@ class RentalForm(forms.ModelForm):
                     'down_payment_date',
                     'A data da entrada não pode estar no futuro.',
                 )
-            if dp_date and first_due_date and first_due_date <= dp_date:
+            if dp_date and first_due_date and first_due_date < dp_date:
                 self.add_error(
                     'first_due_date',
-                    'O próximo vencimento deve ser posterior à data da entrada.',
+                    'O próximo vencimento não pode ser anterior à data da entrada.',
                 )
         return cleaned
 

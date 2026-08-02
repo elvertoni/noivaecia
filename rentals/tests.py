@@ -168,6 +168,17 @@ class RentalFormValidationTests(TestCase):
             set(Payment.Method.values),
         )
 
+    def test_next_payment_may_match_down_payment_date(self):
+        form = RentalForm(data=self._header_data(
+            installment_count='1',
+            first_due_date='30/07/2026',
+            down_payment_amount='300,00',
+            down_payment_method=Payment.Method.PIX,
+            down_payment_date='30/07/2026',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_cash_discount_rejects_percent_and_amount_together(self):
         form = RentalForm(data=self._header_data(
             cash_discount='on',
@@ -312,6 +323,65 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(receivables[1].due_date, date(2027, 1, 15))
         self.assertEqual(Payment.objects.count(), 1)
 
+    def test_create_rental_accepts_payment_dates_on_same_day(self):
+        CashAccount.objects.create(name='Caixa principal')
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'installment_count': '1',
+            'first_due_date': '2026-07-30',
+            'down_payment_amount': '300,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-30',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        rental = Rental.objects.get()
+        self.assertEqual(rental.receivables.count(), 1)
+        self.assertEqual(rental.receivables.get().balance, Decimal('0.00'))
+
+    def test_create_fully_paid_rental_without_future_due_date(self):
+        CashAccount.objects.create(name='Caixa principal')
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-01-15',
+            'return_date': '2027-01-20',
+            'penalty_value': '0',
+            'notes': '',
+            'down_payment_amount': '300,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-30',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        rental = Rental.objects.get()
+        receivables = list(rental.receivables.all())
+        self.assertEqual(len(receivables), 1)
+        self.assertEqual(receivables[0].amount, Decimal('300.00'))
+        self.assertEqual(receivables[0].balance, Decimal('0.00'))
+        self.assertFalse(
+            rental.receivables.filter(payments__isnull=True).exists()
+        )
+
     def test_create_rental_rejects_entry_above_items_total(self):
         response = self.client.post('/locacoes/nova/', {
             'customer': self.customer.pk,
@@ -348,7 +418,7 @@ class RentalCreateFlowTests(TestCase):
             'penalty_value': '0',
             'notes': '',
             'installment_count': '1',
-            'first_due_date': '2006-07-30',
+            'first_due_date': '2026-07-29',
             'down_payment_amount': '150,00',
             'down_payment_method': Payment.Method.PIX,
             'down_payment_date': '2026-07-30',
@@ -365,7 +435,10 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         form = response.context['form']
         self.assertIn('first_due_date', form.errors)
-        self.assertContains(response, 'O próximo vencimento deve ser posterior à data da entrada.')
+        self.assertContains(
+            response,
+            'O próximo vencimento não pode ser anterior à data da entrada.',
+        )
         self.assertFalse(Rental.objects.exists())
 
     def test_create_requires_at_least_one_item(self):
