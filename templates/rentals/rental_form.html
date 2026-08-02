@@ -143,8 +143,10 @@
                     <div class="field-group product-search-field mb-0">
                       {{ item_form.product }}
                       <div class="relative">
-                        {# Named so a failed save echoes the typed text back instead of wiping it.
-                           Not a form field — the formset ignores the extra key. #}
+                        {% comment %}
+                        Named so a failed save echoes the typed text back instead of wiping it.
+                        Not a form field — the formset ignores the extra key.
+                        {% endcomment %}
                         <input type="text" id="{{ item_form.product.id_for_label }}-search" class="product-search-input field-input py-1.5 text-sm w-full"
                                name="{{ item_form.product.html_name }}_search"
                                value="{{ item_form.typed_product_search }}"
