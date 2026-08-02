@@ -22,6 +22,11 @@ from core.ui import (
 from customers.models import Customer
 from .models import Rental, RentalItem
 
+# What the printed contract holds: 14 item lines, and one mandatory down payment
+# plus at most 8 future installments. Confirmed with the shop on 2026-08-02.
+MAX_ITEMS_PER_RENTAL = 14
+MAX_FUTURE_INSTALLMENTS = 8
+
 MAX_PROOF_PHOTO_UPLOAD_SIZE = 8 * 1024 * 1024
 MAX_PROOF_PHOTO_PIXELS = 40_000_000
 MAX_PROOF_PHOTO_EDGE = 1600
@@ -106,7 +111,7 @@ class RentalForm(forms.ModelForm):
 
     # Extra: installment generation (R7.05)
     installment_count = forms.IntegerField(
-        label='Número de parcelas futuras', min_value=1, max_value=9, initial=1,
+        label='Número de parcelas futuras', min_value=1, max_value=MAX_FUTURE_INSTALLMENTS, initial=1,
         required=False,
         help_text='O saldo após a entrada será dividido igualmente entre elas.',
     )
@@ -405,6 +410,25 @@ class BaseRentalItemFormSet(forms.BaseInlineFormSet):
         super().clean()
         if any(self.errors):
             return
+
+        # The printed contract fits MAX_ITEMS_PER_RENTAL pieces; beyond that the
+        # list runs off the page silently. Imported legacy rentals already exceed
+        # it (88 of them carry 15 items), so the cap only blocks *growth* — an
+        # over-limit rental stays editable, and swapping a piece for another keeps
+        # the same count. Same spirit as the duplicate rule below.
+        kept = [
+            form for form in self.forms
+            if getattr(form, 'cleaned_data', None)
+            and not form.cleaned_data.get('DELETE')
+            and form.cleaned_data.get('product')
+        ]
+        if len(kept) > MAX_ITEMS_PER_RENTAL and len(kept) > self.initial_form_count():
+            raise forms.ValidationError(
+                f'A locação pode ter no máximo {MAX_ITEMS_PER_RENTAL} peças — '
+                'é o que cabe no contrato impresso.',
+                code='too_many_items',
+            )
+
         seen = set()
         for form in self.forms:
             if not getattr(form, 'cleaned_data', None):

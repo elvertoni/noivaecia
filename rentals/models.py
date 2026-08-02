@@ -29,10 +29,16 @@ class Rental(TimeStampedModel):
     pickup_date = models.DateField('data de retirada', db_index=True)
     return_date = models.DateField('data de retorno', db_index=True)
     total_value = models.DecimalField('valor total', max_digits=10, decimal_places=2, default=0)
+    # Named ``penalty_value`` for historical reasons: it maps to the legacy
+    # ``locado.multa`` column. The 2026-08 migration showed what the legacy data
+    # actually holds — a per-rental amount worth 1.2x to 3x the rental itself,
+    # which the shop writes into clause 3 of the printed contract as the
+    # replacement price of the garments. The label follows the data, the field
+    # name stays put so the legacy importer and existing payloads keep working.
     penalty_value = models.DecimalField(
-        'multa por atraso', max_digits=10, decimal_places=2, default=0,
-        help_text='Valor único cobrado se a devolução atrasar, qualquer que seja o '
-                  'número de dias. Não é uma diária.',
+        'valor de reposição', max_digits=10, decimal_places=2, default=0,
+        help_text='Quanto custa repor as peças desta locação, se forem perdidas ou '
+                  'danificadas. Sai impresso na cláusula 3 do contrato.',
     )
     wearer_name = models.CharField(
         'quem vai usar', max_length=150, blank=True,

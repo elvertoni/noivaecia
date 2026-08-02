@@ -132,8 +132,9 @@ class RentalFooterUITests(TestCase):
             self.response,
             'subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}`',
         )
-        self.assertContains(self.response, 'Multa por atraso (valor único)')
+        self.assertContains(self.response, 'Valor de reposição')
         self.assertNotContains(self.response, 'Multa diária por atraso')
+        self.assertNotContains(self.response, 'Multa por atraso')
 
 
 class RentalFormSubmittabilityTests(TestCase):
