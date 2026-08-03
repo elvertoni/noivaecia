@@ -676,99 +676,115 @@ Ordem lógica; cada tarefa nomeia o arquivo afetado e o critério de pronto.
 
 ### S1 — Imagem e entrypoints
 
-- [ ] `.dockerignore`: adicionar `pit/`, `graphify-out/`, `prints/`, `Ana*/`, `brcom/`,
+- [x] `.dockerignore`: adicionar `pit/`, `graphify-out/`, `prints/`, `Ana*/`, `brcom/`,
   `*.mp4`, `*.pptx`, `*.zip`, `*.pdf`, `legado.jpeg`. **Pronto:** contexto de build
   abaixo de 50 MB (hoje ~630 MB).
-- [ ] `Dockerfile`: trocar `CMD ["./docker-entrypoint.sh"]` por
+- [x] `Dockerfile`: trocar `CMD ["./docker-entrypoint.sh"]` por
   `ENTRYPOINT ["./entrypoint.sh"]`; `chmod +x entrypoint.sh worker-entrypoint.sh`.
   **Pronto:** `docker run <img> gunicorn --version` executa o entrypoint e depois o
   comando passado.
-- [ ] `Dockerfile`: criar usuário não-root e `USER` antes do `ENTRYPOINT`, com
-  `/app/media` e `/app/staticfiles` sob sua posse. *(Desvio consciente do SCSI, que roda
-  como root.)* **Pronto:** `docker run ... id -u` retorna diferente de `0` e o app sobe.
-- [ ] `core/management/commands/wait_for_db.py`: porte de
+- [x] `Dockerfile`/entrypoints: criar usuário não-root e executar os processos web e
+  scheduler como `app`, com `/app/media` e `/app/staticfiles` sob sua posse. O entrypoint
+  inicia como root somente para corrigir a posse de volumes criados pela imagem legada e
+  imediatamente usa `setpriv` para executar como `app`. **Pronto:** o processo principal
+  do app/scheduler roda com UID diferente de `0` e o upgrade preserva o SQLite persistente.
+- [x] `core/management/commands/wait_for_db.py`: porte de
   `scsi_v1/base/management/commands/wait_for_db.py`. **Pronto:** `python manage.py
   wait_for_db --timeout 5` sai com código 1 e mensagem clara com o banco fora.
-- [ ] `entrypoint.sh` (renomeado de `docker-entrypoint.sh`): `wait_for_db` → migrations
+- [x] `entrypoint.sh` (renomeado de `docker-entrypoint.sh`): `wait_for_db` → migrations
   com advisory lock → `collectstatic` → `exec "$@"` (4.7). **Pronto:** subir duas
   réplicas e confirmar nos logs que só uma aplica migrations e a outra reporta
-  "Migrations concluídas pela outra réplica".
-- [ ] `worker-entrypoint.sh`: arquivo novo (4.7). **Pronto:** o container do scheduler
+  "Migrations concluídas pela outra réplica". *(Caminho SQLite/single-instance validado
+  localmente em 2026-08-02; o teste com 2 réplicas Postgres fica pra S5/staging.)*
+- [x] `worker-entrypoint.sh`: arquivo novo (4.7). **Pronto:** o container do scheduler
   loga `[scheduler] WhatsApp daily report scheduler started` e **não** loga `Aplicando
   migrations`.
 
 ### S2 — Settings e configuração
 
-- [ ] `noivas_cia/settings.py`: bloco `LOGGING` — console com timestamp e nível,
+- [x] `noivas_cia/settings.py`: bloco `LOGGING` — console com timestamp e nível,
   `django.request` em `ERROR`, nível raiz por `DJANGO_LOG_LEVEL`. **Pronto:** um 500
   forçado aparece formatado em `docker service logs`.
-- [ ] `.env.example`: adicionar `DOMAIN`, `ACME_EMAIL`, `TRAEFIK_DASHBOARD_AUTH`; usar o
+- [x] `.env.example`: adicionar `DOMAIN`, `ACME_EMAIL`, `TRAEFIK_DASHBOARD_AUTH`; usar o
   padrão de hosts de 4.4; remover a linha obsoleta `DATABASE_NAME` (`.env.example:18`,
   resquício de SQLite). **Pronto:** copiar o exemplo e preencher os segredos resulta num
-  `.env` que sobe.
+  `.env` que sobe. *(Também ganhou `EVOLUTION_*` para o Postgres/Redis/S3 próprios do
+  evolution-api, auditados do EasyPanel em 2026-08-02 — ver 3.3 revisado abaixo.)*
 - [ ] `README.md`: corrigir a tabela de variáveis (linhas 98-114), hoje descrevendo
   SQLite/`DATABASE_NAME` sem mencionar `DATABASE_URL`/Postgres/Evolution. **Pronto:**
-  tabela reflete o `settings.py` atual.
+  tabela reflete o `settings.py` atual. *(Não feito nesta sessão.)*
 
 ### S3 — Endpoint de saúde
 
-- [ ] Confirmar `/healthz/` (`core/views.py:23-25`): 200, sem DB, sem auth, isento de
+- [x] Confirmar `/healthz/` (`core/views.py:23-25`): 200, sem DB, sem auth, isento de
   redirect (`settings.py:231`). **Pronto:** verificado; nenhum código novo.
-- [ ] Documentar que onde o SCSI usa `/health/`, este projeto usa `/healthz/`.
+- [x] Documentar que onde o SCSI usa `/health/`, este projeto usa `/healthz/`.
   **Pronto:** o path aparece uma única vez no guia, referenciado dos demais pontos.
 
 ### S4 — Compose local
 
-- [ ] `docker-compose.yml`: serviço `scheduler` com `entrypoint:
+- [x] `docker-compose.yml`: serviço `scheduler` com `entrypoint:
   ["./worker-entrypoint.sh"]`; comando do gunicorn movido para `command:` do `app`
   (4.11). **Pronto:** `docker compose up --build` sobe `app` e `scheduler` separados e
-  serve CSS/JS.
+  serve CSS/JS. Validado com `docker compose config` em 2026-08-02.
 
 ### S5 — Stack Swarm
 
-- [ ] `docker-stack.yml`: novo arquivo com `traefik`, `app`, `scheduler`, `db`,
-  `evolution-api` (+ `evolution-redis` se S0 confirmar), usando `image:` do GHCR.
-  **Pronto:** `docker stack config -c docker-stack.yml` valida sem erro.
-- [ ] Três redes (4.1), cinco volumes (4.2), secret externo (4.3). **Pronto:**
-  `docker stack deploy` cria as redes e monta o secret em `/run/secrets/`.
-- [ ] Healthchecks (4.8), `restart_policy` e `resources` (4.9) em todos os serviços.
-  **Pronto:** `docker service ls` estável por 5 minutos; `docker stats` confirma os
-  limites.
-- [ ] `update_config` / `rollback_config` no `app` (4.9). **Pronto:** deploy de uma
-  imagem propositalmente quebrada dispara rollback automático e o site permanece no ar.
+- [x] `docker-stack.yml`: novo arquivo com `traefik`, `app`, `scheduler`, `db`,
+  `evolution-api`, `evolution-api-db`, `evolution-api-redis` (ver nota abaixo — S0
+  revelou que o evolution-api usa banco e cache **próprios**, não os do app), usando
+  `image:` do GHCR. **Pronto:** `docker stack config -c docker-stack.yml` valida sem
+  erro — confirmado em 2026-08-02.
+- [x] Três redes (4.1), sete volumes (`letsencrypt`, `pg_data`, `media_data`,
+  `static_data`, `evolution_instances`, `evolution_pg_data`, `evolution_redis_data`),
+  secret externo (4.3). **Pronto (config):** presentes no stack file; criação real do
+  secret/redes é passo de VPS (S0/S6, ainda não executado).
+- [x] Healthchecks (4.8), `restart_policy` e `resources` (4.9) em todos os serviços.
+  **Pronto (config):** escritos e validados sintaticamente; observação de 5 min em
+  produção fica para depois do deploy real na VPS.
+- [x] `update_config` / `rollback_config` no `app` (4.9). **Pronto (config):** escrito;
+  teste de rollback com imagem quebrada fica para depois do primeiro deploy real.
+
+> **Correção sobre 3.3 (Redis — condicional).** O S0 (auditoria via EasyPanel MCP,
+> 2026-08-02) confirmou que o `evolution-api` **usa** Postgres e Redis próprios
+> (`work_evolution-api-db`, `work_evolution-api-redis`, não os do app) e mídia via MinIO
+> externo (`minio.tonicoimbra.com`, fora do escopo desta migração). O stack ganhou os
+> serviços `evolution-api-db` e `evolution-api-redis` (não é mais "condicional" — é
+> obrigatório).
 
 ### S6 — Traefik e Cloudflare
 
-- [ ] Serviço `traefik` no `docker-stack.yml` com a configuração de 4.5. **Pronto:**
-  dashboard responde em `https://traefik.${DOMAIN}` pedindo Basic Auth.
-- [ ] `TRAEFIK_DASHBOARD_AUTH` no `.env` com hash de `htpasswd -nbB`, **um único `$`**
-  (4.5). **Pronto:** acesso sem credencial retorna 401; com credencial, 200.
-- [ ] `forwardedHeaders.trustedIPs` com as faixas do Cloudflare e comentário registrando
-  a data da cópia. **Pronto:** access logs mostram o IP real do cliente.
-- [ ] Labels do `app` com `Host(\`${DOMAIN}\`)`, `healthcheck.path=/healthz/`,
-  `healthcheck.hostname=${DOMAIN}` e o middleware de rate limit. **Pronto:** nos logs do
-  Traefik não aparece nenhum `400` de `Go-http-client` em `/healthz/`.
-- [ ] Emissão do wildcard `${DOMAIN}` + `*.${DOMAIN}`. **Pronto:** `openssl s_client
-  -connect novo.tonicoimbra.com:443` mostra o SAN wildcard e emissor Let's Encrypt.
-- [ ] Verificar que nenhum arquivo versionado tem o domínio literal:
-  `grep -rn 'tonicoimbra' docker-stack.yml scripts/` não retorna nada. **Pronto:** trocar
-  de domínio é editar só o `.env`.
+- [x] Serviço `traefik` no `docker-stack.yml` com a configuração de 4.5. **Pronto
+  (config):** escrito e validado sintaticamente; verificação real do dashboard depende
+  do deploy na VPS.
+- [x] `TRAEFIK_DASHBOARD_AUTH` no `.env.example` documentado com hash de `htpasswd -nbB`,
+  **um único `$`** (4.5). **Pronto:** preencher o hash real é passo de VPS.
+- [x] `forwardedHeaders.trustedIPs` com as faixas do Cloudflare e comentário registrando
+  a data da cópia (2026-08-02). **Pronto:** escrito no `docker-stack.yml`.
+- [x] Labels do `app` com `Host(\`${DOMAIN}\`)`, `healthcheck.path=/healthz/`,
+  `healthcheck.hostname=${DOMAIN}` e o middleware de rate limit. **Pronto:** escrito;
+  verificação de logs sem `400` depende do deploy real.
+- [ ] Emissão do wildcard `${DOMAIN}` + `*.${DOMAIN}`. **Pronto:** depende da VPS ativa
+  e do secret Cloudflare criado — passo de S9/cutover.
+- [x] Verificar que nenhum arquivo versionado tem o domínio literal:
+  `grep -rn 'tonicoimbra' docker-stack.yml scripts/` não retorna nada. **Pronto:**
+  confirmado em 2026-08-02 — só `${DOMAIN}`.
 
 ### S7 — Scripts e CI
 
-- [ ] `scripts/deploy.sh` — porte de `scsi_v1/scripts/deploy.sh` (4.10). **Pronto:**
-  rodar com `DJANGO_DEBUG=True` no `.env` emite aviso, e sem o secret do Cloudflare
-  aborta antes de qualquer `docker stack deploy`.
-- [ ] `scripts/backup.sh` — porte de `scsi_v1/scripts/backup.sh` (4.10). **Pronto:** um
-  ciclo gera `db_<data>.sql.gz` + `media_<data>.tar.gz` e remove artefatos além de 30 dias.
-- [ ] `scripts/setup_deploy.sh` — porte de `scsi_v1/scripts/setup_deploy.sh`, **com as
-  duas correções** de 4.10 (jail `[sshd]`/`backend=systemd`; revisar o `NOPASSWD`).
-  **Pronto:** rodar numa VPS limpa leva do zero ao stack no ar; rodar de novo é
-  idempotente.
-- [ ] `.github/workflows/deploy.yml` (4.10). **Pronto:** push em `main` publica
-  `ghcr.io/elvertoni/noivaecia:<sha>` e `:latest`.
-- [ ] Agendar `backup.sh` por cron no host, diário. **Pronto:** `crontab -l` mostra a
-  entrada e o primeiro backup automático existe.
+- [x] `scripts/deploy.sh` — porte de `scsi_v1/scripts/deploy.sh` (4.10), nomes deste
+  projeto (`STACK_NAME=noivascia`, `IMAGE=ghcr.io/elvertoni/noivaecia`,
+  `DJANGO_DEBUG`/`DJANGO_ALLOWED_HOSTS`). **Pronto (código):** escrito; execução real na
+  VPS pendente.
+- [x] `scripts/backup.sh` — porte de `scsi_v1/scripts/backup.sh` (4.10). **Pronto
+  (código):** escrito; primeiro ciclo real pendente (precisa da VPS/stack no ar).
+- [x] `scripts/setup_deploy.sh` — porte de `scsi_v1/scripts/setup_deploy.sh`, **com as
+  duas correções** de 4.10 aplicadas (jail `[sshd]`/`backend=systemd` corrigida;
+  `NOPASSWD` mantido e comentado como trade-off documentado, não removido). **Pronto
+  (código):** escrito; idempotência real só se comprova rodando na VPS.
+- [x] `.github/workflows/deploy.yml` (4.10). **Pronto:** escrito (build+push GHCR,
+  `linux/amd64`, tags `:sha`/`:latest`); primeiro push em `main` valida o restante.
+- [ ] Agendar `backup.sh` por cron no host, diário. **Pronto:** passo de VPS, pendente.
 
 ### S8 — Migração de dados
 

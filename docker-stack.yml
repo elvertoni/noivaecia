@@ -1,0 +1,380 @@
+version: "3.9"
+
+# Deploy de produção — Docker Swarm + Traefik. Ver docs/deploy/PRD-deploy.md
+# e docs/deploy/guia-vps.md para a spec completa e o passo a passo.
+#
+#   docker stack deploy -c docker-stack.yml --with-registry-auth noivascia
+#
+# Nenhum domínio literal aqui — tudo vem de ${DOMAIN} no .env da VPS.
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      - "--providers.swarm=true"
+      - "--providers.swarm.endpoint=unix:///var/run/docker.sock"
+      - "--providers.swarm.exposedByDefault=false"
+      - "--providers.swarm.network=traefik_public"
+
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      # Faixas de IP do Cloudflare copiadas em 2026-08-02 de
+      # https://www.cloudflare.com/ips/ — revisar semestralmente.
+      - "--entrypoints.websecure.forwardedHeaders.trustedIPs=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22"
+
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=10"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--entrypoints.websecure.http.tls.domains[0].main=${DOMAIN}"
+      - "--entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN}"
+
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+    environment:
+      CF_DNS_API_TOKEN_FILE: /run/secrets/CLOUDFLARE_DNS_API_TOKEN
+    secrets:
+      - CLOUDFLARE_DNS_API_TOKEN
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_public
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
+        - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+        - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.traefik-dashboard.service=api@internal"
+        # Hash cru de `htpasswd -nbB admin 'SENHA'` (UM único '$') no .env —
+        # como vem por variável interpolada, NÃO duplicar '$' para '$$'.
+        - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
+        - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+        - "traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080"
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 192M
+        reservations:
+          cpus: "0.15"
+          memory: 64M
+
+  app:
+    image: ghcr.io/elvertoni/noivaecia:latest
+    command: >
+      gunicorn noivas_cia.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 4
+      --worker-class gthread
+      --threads 2
+      --timeout 120
+      --max-requests 1000
+      --max-requests-jitter 50
+      --graceful-timeout 30
+      --keep-alive 5
+      --forwarded-allow-ips *
+      --access-logfile -
+      --error-logfile -
+    env_file: .env
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    networks:
+      - traefik_public
+      - noivascia_internal
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 15s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.noivascia.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.noivascia.entrypoints=websecure"
+        - "traefik.http.routers.noivascia.tls=true"
+        - "traefik.http.routers.noivascia.tls.certresolver=letsencrypt"
+        - "traefik.http.services.noivascia.loadbalancer.server.port=8000"
+        - "traefik.http.services.noivascia.loadbalancer.healthcheck.path=/healthz/"
+        - "traefik.http.services.noivascia.loadbalancer.healthcheck.interval=15s"
+        # Sem isto o Traefik manda o IP da task (10.0.x.x) como Host — não
+        # está em ALLOWED_HOSTS, o Django responde 400 e o LB marca unhealthy.
+        - "traefik.http.services.noivascia.loadbalancer.healthcheck.hostname=${DOMAIN}"
+        - "traefik.http.middlewares.noivascia-ratelimit.ratelimit.average=100"
+        - "traefik.http.middlewares.noivascia-ratelimit.ratelimit.burst=50"
+        - "traefik.http.routers.noivascia.middlewares=noivascia-ratelimit"
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # Substitui o celery_beat do SCSI: único trabalho periódico deste projeto é
+  # o relatório diário do WhatsApp (scripts/report_scheduler.sh), replicas
+  # fixo em 1 para nunca duplicar o envio.
+  scheduler:
+    image: ghcr.io/elvertoni/noivaecia:latest
+    entrypoint: ["./worker-entrypoint.sh"]
+    command: sh scripts/report_scheduler.sh
+    env_file: .env
+    volumes:
+      - media_data:/app/media
+    networks:
+      - noivascia_internal
+      - noivascia_egress
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 128M
+
+  db:
+    image: postgres:16
+    env_file: .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - noivascia_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2048M
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+  # WhatsApp gateway (Evolution API). Só o app/scheduler falam com ele — sem
+  # rota do Traefik, fica inteiramente na rede interna + egress (precisa sair
+  # para os servidores do WhatsApp). Banco e cache próprios, auditados do
+  # EasyPanel em 2026-08-02 (work/evolution-api). Mídia/instância via MinIO
+  # externo já existente (minio.tonicoimbra.com) — não migrado nesta sprint.
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+      SERVER_URL: http://noivascia_evolution-api:8080
+      CORS_ORIGIN: "*"
+      CORS_METHODS: GET,POST,PUT,DELETE
+      CORS_CREDENTIALS: "true"
+      LOG_LEVEL: ERROR,WARN,INFO
+      LOG_COLOR: "true"
+      LOG_BAILEYS: error
+      DEL_INSTANCE: "false"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgres://postgres:${EVOLUTION_POSTGRES_PASSWORD}@noivascia_evolution-api-db:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      DATABASE_DELETE_MESSAGE: "true"
+      RABBITMQ_ENABLED: "false"
+      WEBSOCKET_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      CONFIG_SESSION_PHONE_CLIENT: "Evolution API"
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: "30"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://default:${EVOLUTION_REDIS_PASSWORD}@noivascia_evolution-api-redis:6379
+      CACHE_REDIS_TTL: "604800"
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      S3_ENABLED: "true"
+      S3_ACCESS_KEY: ${EVOLUTION_S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${EVOLUTION_S3_SECRET_KEY}
+      S3_BUCKET: ${EVOLUTION_S3_BUCKET}
+      S3_PORT: "443"
+      S3_ENDPOINT: ${EVOLUTION_S3_ENDPOINT}
+      S3_REGION: us-east-1
+      S3_USE_SSL: "true"
+      AUTHENTICATION_API_KEY: ${EVOLUTION_AUTHENTICATION_API_KEY}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      LANGUAGE: en
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - noivascia_internal
+      - noivascia_egress
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  evolution-api-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD}
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution_pg_data:/var/lib/postgresql/data
+    networks:
+      - noivascia_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  evolution-api-redis:
+    image: redis:7
+    command: redis-server --requirepass ${EVOLUTION_REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      EVOLUTION_REDIS_PASSWORD: ${EVOLUTION_REDIS_PASSWORD}
+    volumes:
+      - evolution_redis_data:/data
+    networks:
+      - noivascia_internal
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${EVOLUTION_REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+networks:
+  traefik_public:
+    external: true
+  noivascia_internal:
+    driver: overlay
+    internal: true
+  noivascia_egress:
+    driver: overlay
+
+volumes:
+  letsencrypt:
+  pg_data:
+  media_data:
+  static_data:
+  evolution_instances:
+  evolution_pg_data:
+  evolution_redis_data:
+
+secrets:
+  CLOUDFLARE_DNS_API_TOKEN:
+    external: true

@@ -50,3 +50,16 @@ Thumbs.db
 # Project-local scratch files
 _tmp_*
 print_*.png
+
+# Large local-only artifacts never needed inside the image (measured ~630MB
+# without this — see docs/deploy/PRD-deploy.md gap #8)
+pit/
+graphify-out/
+prints/
+Ana*/
+brcom/
+*.mp4
+*.pptx
+*.zip
+*.pdf
+legado.jpeg

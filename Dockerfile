@@ -28,11 +28,21 @@ COPY . .
 COPY --from=css-builder /app/static/css/ static/css/
 
 RUN DJANGO_SECRET_KEY=build-time-only DJANGO_ALLOWED_HOSTS=localhost python manage.py collectstatic --noinput
-RUN mkdir -p /app/data /app/staticfiles /app/media \
-    && chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/entrypoint.sh /app/worker-entrypoint.sh
+
+RUN groupadd -r app && useradd -r -g app -d /app app \
+    && mkdir -p /app/data /app/staticfiles /app/media \
+    && chown -R app:app /app
+
+# The entrypoints start as root only long enough to repair ownership on volumes
+# created by the legacy root-based image, then immediately re-exec as ``app``.
+# This keeps the running web and scheduler processes unprivileged while making
+# the upgrade safe for the existing persistent SQLite volume.
+USER root
 
 EXPOSE 8000
 
 STOPSIGNAL SIGTERM
 
-CMD ["./docker-entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["gunicorn", "noivas_cia.wsgi:application", "--bind", "0.0.0.0:8000"]
