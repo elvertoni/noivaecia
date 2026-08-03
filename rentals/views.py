@@ -14,7 +14,12 @@ from django.views.generic import (
     UpdateView,
 )
 
-from billing.services import PaymentPlanError, create_rental_payment_plan
+from billing.services import (
+    PaymentPlanError,
+    apply_cancellation_penalty,
+    compute_cancellation_penalty,
+    create_rental_payment_plan,
+)
 from catalog.availability import find_overlapping_rentals
 from catalog.models import Product
 from company.models import Company
@@ -318,7 +323,6 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         'customer',
         'pickup_date',
         'return_date',
-        'penalty_value',
     )
 
     def get_object(self, queryset=None):
@@ -436,6 +440,12 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['rental'] = self.rental
+        company = Company.load()
+        ctx['cancellation_penalty_rate'] = company.cancellation_penalty_rate
+        ctx['cancellation_penalty_amount'] = compute_cancellation_penalty(
+            self.rental,
+            company=company,
+        )
         return ctx
 
     def form_valid(self, form):
@@ -451,6 +461,11 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
             rental.save(update_fields=[
                 'status', 'cancelled_reason', 'cancelled_at', 'cancelled_by', 'updated_at',
             ])
+            penalty = apply_cancellation_penalty(
+                rental,
+                user=self.request.user,
+                due_date=timezone.localdate(),
+            )
             AuditLog.objects.create(
                 user=self.request.user,
                 action='rental_cancel',
@@ -460,7 +475,17 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
                 reason=form.cleaned_data['reason'],
             )
         self.rental = rental
-        messages.success(self.request, f'Locação #{rental.number} cancelada.')
+        messages.success(
+            self.request,
+            f'Locação #{rental.number} cancelada. Penalidade aplicada: '
+            f'{penalty["rate"]}% (R$ {penalty["amount"]:.2f}).',
+        )
+        if penalty['paid_exceeds_amount']:
+            messages.warning(
+                self.request,
+                'Os recebimentos já registrados superam a penalidade calculada; '
+                'nenhum estorno foi feito automaticamente.',
+            )
         return redirect(rental.get_absolute_url())
 
 

@@ -218,10 +218,10 @@ Todos os movimentos de `movimento` são importados como `FinancialMovement` com 
 | Conceito | Origem | Status |
 |---|---|---|
 | **Juros financeiro** | Vencimento do título em `pagar`; taxa diária em `Company.daily_interest_rate`. | Implementado em `billing.services.compute_interest`. |
-| **Valor de reposição** (era "multa de atraso") | `locado.multa` — **resolvido em 2026-08-02**: é o custo de repor as peças, constante por locação, valendo 1,2x a 3x o valor da locação. Não é diária nem depende de dias de atraso. | Mapeado para `Rental.penalty_value`, impresso na cláusula 3 do contrato. Não alimenta mais o cálculo de atraso. |
+| **Valor de reposição legado** | `locado.multa` importado do Access. Pode ser constante por locação, mas não representa a regra do novo sistema. | Preservado em `Rental.penalty_value` apenas para auditoria da importação; não é impresso nem usado em cálculos novos. |
 | **Multa por atraso na devolução** | **Definida pela cliente em 2026-08-02:** 10% do valor total da locação por dia de atraso, limitada a 7 dias (70%). A partir do 8º dia a peça é tratada como não devolvida e vale a cláusula 6 (`loss_penalty_rate`, 100%). | `Company.late_return_daily_rate` e `Company.late_return_max_days`; cálculo em `movements.services.compute_penalty`; percentual impresso na cláusula 4. |
 | **Multa moratória financeira** | 2% sobre valor total (cláusula do contrato Crystal). | **Pendente** — delineada mas não separada do juros. |
-| **Penalidades contratuais** | 50%/100% por dano, perda, não devolução, desistência ou troca. | **Pendente** — delineada no PRD. |
+| **Penalidades contratuais** | Percentuais configuráveis na aba Empresa: dano por item, perda/não devolução por item e desistência/rescisão sobre o total da locação. | Implementado. O percentual é lido da Empresa no momento de imprimir o contrato e de registrar a ocorrência; aceita valores acima de 100%. |
 
 ### Decisões aprovadas
 
@@ -277,9 +277,9 @@ Campos `cancellation_reason`, `cancelled_at`, `cancelled_by` em `Rental`.
 1. Devolução até a data contratada.
 2. Multa moratória de 2% sobre valor total.
 3. Juros de mora de 1% ao mês e correção monetária pelo INPC/IBGE.
-4. Penalidade por danos: 50% do valor do item avariado.
-5. Penalidade por perda ou não devolução em até sete dias: 100% do valor do item.
-6. Penalidade por desistência: crédito ou cobrança conforme texto do relatorio atual.
+4. Penalidade por danos: percentual vigente na Empresa sobre o valor do item avariado.
+5. Penalidade por perda ou não devolução: percentual vigente na Empresa sobre o valor do item, aplicado quando ultrapassado o prazo de devolução.
+6. Penalidade por desistência: percentual vigente na Empresa sobre o valor total da locação.
 7. Penalidade por troca.
 8. Campo de assinatura do locador e do locatário.
 9. Duas vias (campo `via` na tabela `temp`).

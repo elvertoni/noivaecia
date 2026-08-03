@@ -46,7 +46,7 @@ def _style(form):
             configure_br_decimal_field(
                 field,
                 currency=field_name in {
-                    'down_payment_amount', 'penalty_value', 'value', 'cash_discount_amount',
+                    'down_payment_amount', 'value', 'cash_discount_amount',
                 },
                 percent=field_name == 'cash_discount_percent',
             )
@@ -150,7 +150,7 @@ class RentalForm(forms.ModelForm):
     class Meta:
         model = Rental
         fields = (
-            'customer', 'pickup_date', 'return_date', 'penalty_value', 'wearer_name',
+            'customer', 'pickup_date', 'return_date', 'wearer_name',
             'cash_discount', 'cash_discount_percent', 'cash_discount_amount', 'notes',
         )
         widgets = {
@@ -161,8 +161,6 @@ class RentalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _style(self)
-        self.fields['penalty_value'].min_value = Decimal('0')
-        self.fields['penalty_value'].validators.append(MinValueValidator(Decimal('0')))
         self.fields['cash_discount'].widget.attrs['class'] = (
             'rounded border-slate-300 text-rose-600 focus:ring-rose-500'
         )

@@ -43,6 +43,38 @@ class Return(TimeStampedModel):
         null=True,
         blank=True,
     )
+    damage_rate = models.DecimalField(
+        'percentual aplicado por dano',
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    damaged_items = models.ManyToManyField(
+        'rentals.RentalItem',
+        blank=True,
+        related_name='damage_return_records',
+        verbose_name='peças danificadas',
+    )
+    loss_amount = models.DecimalField(
+        'valor cobrado por perda/não devolução',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    loss_rate = models.DecimalField(
+        'percentual aplicado por perda/não devolução',
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    lost_items = models.ManyToManyField(
+        'rentals.RentalItem',
+        blank=True,
+        related_name='loss_return_records',
+        verbose_name='peças não devolvidas',
+    )
     damage_notes = models.TextField('observações sobre danos', blank=True)
 
     class Meta:

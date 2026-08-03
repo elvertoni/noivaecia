@@ -17,6 +17,12 @@
       Os itens reservados serão liberados para nova locação.
     </div>
 
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      A penalidade será calculada pela configuração atual da Empresa:
+      <strong>{{ cancellation_penalty_rate|pct }}% do valor total</strong>
+      (R$ {{ cancellation_penalty_amount|brl }}).
+    </div>
+
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <div class="field-group">

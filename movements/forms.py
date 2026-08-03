@@ -13,6 +13,7 @@ from core.ui import (
 )
 
 from .models import Pickup, Return
+from rentals.models import RentalItem
 
 
 class PickupForm(forms.ModelForm):
@@ -38,6 +39,14 @@ class PickupForm(forms.ModelForm):
 class ReturnForm(forms.ModelForm):
     """Return form. days_late and penalty_applied are computed in the view."""
 
+    damaged_items = forms.ModelMultipleChoiceField(
+        label='Peças danificadas',
+        queryset=RentalItem.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text='A cobrança é calculada pela porcentagem de dano configurada na Empresa.',
+    )
+
     payment_amount = BRMoneyField(
         label='Valor recebido agora', required=False, min_value=Decimal('0.01'),
         decimal_places=2, max_digits=10,
@@ -56,17 +65,18 @@ class ReturnForm(forms.ModelForm):
 
     class Meta:
         model = Return
-        fields = ('return_date', 'damage_amount', 'damage_notes')
+        fields = ('return_date', 'damage_notes')
         widgets = {'return_date': forms.DateInput(format='%Y-%m-%d', attrs=DATE_INPUT_ATTRS.copy())}
 
     def __init__(self, *args, rental=None, **kwargs):
         self.rental = rental
         super().__init__(*args, **kwargs)
+        if rental is not None:
+            self.fields['damaged_items'].queryset = rental.items.select_related(
+                'product__category',
+            ).order_by('pk')
         self.fields['return_date'].input_formats = DATE_INPUT_FORMATS
         self.fields['return_date'].widget.attrs['class'] = INPUT_CLASS
-        configure_br_decimal_field(self.fields['damage_amount'], currency=True)
-        self.fields['damage_amount'].min_value = Decimal('0')
-        self.fields['damage_amount'].widget.attrs['class'] = INPUT_CLASS
         self.fields['damage_notes'].widget.attrs.setdefault('rows', 2)
         self.fields['damage_notes'].widget.attrs['class'] = INPUT_CLASS
         self.fields['payment_amount'].widget.attrs['class'] = INPUT_CLASS
@@ -79,6 +89,8 @@ class ReturnForm(forms.ModelForm):
         payment_method = cleaned_data.get('payment_method')
         return_date = cleaned_data.get('return_date')
         payment_date = cleaned_data.get('payment_date')
+        damaged_items = cleaned_data.get('damaged_items')
+        damage_notes = (cleaned_data.get('damage_notes') or '').strip()
         today = timezone.localdate()
         if return_date and return_date > today:
             self.add_error(
@@ -100,4 +112,9 @@ class ReturnForm(forms.ModelForm):
                     'return_date',
                     'A data de devolução não pode ser anterior à retirada registrada.',
                 )
+        if damage_notes and not damaged_items:
+            self.add_error(
+                'damaged_items',
+                'Selecione ao menos uma peça danificada para registrar a ocorrência.',
+            )
         return cleaned_data

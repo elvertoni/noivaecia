@@ -147,11 +147,10 @@ class RentalFormValidationTests(TestCase):
         data.update(overrides)
         return data
 
-    def test_monetary_penalty_cannot_be_negative(self):
-        form = RentalForm(data=self._header_data(penalty_value='-1,00'))
+    def test_legacy_replacement_value_is_not_part_of_new_rental_form(self):
+        form = RentalForm(data=self._header_data())
 
-        self.assertFalse(form.is_valid())
-        self.assertIn('penalty_value', form.errors)
+        self.assertNotIn('penalty_value', form.fields)
 
     def test_down_payment_uses_only_payment_model_methods(self):
         form = RentalForm(data=self._header_data(
@@ -613,6 +612,68 @@ class RentalCancelledStatusTests(TestCase):
         )
         rental.refresh_from_db()
         self.assertIn('debutante', rental.legacy_notes)
+
+
+class RentalCancellationPenaltyViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='cancel-penalty@b.com',
+            password='Senha12345',
+        )
+        ModulePermission.objects.create(user=self.user, module_key='rentals', allowed=True)
+        ActionPermission.objects.create(user=self.user, action_key='rentals.cancel', allowed=True)
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(name='Cliente de rescisão')
+        self.rental = Rental.objects.create(
+            number=29,
+            customer=self.customer,
+            pickup_date=date(2026, 7, 10),
+            return_date=date(2026, 7, 15),
+            total_value=Decimal('300.00'),
+        )
+        self.base_receivable = Receivable.objects.create(
+            rental=self.rental,
+            due_date=date(2026, 7, 10),
+            amount=Decimal('300.00'),
+        )
+
+    def _cancel(self):
+        return self.client.post(
+            reverse('rentals:cancel', args=[self.rental.pk]),
+            {'reason': 'Cliente desistiu da locação.'},
+        )
+
+    def test_cancellation_uses_current_company_rate_above_one_hundred_percent(self):
+        company = Company.load()
+        company.cancellation_penalty_rate = Decimal('200')
+        company.save(update_fields=['cancellation_penalty_rate', 'updated_at'])
+
+        response = self._cancel()
+
+        self.assertEqual(response.status_code, 302)
+        self.rental.refresh_from_db()
+        self.assertEqual(self.rental.status, Rental.Status.CANCELLED)
+        self.assertEqual(self.rental.cancellation_penalty_rate, Decimal('200.00'))
+        self.assertEqual(self.rental.cancellation_penalty_amount, Decimal('600.00'))
+        self.assertEqual(
+            Receivable.objects.get(
+                rental=self.rental,
+                legacy_notes__startswith='penalty:cancellation',
+            ).amount,
+            Decimal('300.00'),
+        )
+
+    def test_cancellation_reduces_unpaid_balance_when_company_rate_is_lower(self):
+        company = Company.load()
+        company.cancellation_penalty_rate = Decimal('50')
+        company.save(update_fields=['cancellation_penalty_rate', 'updated_at'])
+
+        response = self._cancel()
+
+        self.assertEqual(response.status_code, 302)
+        self.base_receivable.refresh_from_db()
+        self.assertEqual(self.base_receivable.amount, Decimal('150.00'))
+        self.assertEqual(self.base_receivable.balance, Decimal('150.00'))
 
 
 class RentalDeleteViewTests(TestCase):
@@ -1210,12 +1271,12 @@ class ClientCorrectionsTests(TestCase):
 
         # Cláusula 1 com data de devolução
         self.assertIn('data de devolução estipulada acima (15/08/2026)', content)
-        # Cláusula 3 com espaço para quantia de reposição
-        self.assertIn('na quantia de R$ (____________________)', content)
+        # Cláusula 3 usa o percentual atual de dano por item.
+        self.assertIn('será cobrado 50% correspondente ao valor de locação de cada peça danificada.', content)
         # Cláusula 5 com multa de 100% por desistência/rescisão — sem centavos
         self.assertIn('será cobrado o percentual de 100% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
-        self.assertIn('6. A não devolução dos trajes', content)
+        self.assertIn('6. A perda ou não devolução dos trajes', content)
         self.assertIn('implica cobrança de 100% correspondente', content)
         # Sem multa cadastrada: bloco dos Dados da Locação omitido e cláusula 4
         # não promete um valor que o contrato não mostra.
@@ -1230,27 +1291,28 @@ class ClientCorrectionsTests(TestCase):
         self.assertIn('Testemunha', content)
         self.assertNotIn('Testemunha 2', content)
 
-    def test_printed_contract_states_penalty_is_charged_once(self):
+    def test_printed_contract_ignores_legacy_replacement_value(self):
         self.rental.penalty_value = Decimal('960.00')
         self.rental.save(update_fields=['penalty_value'])
 
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('<span class="field-caption">Valor de reposição</span>', content)
+        self.assertNotIn('<span class="field-caption">Valor de reposição</span>', content)
         self.assertIn(
             '4. O atraso na devolução sujeita o locatário à multa de 10% do valor '
             'total da locação por dia de atraso, limitada a 7 dias, além de '
             'juros moratórios e demais penalidades aplicáveis.',
             content,
         )
-        self.assertNotIn('diária', content)
+        self.assertNotIn('R$ 960,00', content)
 
     def test_printed_contract_percentages_follow_configured_rates(self):
         self.company.cancellation_penalty_rate = Decimal('0')
         self.company.loss_penalty_rate = Decimal('12.50')
+        self.company.damage_penalty_rate = Decimal('200')
         self.company.save(update_fields=[
-            'cancellation_penalty_rate', 'loss_penalty_rate',
+            'cancellation_penalty_rate', 'loss_penalty_rate', 'damage_penalty_rate',
         ])
 
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
@@ -1259,8 +1321,9 @@ class ClientCorrectionsTests(TestCase):
         # A 0% rate must print as 0%, not fall back to the old hardcoded 50%.
         self.assertIn('será cobrado o percentual de 0% correspondente', content)
         self.assertIn('implica cobrança de 12,5% correspondente', content)
+        self.assertIn('será cobrado 200% correspondente ao valor de locação de cada peça danificada.', content)
 
-    def test_printed_contract_shows_damage_amount_when_return_recorded(self):
+    def test_printed_contract_keeps_damage_rule_when_return_recorded(self):
         Pickup.objects.create(rental=self.rental, pickup_date=date(2026, 8, 10))
         Return.objects.create(
             rental=self.rental,
@@ -1271,14 +1334,14 @@ class ClientCorrectionsTests(TestCase):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('a quantia de R$ 80,00.', content)
-        self.assertNotIn('a quantia de (____________________)', content)
+        self.assertIn('será cobrado 50% correspondente ao valor de locação de cada peça danificada.', content)
+        self.assertNotIn('R$ 80,00.', content)
 
-    def test_printed_contract_shows_blank_when_no_damage_recorded(self):
+    def test_printed_contract_does_not_show_a_blank_fixed_damage_amount(self):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('na quantia de R$ (____________________)', content)
+        self.assertNotIn('na quantia de R$ (____________________)', content)
 
     def test_printed_contract_shows_wearer_name_when_set(self):
         self.rental.wearer_name = 'Julio Cesar'

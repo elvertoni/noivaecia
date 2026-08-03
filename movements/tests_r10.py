@@ -282,18 +282,57 @@ class ReturnDamageTrackingTests(TestCase):
         self.client.force_login(self.user)
         self.rental = _make_rental(900, status='picked_up', return_date=TODAY)
         Pickup.objects.create(rental=self.rental, pickup_date=TODAY - timedelta(days=1))
+        category = Category.objects.create(prefix='VD', name='Vestidos')
+        self.product = Product.objects.create(
+            category=category,
+            code=900,
+            description='Vestido de teste',
+            value=Decimal('200'),
+        )
+        self.item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=Decimal('200'),
+        )
 
-    def test_return_persists_damage_amount_and_notes(self):
+    def test_return_calculates_damage_from_selected_item_and_company_rate(self):
         url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
         response = self.client.post(url, {
             'return_date': TODAY.isoformat(),
-            'damage_amount': '80,00',
+            'damaged_items': [self.item.pk],
             'damage_notes': 'Mancha na barra do vestido.',
         })
         self.assertEqual(response.status_code, 302)
         record = Return.objects.get(rental=self.rental)
-        self.assertEqual(record.damage_amount, Decimal('80.00'))
+        self.assertEqual(record.damage_amount, Decimal('100.00'))
+        self.assertEqual(record.damage_rate, Decimal('50.00'))
+        self.assertEqual(list(record.damaged_items.all()), [self.item])
         self.assertEqual(record.damage_notes, 'Mancha na barra do vestido.')
+        self.assertEqual(
+            Receivable.objects.get(
+                rental=self.rental,
+                legacy_notes__startswith='penalty:damage',
+            ).amount,
+            Decimal('100.00'),
+        )
+
+    def test_return_uses_current_damage_rate_above_one_hundred_percent(self):
+        company = Company.load()
+        company.damage_penalty_rate = Decimal('200')
+        company.save(update_fields=['damage_penalty_rate', 'updated_at'])
+
+        response = self.client.post(
+            reverse('movements:return', kwargs={'rental_pk': self.rental.pk}),
+            {
+                'return_date': TODAY.isoformat(),
+                'damaged_items': [self.item.pk],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        record = Return.objects.get(rental=self.rental)
+        self.assertEqual(record.damage_amount, Decimal('400.00'))
+        self.assertEqual(record.damage_rate, Decimal('200.00'))
 
     def test_return_without_damage_stays_backward_compatible(self):
         url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
@@ -314,8 +353,6 @@ class ReturnPenaltyReceivableTests(TestCase):
         # return_date in the past so return is late
         past_return = TODAY - timedelta(days=5)
         self.rental = _make_rental(900, status='picked_up', return_date=past_return)
-        self.rental.penalty_value = Decimal('20')
-        self.rental.save()
         Pickup.objects.create(rental=self.rental, pickup_date=past_return - timedelta(days=3))
 
     def test_late_return_creates_penalty_receivable(self):
@@ -349,7 +386,7 @@ class ReturnPenaltyReceivableTests(TestCase):
         self.assertEqual(response.status_code, 302)
         penalty = Receivable.objects.get(
             rental=self.rental,
-            legacy_notes='Multa de atraso na devolução',
+            legacy_notes__startswith='penalty:late_return',
         )
         # 10% of the 300,00 rental per day, 5 days late — and pointedly not the
         # 20,00 replacement price sitting on this rental.
@@ -360,6 +397,72 @@ class ReturnPenaltyReceivableTests(TestCase):
                 total=Sum('amount'),
             )['total'],
             Decimal('150'),
+        )
+
+
+class ReturnLossPenaltyTests(TestCase):
+    def setUp(self):
+        _make_company()
+        self.user = _make_user()
+        self.client.force_login(self.user)
+        self.rental = _make_rental(
+            950,
+            status='picked_up',
+            return_date=TODAY - timedelta(days=8),
+        )
+        Pickup.objects.create(
+            rental=self.rental,
+            pickup_date=TODAY - timedelta(days=16),
+        )
+        category = Category.objects.create(prefix='VL', name='Vestidos longos')
+        product_a = Product.objects.create(
+            category=category,
+            code=950,
+            description='Vestido A',
+            value=Decimal('200'),
+        )
+        product_b = Product.objects.create(
+            category=category,
+            code=951,
+            description='Vestido B',
+            value=Decimal('100'),
+        )
+        self.item_a = RentalItem.objects.create(
+            rental=self.rental,
+            product=product_a,
+            value=Decimal('200'),
+        )
+        self.item_b = RentalItem.objects.create(
+            rental=self.rental,
+            product=product_b,
+            value=Decimal('100'),
+        )
+
+    def test_return_after_limit_uses_current_loss_rate_for_each_item(self):
+        company = Company.load()
+        company.loss_penalty_rate = Decimal('200')
+        company.save(update_fields=['loss_penalty_rate', 'updated_at'])
+
+        response = self.client.post(
+            reverse('movements:return', kwargs={'rental_pk': self.rental.pk}),
+            {'return_date': TODAY.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        record = Return.objects.get(rental=self.rental)
+        self.assertEqual(record.penalty_applied, Decimal('0'))
+        self.assertEqual(record.loss_amount, Decimal('600.00'))
+        self.assertEqual(record.loss_rate, Decimal('200.00'))
+        self.assertEqual(
+            set(record.lost_items.values_list('pk', flat=True)),
+            {self.item_a.pk, self.item_b.pk},
+        )
+        self.assertEqual(
+            Receivable.objects.get(
+                rental=self.rental,
+                legacy_notes__startswith='penalty:loss',
+            ).amount,
+            Decimal('600.00'),
         )
 
 

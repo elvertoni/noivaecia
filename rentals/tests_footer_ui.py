@@ -119,20 +119,12 @@ class RentalFooterUITests(TestCase):
         self.assertNotIn('add-item', self.elements)
         self.assertNotIn('add-item-bottom', self.elements)
 
-    def test_totals_script_defines_and_updates_penalty(self):
-        self.assertContains(
-            self.response,
-            "const penaltyEl = document.getElementById('penalty-display');",
-        )
-        self.assertContains(
-            self.response,
-            'penaltyEl.textContent = `R$ ${formatMoneyBR(penaltyVal)}`',
-        )
+    def test_totals_script_does_not_include_legacy_replacement_value(self):
         self.assertNotContains(
             self.response,
             'subtotal > 0 ? `R$ ${formatMoneyBR(subtotal)}`',
         )
-        self.assertContains(self.response, 'Valor de reposição')
+        self.assertNotContains(self.response, 'Valor de reposição')
         self.assertNotContains(self.response, 'Multa diária por atraso')
         self.assertNotContains(self.response, 'Multa por atraso')
 

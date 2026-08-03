@@ -22,6 +22,7 @@ NON_NEGATIVE_RATE_FIELDS = (
     'damage_penalty_rate',
     'loss_penalty_rate',
     'cancellation_penalty_rate',
+    'late_return_daily_rate',
 )
 
 

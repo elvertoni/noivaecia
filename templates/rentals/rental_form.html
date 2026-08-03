@@ -58,12 +58,6 @@
           {% if form.return_date.errors %}<p class="field-error" role="alert">{{ form.return_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
-          <label class="field-label" for="{{ form.penalty_value.id_for_label }}">{{ form.penalty_value.label }}</label>
-          {{ form.penalty_value|render_field }}
-          <p class="text-[10px] text-app-muted mt-0.5">Custo de repor as peças. Sai na cláusula 3 do contrato.</p>
-          {% if form.penalty_value.errors %}<p class="field-error" role="alert">{{ form.penalty_value.errors|striptags }}</p>{% endif %}
-        </div>
-        <div class="field-group">
           <label class="field-label" for="{{ form.wearer_name.id_for_label }}">{{ form.wearer_name.label }} <span class="font-normal text-app-muted">(opcional)</span></label>
           {{ form.wearer_name|render_field }}
           <p class="field-help mt-0.5">Preencha quando quem vai usar a peça não é o(a) locatário(a).</p>
@@ -237,10 +231,6 @@
               {% endif %}
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
               <p class="text-[10px] text-app-muted mt-0.5">Em branco aplica o desconto padrão da empresa.</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-app-muted">Valor de reposição</p>
-              <p id="penalty-display" class="text-lg font-semibold text-slate-700 mt-0.5">R$ 0,00</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">
               <p class="text-xs font-semibold text-rose-900">Total final da locação</p>
@@ -1319,22 +1309,9 @@
     const subtotalEl = document.getElementById('subtotal-display');
     const discountEl = document.getElementById('discount-display');
     const totalFinalEl = document.getElementById('total-final-display');
-    const penaltyEl = document.getElementById('penalty-display');
-    const penaltyInput = document.getElementById('id_penalty_value');
-    let penaltyVal = 0;
-    if (penaltyInput && penaltyInput.value) {
-      penaltyVal = parseBRDecimal(penaltyInput.value);
-    }
-
     if (subtotalEl) subtotalEl.textContent = `R$ ${formatMoneyBR(subtotal)}`;
     if (discountEl) discountEl.textContent = isCashDiscount ? `- R$ ${formatMoneyBR(discount)}` : `R$ 0,00`;
     if (totalFinalEl) totalFinalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
-    if (penaltyEl) penaltyEl.textContent = `R$ ${formatMoneyBR(penaltyVal)}`;
-  }
-
-  const penaltyInput = document.getElementById('id_penalty_value');
-  if (penaltyInput) {
-    penaltyInput.addEventListener('input', updateFinancialTotals);
   }
 
   if (container) {

@@ -10,10 +10,8 @@ default). Confirmed with the shop on 2026-08-02.
 Two earlier readings were wrong and are worth naming, because both are easy to
 fall back into:
 
-- It is **not** ``rental.penalty_value``. That field holds the replacement price
-  of the garments, which the 2026-08 legacy migration showed to be 1.2x-3x the
-  rental itself; charging it for a single day late billed the customer the cost
-  of replacing everything. It now serves only clause 3 of the printed contract.
+- It is **not** ``rental.penalty_value``. That field is preserved only as legacy
+  import evidence; operational charges always use the current Company settings.
 - It is **not** flat. The previous version applied a one-time fee precisely to
   stop a per-day multiplication from ballooning — the right instinct against the
   wrong base. With the rental value as the base and a hard day cap, per-day works

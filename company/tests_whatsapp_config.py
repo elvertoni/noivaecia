@@ -170,6 +170,16 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
                 self.assertFalse(form.is_valid())
                 self.assertIn(field_name, form.errors)
 
+    def test_accepts_penalty_rates_above_one_hundred_percent(self):
+        form = CompanyForm(data=self._base_data(
+            damage_penalty_rate='200',
+            loss_penalty_rate='200',
+            cancellation_penalty_rate='200',
+            late_return_daily_rate='200',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_last_rental_number_cannot_be_lower_than_existing_contract(self):
         customer = Customer.objects.create(name='Cliente Teste')
         Rental.objects.create(
