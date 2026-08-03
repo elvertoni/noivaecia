@@ -8,6 +8,7 @@ from customers.models import Customer, _digits_only, _normalize_name
 
 CUSTOMER_SEARCH_FIELDS = (
     'cpf_digits',
+    'cnpj_digits',
     'rg_digits',
     'phone_home_digits',
     'phone_mobile_digits',
@@ -32,6 +33,7 @@ def _rebuild_customers(batch_size):
     queryset = Customer.objects.only(
         'id',
         'cpf',
+        'cnpj',
         'rg',
         'phone_home',
         'phone_mobile',
@@ -43,6 +45,7 @@ def _rebuild_customers(batch_size):
     for customer in queryset.iterator(chunk_size=batch_size):
         expected = {
             'cpf_digits': _digits_only(customer.cpf),
+            'cnpj_digits': _digits_only(customer.cnpj),
             'rg_digits': _digits_only(customer.rg),
             'phone_home_digits': _digits_only(customer.phone_home),
             'phone_mobile_digits': _digits_only(customer.phone_mobile),

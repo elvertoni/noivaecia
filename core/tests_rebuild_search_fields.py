@@ -32,8 +32,10 @@ class RebuildSearchFieldsCommandTests(TestCase):
                 Customer(
                     name='Maria de F\u00e1tima',
                     cpf='987.654.321-00',
+                    cnpj='12.345.678/0001-90',
                     phone_mobile='(11) 98888-7777',
                     cpf_digits='',
+                    cnpj_digits='',
                     phone_mobile_digits='',
                     name_search='',
                 ),
@@ -74,6 +76,7 @@ class RebuildSearchFieldsCommandTests(TestCase):
 
         maria = Customer.objects.get(cpf='987.654.321-00')
         self.assertEqual(maria.cpf_digits, '98765432100')
+        self.assertEqual(maria.cnpj_digits, '12345678000190')
         self.assertEqual(maria.phone_mobile_digits, '11988887777')
         self.assertEqual(maria.name_search, 'maria de fatima')
 
