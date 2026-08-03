@@ -17,7 +17,7 @@ REGISTRY="ghcr.io/elvertoni"
 IMAGE="$REGISTRY/noivaecia"
 STACK_NAME="noivascia"
 STACK_FILE="docker-stack.yml"
-URL="https://${DOMAIN:-<domínio não carregado ainda>}"
+URL="https://noivaseciabandeirantes.com.br"
 
 # ── Cores ──
 GREEN='\033[0;32m'
