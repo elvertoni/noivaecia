@@ -5,7 +5,9 @@ set -e
 # ownership repair is necessary during the transition from the legacy image.
 if [ "$(id -u)" -eq 0 ]; then
     echo ">>> [scheduler] Ajustando permissões dos volumes persistentes..."
-    chown app:app /app/data /app/media /app/staticfiles
+    # Volumes podem conter arquivos criados por uma imagem/execução anterior
+    # como root; o scheduler roda como app e precisa acessá-los.
+    chown -R app:app /app/data /app/media /app/staticfiles
     for sqlite_file in /app/data/db.sqlite3 /app/data/db.sqlite3-*; do
         [ -e "$sqlite_file" ] && chown app:app "$sqlite_file"
     done

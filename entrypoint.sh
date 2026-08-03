@@ -6,7 +6,9 @@ set -e
 # Gunicorn and every Django management command below run as ``app``.
 if [ "$(id -u)" -eq 0 ]; then
     echo ">>> Ajustando permissões dos volumes persistentes..."
-    chown app:app /app/data /app/media /app/staticfiles
+    # Volumes podem conter arquivos criados por uma imagem/execução anterior
+    # como root; o processo Django roda como app e precisa atualizá-los.
+    chown -R app:app /app/data /app/media /app/staticfiles
     for sqlite_file in /app/data/db.sqlite3 /app/data/db.sqlite3-*; do
         [ -e "$sqlite_file" ] && chown app:app "$sqlite_file"
     done
