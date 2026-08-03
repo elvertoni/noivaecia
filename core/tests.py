@@ -5,6 +5,7 @@ from django.urls import reverse
 from accounts.models import ModulePermission
 from core.models import AuditLog
 from customers.models import Customer
+from rentals.models import Rental
 
 User = get_user_model()
 
@@ -71,6 +72,30 @@ class DashboardModuleTests(TestCase):
 
         self.assertEqual(module_urls['movements'], reverse('movements:pickup_list'))
         self.assertEqual(module_urls['billing'], reverse('billing:dashboard'))
+
+    def test_dashboard_pickup_indicator_excludes_legacy_payment_only_records(self):
+        user = User.objects.create_user(email='pickup@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=user, module_key='movements', allowed=True)
+        customer = Customer.objects.create(name='Cliente da fila')
+        Rental.objects.create(
+            number=1,
+            customer=customer,
+            pickup_date='2026-08-03',
+            return_date='2026-08-10',
+        )
+        Rental.objects.create(
+            number=2,
+            customer=customer,
+            pickup_date='2010-01-01',
+            return_date='2010-01-08',
+            legacy_notes=Rental.LEGACY_PAGAR_ONLY_MARKER,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('dashboard'))
+
+        indicators = {indicator['label']: indicator['value'] for indicator in response.context['indicators']}
+        self.assertEqual(indicators['Locações a retirar'], 1)
 
 
 class AuditLogTests(TestCase):

@@ -13,6 +13,8 @@ CASH_DISCOUNT_RATE = Decimal('0.10')
 class Rental(TimeStampedModel):
     """Rental contract for a customer (RF-15)."""
 
+    LEGACY_PAGAR_ONLY_MARKER = 'locado_source=pagar_only'
+
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pendente'
         PICKED_UP = 'picked_up', 'Retirado'
@@ -90,6 +92,19 @@ class Rental(TimeStampedModel):
 
     def get_absolute_url(self):
         return reverse('rentals:detail', args=[self.pk])
+
+    @classmethod
+    def pending_pickup_queryset(cls):
+        """Pending contracts that represent an actual pickup operation.
+
+        The Access importer creates historical ``pagar``-only records when no
+        matching ``locado`` row exists.  They are financial history, not a
+        garment waiting to be picked up, so they must not appear in the
+        operational pickup queue.
+        """
+        return cls.objects.filter(status=cls.Status.PENDING).exclude(
+            legacy_notes__contains=cls.LEGACY_PAGAR_ONLY_MARKER,
+        )
 
     def recalculate_total(self, save=True):
         """Sum item values into ``total_value`` (RF-15 / 6.2.3)."""

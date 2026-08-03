@@ -93,6 +93,9 @@ class ARetirarReportViewTests(TestCase):
         self.url = reverse('reports:a_retirar')
         self.pending = _make_rental(200, status='pending')
         self.picked = _make_rental(201, status='picked_up')
+        self.legacy_payment_only = _make_rental(299, status='pending')
+        self.legacy_payment_only.legacy_notes = Rental.LEGACY_PAGAR_ONLY_MARKER
+        self.legacy_payment_only.save(update_fields=['legacy_notes', 'updated_at'])
 
     def test_200_renders(self):
         r = self.client.get(self.url)
@@ -103,6 +106,7 @@ class ARetirarReportViewTests(TestCase):
         pks = {rental.pk for rental in r.context['rentals']}
         self.assertIn(self.pending.pk, pks)
         self.assertNotIn(self.picked.pk, pks)
+        self.assertNotIn(self.legacy_payment_only.pk, pks)
 
     def test_filter_by_customer(self):
         r = self.client.get(self.url, {'customer': f'Cliente {self.pending.number}'})

@@ -224,7 +224,7 @@ class PickupListView(MovementsAccessMixin, ListView):
 
     def get_queryset(self):
         qs = (
-            Rental.objects.filter(status=Rental.Status.PENDING)
+            Rental.pending_pickup_queryset()
             .select_related('customer')
             .prefetch_related('items__product__category')
             .order_by('pickup_date', 'number')

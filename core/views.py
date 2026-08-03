@@ -53,7 +53,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             rental_counts = Rental.objects.aggregate(
                 to_pick_up=Count(
                     'id',
-                    filter=Q(status=Rental.Status.PENDING),
+                    filter=(
+                        Q(status=Rental.Status.PENDING)
+                        & ~Q(legacy_notes__contains=Rental.LEGACY_PAGAR_ONLY_MARKER)
+                    ),
                 ),
                 to_return=Count(
                     'id',

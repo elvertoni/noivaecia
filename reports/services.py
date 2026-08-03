@@ -100,7 +100,9 @@ def _apply_rental_filters(
 
 def report_a_retirar(date_from='', date_to='', customer='', prefix='', code='', max_results=DEFAULT_REPORT_LIMIT):
     """Rentals pending pickup (R11.02 — equiv. locados.rpt não retirados)."""
-    qs = _rental_base(Rental.Status.PENDING)
+    qs = _rental_base(Rental.Status.PENDING).exclude(
+        legacy_notes__contains=Rental.LEGACY_PAGAR_ONLY_MARKER,
+    )
     return _apply_rental_filters(qs, date_from=date_from, date_to=date_to,
                                   customer=customer, prefix=prefix, code=code,
                                   max_results=max_results)
