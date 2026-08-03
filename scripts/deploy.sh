@@ -15,7 +15,7 @@ set -euo pipefail
 
 REGISTRY="ghcr.io/elvertoni"
 IMAGE="$REGISTRY/noivaecia"
-STACK_NAME="noivascia"
+STACK_NAME="noivaecia"
 STACK_FILE="docker-stack.yml"
 URL="https://noivaseciabandeirantes.com.br"
 

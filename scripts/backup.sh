@@ -7,7 +7,7 @@ set -euo pipefail
 # de propósito; psycopg[binary] já embute libpq).
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
-STACK_NAME="${STACK_NAME:-noivascia}"
+STACK_NAME="${STACK_NAME:-noivaecia}"
 DATE=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$BACKUP_DIR"

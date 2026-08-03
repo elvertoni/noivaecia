@@ -3,7 +3,7 @@ version: "3.9"
 # Deploy de produção — Docker Swarm + Traefik. Ver docs/deploy/PRD-deploy.md
 # e docs/deploy/guia-vps.md para a spec completa e o passo a passo.
 #
-#   docker stack deploy -c docker-stack.yml --with-registry-auth noivascia
+#   docker stack deploy -c docker-stack.yml --with-registry-auth noivaecia
 #
 # Nenhum domínio literal aqui — tudo vem de ${DOMAIN} no .env da VPS.
 
@@ -229,7 +229,7 @@ services:
     environment:
       SERVER_TYPE: http
       SERVER_PORT: "8080"
-      SERVER_URL: http://noivascia_evolution-api:8080
+      SERVER_URL: http://noivaecia_evolution-api:8080
       CORS_ORIGIN: "*"
       CORS_METHODS: GET,POST,PUT,DELETE
       CORS_CREDENTIALS: "true"
@@ -238,7 +238,7 @@ services:
       LOG_BAILEYS: error
       DEL_INSTANCE: "false"
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: postgres://postgres:${EVOLUTION_POSTGRES_PASSWORD}@noivascia_evolution-api-db:5432/evolution
+      DATABASE_CONNECTION_URI: postgres://postgres:${EVOLUTION_POSTGRES_PASSWORD}@noivaecia_evolution-api-db:5432/evolution
       DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
       DATABASE_SAVE_DATA_INSTANCE: "true"
       DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
@@ -253,7 +253,7 @@ services:
       CONFIG_SESSION_PHONE_NAME: Chrome
       QRCODE_LIMIT: "30"
       CACHE_REDIS_ENABLED: "true"
-      CACHE_REDIS_URI: redis://default:${EVOLUTION_REDIS_PASSWORD}@noivascia_evolution-api-redis:6379
+      CACHE_REDIS_URI: redis://default:${EVOLUTION_REDIS_PASSWORD}@noivaecia_evolution-api-redis:6379
       CACHE_REDIS_TTL: "604800"
       CACHE_REDIS_PREFIX_KEY: evolution
       CACHE_LOCAL_ENABLED: "false"
