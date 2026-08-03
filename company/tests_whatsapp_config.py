@@ -37,6 +37,8 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             'damage_penalty_rate': '50.00',
             'loss_penalty_rate': '100.00',
             'cancellation_penalty_rate': '50.00',
+            'late_return_daily_rate': '10.00',
+            'late_return_max_days': 7,
             'footer_message': '',
             'whatsapp_reports_enabled': False,
             'whatsapp_report_number': '',
@@ -164,6 +166,8 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             'monthly_interest_rate',
             'damage_penalty_rate',
             'loss_penalty_rate',
+            'cancellation_penalty_rate',
+            'late_return_daily_rate',
         ):
             with self.subTest(field=field_name):
                 form = CompanyForm(data=self._base_data(**{field_name: '-0.01'}))
@@ -179,6 +183,21 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         ))
 
         self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['damage_penalty_rate'], 200)
+        self.assertEqual(form.cleaned_data['loss_penalty_rate'], 200)
+        self.assertEqual(form.cleaned_data['cancellation_penalty_rate'], 200)
+        self.assertEqual(form.cleaned_data['late_return_daily_rate'], 200)
+
+    def test_exposes_all_operational_penalty_settings(self):
+        form = CompanyForm(data=self._base_data(late_return_max_days=10))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertIn('damage_penalty_rate', form.fields)
+        self.assertIn('loss_penalty_rate', form.fields)
+        self.assertIn('cancellation_penalty_rate', form.fields)
+        self.assertIn('late_return_daily_rate', form.fields)
+        self.assertIn('late_return_max_days', form.fields)
+        self.assertEqual(form.cleaned_data['late_return_max_days'], 10)
 
     def test_last_rental_number_cannot_be_lower_than_existing_contract(self):
         customer = Customer.objects.create(name='Cliente Teste')
