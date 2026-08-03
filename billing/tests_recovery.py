@@ -250,13 +250,13 @@ class RecoveryPlanValidationTests(SimpleTestCase):
 
         self.assertTrue(validation.is_valid)
         self.assertEqual(validation.errors, ())
-        self.assertEqual(EXPECTED_RECOVERY_PLAN.payment_count, 127)
-        self.assertEqual(EXPECTED_RECOVERY_PLAN.payment_total, Decimal('12655.00'))
+        self.assertEqual(EXPECTED_RECOVERY_PLAN.payment_count, 110)
+        self.assertEqual(EXPECTED_RECOVERY_PLAN.payment_total, Decimal('7670.00'))
         self.assertEqual(
             EXPECTED_RECOVERY_PLAN.payment_groups,
             GroupedCounts.from_mapping({
                 RETROACTIVE_PAYMENT_GROUP: 107,
-                ENTRY_PAYMENT_GROUP: 20,
+                ENTRY_PAYMENT_GROUP: 3,
             }),
         )
 
@@ -266,8 +266,8 @@ class RecoveryPlanValidationTests(SimpleTestCase):
         self.assertEqual(
             EXPECTED_RECOVERY_PLAN.write_off_groups,
             GroupedCounts.from_mapping({
-                LEGACY_DEAD_CUTOFF_GROUP: 25043,
-                ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 69,
+                LEGACY_DEAD_CUTOFF_GROUP: 25059,
+                ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 40,
                 LEGACY_OVERPAYMENT_GROUP: 1,
             }),
         )
@@ -285,21 +285,21 @@ class RecoveryPlanValidationTests(SimpleTestCase):
         self.assertEqual(first, second)
 
     def test_grouped_counts_are_immutable_and_hashable(self):
-        source = [(ENTRY_PAYMENT_GROUP, 20), (RETROACTIVE_PAYMENT_GROUP, 107)]
+        source = [(ENTRY_PAYMENT_GROUP, 3), (RETROACTIVE_PAYMENT_GROUP, 107)]
         groups = GroupedCounts(tuple(sorted(source)))
 
-        self.assertEqual(groups.total, 127)
+        self.assertEqual(groups.total, 110)
         self.assertEqual(len({groups, EXPECTED_RECOVERY_PLAN.payment_groups}), 1)
 
     def test_payment_group_invariant_and_expected_values_are_enforced(self):
         actual = RecoveryPlanSummary(
-            payment_count=127,
-            payment_total=Decimal('12654.99'),
+            payment_count=110,
+            payment_total=Decimal('7669.99'),
             payment_groups=GroupedCounts.from_mapping({
                 RETROACTIVE_PAYMENT_GROUP: 106,
-                ENTRY_PAYMENT_GROUP: 20,
+                ENTRY_PAYMENT_GROUP: 3,
             }),
-            write_off_count=25113,
+            write_off_count=25100,
             write_off_groups=EXPECTED_RECOVERY_PLAN.write_off_groups,
         )
 
@@ -312,13 +312,13 @@ class RecoveryPlanValidationTests(SimpleTestCase):
 
     def test_write_off_group_invariant_is_enforced(self):
         actual = RecoveryPlanSummary(
-            payment_count=127,
-            payment_total=Decimal('12655.00'),
+            payment_count=110,
+            payment_total=Decimal('7670.00'),
             payment_groups=EXPECTED_RECOVERY_PLAN.payment_groups,
-            write_off_count=25113,
+            write_off_count=25100,
             write_off_groups=GroupedCounts.from_mapping({
-                LEGACY_DEAD_CUTOFF_GROUP: 25043,
-                ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 68,
+                LEGACY_DEAD_CUTOFF_GROUP: 25059,
+                ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 39,
                 LEGACY_OVERPAYMENT_GROUP: 1,
             }),
         )

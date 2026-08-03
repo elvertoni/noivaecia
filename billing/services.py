@@ -484,6 +484,108 @@ def reverse_payment(payment, reason, user=None):
     return reversal
 
 
+def write_off_receivable(receivable, reason, user=None):
+    """Close one positive outstanding balance while preserving its history."""
+    reason = (reason or '').strip()
+    if not reason:
+        raise ValueError('A reconciliation reason is required.')
+
+    with transaction.atomic():
+        locked_receivable = (
+            Receivable.objects.select_for_update()
+            .select_related('rental')
+            .get(pk=receivable.pk)
+        )
+        if (
+            locked_receivable.written_off_at is not None
+            or locked_receivable.balance <= 0
+        ):
+            return False
+
+        previous_balance = locked_receivable.balance
+        written_off_at = timezone.now()
+        locked_receivable.written_off_at = written_off_at
+        locked_receivable.written_off_reason = reason
+        locked_receivable.save(update_fields=[
+            'written_off_at',
+            'written_off_reason',
+            'balance',
+            'updated_at',
+        ])
+        AuditLog.record(
+            user=user,
+            action='write_off_receivable',
+            obj=locked_receivable,
+            reason=reason,
+            metadata={
+                'amount': str(locked_receivable.amount),
+                'paid_amount': str(locked_receivable.paid_amount),
+                'previous_balance': str(previous_balance),
+                'written_off_at': written_off_at.isoformat(),
+            },
+        )
+
+    return True
+
+
+def write_off_receivables(receivables, reason, user=None):
+    """Write off an audited batch of positive balances in one transaction."""
+    reason = (reason or '').strip()
+    if not reason:
+        raise ValueError('A reconciliation reason is required.')
+
+    receivable_ids = sorted({receivable.pk for receivable in receivables})
+    if not receivable_ids:
+        return 0
+
+    with transaction.atomic():
+        locked_receivables = list(
+            Receivable.objects.select_for_update().filter(
+                pk__in=receivable_ids,
+                written_off_at__isnull=True,
+                balance__gt=0,
+            )
+        )
+        if not locked_receivables:
+            return 0
+
+        written_off_at = timezone.now()
+        for receivable in locked_receivables:
+            previous_balance = receivable.balance
+            receivable.written_off_at = written_off_at
+            receivable.written_off_reason = reason
+            receivable.balance = Decimal('0')
+            receivable.updated_at = written_off_at
+            receivable._recovery_previous_balance = previous_balance
+
+        Receivable.objects.bulk_update(
+            locked_receivables,
+            ['written_off_at', 'written_off_reason', 'balance', 'updated_at'],
+            batch_size=1000,
+        )
+        AuditLog.objects.bulk_create([
+            AuditLog(
+                user=user,
+                action='write_off_receivable',
+                model_name='Receivable',
+                object_id=str(receivable.pk),
+                object_repr=str(receivable)[:200],
+                reason=reason,
+                metadata={
+                    'amount': str(receivable.amount),
+                    'paid_amount': str(receivable.paid_amount),
+                    'previous_balance': str(
+                        receivable._recovery_previous_balance,
+                    ),
+                    'written_off_at': written_off_at.isoformat(),
+                },
+            )
+            for receivable in locked_receivables
+        ], batch_size=1000)
+
+    return len(locked_receivables)
+
+
 def reconcile_overpayment(receivable, reason, user=None):
     """Write off a negative receivable balance and record the adjustment.
 

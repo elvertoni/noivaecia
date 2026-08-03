@@ -6,7 +6,11 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from billing.models import Receivable
-from billing.services import reconcile_overpayment
+from billing.services import (
+    reconcile_overpayment,
+    write_off_receivable,
+    write_off_receivables,
+)
 from core.models import AuditLog
 from customers.models import Customer
 from rentals.models import Rental
@@ -58,6 +62,67 @@ class ReconcileNegativeBalancesTests(TestCase):
         self.assertEqual(log.object_id, str(receivable.pk))
         self.assertEqual(log.metadata['previous_balance'], '-15.00')
         self.assertEqual(log.metadata['overpayment_amount'], '15.00')
+
+    def test_positive_balance_write_off_is_zeroed_and_audited(self):
+        receivable = self.make_receivable(
+            amount=Decimal('20.00'),
+            paid_amount=Decimal('5.00'),
+        )
+
+        changed = write_off_receivable(receivable, 'Título legado prescrito.')
+
+        self.assertTrue(changed)
+        receivable.refresh_from_db()
+        self.assertEqual(receivable.balance, Decimal('0.00'))
+        self.assertIsNotNone(receivable.written_off_at)
+        self.assertEqual(receivable.written_off_reason, 'Título legado prescrito.')
+        log = AuditLog.objects.get(action='write_off_receivable')
+        self.assertEqual(log.metadata['previous_balance'], '15.00')
+
+    def test_write_off_ignores_already_closed_receivable(self):
+        receivable = self.make_receivable(
+            amount=Decimal('20.00'),
+            paid_amount=Decimal('20.00'),
+        )
+
+        changed = write_off_receivable(receivable, 'Título já encerrado.')
+
+        self.assertFalse(changed)
+        self.assertIsNone(receivable.written_off_at)
+        self.assertFalse(AuditLog.objects.exists())
+
+    def test_batch_write_off_is_atomic_and_audited_per_receivable(self):
+        first = self.make_receivable(
+            amount=Decimal('20.00'),
+            paid_amount=Decimal('5.00'),
+        )
+        second = self.make_receivable(
+            amount=Decimal('30.00'),
+            paid_amount=Decimal('0.00'),
+        )
+        closed = self.make_receivable(
+            amount=Decimal('10.00'),
+            paid_amount=Decimal('10.00'),
+        )
+
+        changed = write_off_receivables(
+            [first, second, closed],
+            'Baixa em lote testada.',
+        )
+
+        self.assertEqual(changed, 2)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        closed.refresh_from_db()
+        self.assertEqual(first.balance, Decimal('0.00'))
+        self.assertEqual(second.balance, Decimal('0.00'))
+        self.assertIsNone(closed.written_off_at)
+        logs = AuditLog.objects.filter(action='write_off_receivable')
+        self.assertEqual(logs.count(), 2)
+        self.assertEqual(
+            {log.metadata['previous_balance'] for log in logs},
+            {'15.00', '30.00'},
+        )
 
     def test_apply_is_idempotent(self):
         receivable = self.make_receivable(

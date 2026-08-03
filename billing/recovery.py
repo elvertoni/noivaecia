@@ -413,16 +413,16 @@ def _payment_manifest_sort_key(
 
 
 EXPECTED_RECOVERY_PLAN = RecoveryPlanSummary(
-    payment_count=127,
-    payment_total=Decimal('12655.00'),
+    payment_count=110,
+    payment_total=Decimal('7670.00'),
     payment_groups=GroupedCounts.from_mapping({
         RETROACTIVE_PAYMENT_GROUP: 107,
-        ENTRY_PAYMENT_GROUP: 20,
+        ENTRY_PAYMENT_GROUP: 3,
     }),
-    write_off_count=25113,
+    write_off_count=25100,
     write_off_groups=GroupedCounts.from_mapping({
-        LEGACY_DEAD_CUTOFF_GROUP: 25043,
-        ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 69,
+        LEGACY_DEAD_CUTOFF_GROUP: 25059,
+        ACCESS_SETTLED_WITHOUT_VALUE_GROUP: 40,
         LEGACY_OVERPAYMENT_GROUP: 1,
     }),
 )
