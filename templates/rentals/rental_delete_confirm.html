@@ -19,12 +19,45 @@
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
+
+      {# Standard delete button #}
       <div class="form-actions">
         {% if request.user|has_action:'rentals.delete' %}
           <button type="submit" class="btn btn-danger">Excluir permanentemente</button>
         {% endif %}
         <a href="{% url 'rentals:detail' rental.pk %}" class="btn btn-secondary">Voltar</a>
       </div>
+
+      {# Admin override for test cleanup #}
+      {% if request.user|has_action:'rentals.delete' %}
+        <details class="mt-4 rounded-lg border border-slate-200 bg-slate-50">
+          <summary class="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-800">
+            Exclusão forçada (limpeza de teste)
+          </summary>
+          <div class="space-y-3 border-t border-slate-200 px-4 py-4">
+            <p class="text-xs text-slate-500">
+              Para excluir esta locação <strong>independentemente do status</strong> e de histórico de movimentações ou recebimentos,
+              informe a senha de um administrador do sistema.
+            </p>
+            <div class="space-y-1">
+              <label for="id_admin_password" class="block text-sm font-medium text-slate-700">
+                Senha de administrador
+              </label>
+              <input
+                type="password"
+                name="admin_password"
+                id="id_admin_password"
+                autocomplete="off"
+                placeholder="Digite a senha"
+                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              />
+            </div>
+            <button type="submit" class="btn btn-danger w-full">
+              Excluir com autorização administrativa
+            </button>
+          </div>
+        </details>
+      {% endif %}
     </form>
 
   </div>

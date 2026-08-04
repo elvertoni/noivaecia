@@ -492,7 +492,16 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
 # ── Delete ────────────────────────────────────────────────────────────────────
 
 class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
-    """Physically delete a rental only when no movement or payment exists (R7.11)."""
+    """Physically delete a rental (R7.11).
+
+    Standard flow: only cancelled rentals with no movements/payments can be
+    deleted.
+
+    Admin override: when an administrator password is provided, the rental and
+    all associated records (receivables, payments, financial movements,
+    pickup, return) are purged regardless of status.  This is intended for
+    cleaning up usability-test data during the testing phase.
+    """
 
     action_key = 'rentals.delete'
 
@@ -506,6 +515,22 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
                 Rental.objects.select_for_update(),
                 pk=kwargs['pk'],
             )
+
+            # ── Admin override: force-delete with password ────────────
+            admin_password = request.POST.get('admin_password', '').strip()
+            if admin_password:
+                if not self._verify_admin_password(admin_password):
+                    messages.error(request, 'Senha de administrador incorreta.')
+                    return self._render_confirm(request, rental)
+
+                self._purge_rental(rental, request.user)
+                messages.success(
+                    request,
+                    f'Locação #{rental.number} excluída com autorização administrativa.',
+                )
+                return redirect('rentals:list')
+
+            # ── Standard flow ─────────────────────────────────────────
             has_pickup = hasattr(rental, 'pickup') and rental.pickup is not None
             has_return = (
                 hasattr(rental, 'return_record')
@@ -549,6 +574,47 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
                 'Apenas locações canceladas podem ser excluídas. Cancele primeiro.',
             )
             return redirect(rental.get_absolute_url())
+
+    # ── helpers ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _verify_admin_password(password):
+        """Return True if *password* matches any active superuser or staff."""
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+        User = get_user_model()
+        for user in User.objects.filter(
+            is_active=True,
+        ).filter(Q(is_superuser=True) | Q(is_staff=True)):
+            if user.check_password(password):
+                return True
+        return False
+
+    @staticmethod
+    def _purge_rental(rental, acting_user):
+        """Delete a rental and every associated financial / movement record."""
+        from billing.models import FinancialMovement
+        from django.db.models import Q
+
+        # Financial movements first (they reference payments/receivables)
+        FinancialMovement.objects.filter(
+            Q(rental=rental)
+            | Q(receivable__rental=rental)
+            | Q(payment__rental=rental)
+            | Q(payment__receivable__rental=rental)
+        ).delete()
+
+        number = rental.number
+        AuditLog.objects.create(
+            user=acting_user,
+            action='rental_force_delete',
+            model_name='Rental',
+            object_id=str(rental.pk),
+            object_repr=f'Locação #{number}',
+            reason='Exclusão forçada autorizada por senha de administrador (limpeza de teste).',
+        )
+        # CASCADE handles items, receivables→payments, pickup, return
+        rental.delete()
 
     def _render_confirm(self, request, rental):
         from django.template.response import TemplateResponse
