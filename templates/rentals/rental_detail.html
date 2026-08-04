@@ -151,6 +151,11 @@
           (R$ {{ rental.cancellation_penalty_amount|brl }}).
         </p>
       {% endif %}
+      {% if rental.receivables.all %}
+        <p class="text-xs text-red-600 mt-2 border-t border-red-200 pt-2">
+          Esta locação possui histórico financeiro/operacional registrado e permanece preservada no sistema para fins de auditoria.
+        </p>
+      {% endif %}
     </div>
   {% endif %}
 
