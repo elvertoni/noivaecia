@@ -516,11 +516,18 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
             ).exists()
 
             if has_pickup or has_return or has_payments:
-                messages.error(
-                    request,
-                    'Não é possível excluir esta locação pois já possui retirada, devolução ou '
-                    'pagamento registrados. Use o cancelamento.',
-                )
+                if rental.status == Rental.Status.CANCELLED:
+                    messages.error(
+                        request,
+                        'Esta locação já está cancelada, mas não pode ser excluída fisicamente do sistema pois '
+                        'possui histórico de retirada, devolução ou pagamento registrado para auditoria.',
+                    )
+                else:
+                    messages.error(
+                        request,
+                        'Não é possível excluir esta locação pois já possui retirada, devolução ou '
+                        'pagamento registrados. Use o cancelamento.',
+                    )
                 return redirect(rental.get_absolute_url())
 
             if rental.status == Rental.Status.CANCELLED:
