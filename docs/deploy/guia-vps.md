@@ -22,7 +22,7 @@ Convenções deste guia:
 | `DOMAIN` (validação) | `novo.tonicoimbra.com` |
 | `DOMAIN` (produção) | **a definir** — cliente escolhendo |
 | Registry | `ghcr.io/elvertoni/noivaecia` |
-| Stack | `noivascia` (arquivo único `docker-stack.yml`, Traefik incluso) |
+| Stack | `noivaecia` (arquivo único `docker-stack.yml`, Traefik incluso) |
 
 > **Uma variável governa o domínio.** `DOMAIN` define o host do app
 > (`Host(\`${DOMAIN}\`)`), o host do dashboard (`traefik.${DOMAIN}`) e o certificado
@@ -294,8 +294,8 @@ ssh -T git@github.com   # deve responder com o nome de usuário
 ### 3.2 Clonar o repositório — ⏳ PENDENTE
 
 ```bash
-git clone git@github.com:elvertoni/noivaecia.git ~/noivascia
-cd ~/noivascia
+git clone git@github.com:elvertoni/noivaecia.git ~/noivaecia
+cd ~/noivaecia
 ```
 
 ### 3.3 Login no GHCR — ⏳ PENDENTE
@@ -367,11 +367,11 @@ O Traefik lê pela convenção nativa
 
 ### 5.1 Arquivo `.env`
 
-Vive em `~/noivascia/.env` (raiz do repositório clonado), `chmod 600`, **nunca**
+Vive em `~/noivaecia/.env` (raiz do repositório clonado), `chmod 600`, **nunca**
 versionado (`.gitignore:5`, `.dockerignore:23-25`).
 
 ```bash
-cd ~/noivascia
+cd ~/noivaecia
 tee .env >/dev/null <<'EOF'
 DJANGO_ENV=production
 DJANGO_DEBUG=False
@@ -443,7 +443,7 @@ Cinco pontos que causam falha se alterados sem atenção:
 ### 5.2 Gerar os segredos
 
 ```bash
-cd ~/noivascia
+cd ~/noivaecia
 
 # Chave do Django
 python3 -c 'import secrets; print(secrets.token_urlsafe(64))'
@@ -472,7 +472,7 @@ como ela sai.
 O `scripts/deploy.sh` já faz isso. Para deployar à mão:
 
 ```bash
-cd ~/noivascia
+cd ~/noivaecia
 export DOMAIN=$(grep -E '^DOMAIN=' .env | cut -d= -f2-)
 export ACME_EMAIL=$(grep -E '^ACME_EMAIL=' .env | cut -d= -f2-)
 export TRAEFIK_DASHBOARD_AUTH=$(grep -E '^TRAEFIK_DASHBOARD_AUTH=' .env | cut -d= -f2-)
@@ -494,25 +494,25 @@ O stack é **um arquivo só**, com o Traefik dentro:
 Equivalente manual:
 
 ```bash
-docker stack deploy -c docker-stack.yml --with-registry-auth noivascia
-watch docker stack services noivascia
+docker stack deploy -c docker-stack.yml --with-registry-auth noivaecia
+watch docker stack services noivaecia
 ```
 
 Esperado, após ~2 minutos (o TLS pode demorar mais):
 
 ```
-noivascia_traefik        replicated   1/1
-noivascia_app            replicated   2/2
-noivascia_scheduler      replicated   1/1
-noivascia_db             replicated   1/1
-noivascia_evolution-api  replicated   1/1
+noivaecia_traefik        replicated   1/1
+noivaecia_app            replicated   2/2
+noivaecia_scheduler      replicated   1/1
+noivaecia_db             replicated   1/1
+noivaecia_evolution-api  replicated   1/1
 ```
 
 Se alguma coluna travar em `0/1` ou `1/2`:
 
 ```bash
-docker service ps noivascia_app --no-trunc
-docker service logs noivascia_app --tail 100
+docker service ps noivaecia_app --no-trunc
+docker service logs noivaecia_app --tail 100
 ```
 
 `--no-trunc` é essencial — a mensagem de erro do Swarm é truncada por padrão e o motivo
@@ -524,7 +524,7 @@ O desafio DNS-01 leva de 30s a alguns minutos: o Traefik cria um TXT `_acme-chal
 espera o `delaybeforecheck=10`, valida e remove.
 
 ```bash
-docker service logs noivascia_traefik 2>&1 | grep -iE 'acme|certificate|obtain'
+docker service logs noivaecia_traefik 2>&1 | grep -iE 'acme|certificate|obtain'
 ```
 
 Sucesso: uma linha `Certificates obtained for domains ["$DOMAIN" "*.$DOMAIN"]`.
@@ -554,7 +554,7 @@ contrato, subir e reler um `proof_photo`, registrar um recebimento.
 ### 6.5 Superusuário
 
 ```bash
-APP=$(docker ps --filter name=noivascia_app -q | head -1)
+APP=$(docker ps --filter name=noivaecia_app -q | head -1)
 docker exec -it $APP python manage.py createsuperuser
 docker exec -it $APP python manage.py ensure_admins
 ```
@@ -566,7 +566,7 @@ docker exec -it $APP python manage.py ensure_admins
 ### 7.1 Redeploy
 
 ```bash
-cd ~/noivascia
+cd ~/noivaecia
 ./scripts/deploy.sh                 # ciclo completo
 ./scripts/deploy.sh --skip-build    # só reconcilia o stack
 ```
@@ -574,24 +574,24 @@ cd ~/noivascia
 Forçar novo pull sem trocar a tag:
 
 ```bash
-docker service update --force noivascia_app
-docker service update --force noivascia_scheduler
+docker service update --force noivaecia_app
+docker service update --force noivaecia_scheduler
 ```
 
 Fixar uma imagem específica, ou voltar à anterior:
 
 ```bash
-docker service update --image ghcr.io/elvertoni/noivaecia:<sha> noivascia_app
-docker service rollback noivascia_app
+docker service update --image ghcr.io/elvertoni/noivaecia:<sha> noivaecia_app
+docker service rollback noivaecia_app
 ```
 
 ### 7.2 Logs
 
 ```bash
-docker service logs -f noivascia_app --tail 100
-docker service logs -f noivascia_scheduler --tail 50
-docker service logs -f noivascia_traefik            # emissão de TLS, roteamento
-docker service logs noivascia_db --since 10m
+docker service logs -f noivaecia_app --tail 100
+docker service logs -f noivaecia_scheduler --tail 50
+docker service logs -f noivaecia_traefik            # emissão de TLS, roteamento
+docker service logs noivaecia_db --since 10m
 ```
 
 ### 7.3 Comandos Django
@@ -599,7 +599,7 @@ docker service logs noivascia_db --since 10m
 O Swarm não tem `exec` de serviço — resolva a task para um container:
 
 ```bash
-APP=$(docker ps --filter name=noivascia_app -q | head -1)
+APP=$(docker ps --filter name=noivaecia_app -q | head -1)
 
 docker exec -it $APP python manage.py showmigrations
 docker exec -it $APP python manage.py send_daily_whatsapp_report --dry-run --check
@@ -609,20 +609,20 @@ docker exec -it $APP python manage.py wait_for_db --timeout 5
 ### 7.4 Escalar
 
 ```bash
-docker service scale noivascia_app=3
+docker service scale noivaecia_app=3
 ```
 
-> **Nunca escale `noivascia_scheduler` acima de 1.** Duas instâncias do loop enviariam o
+> **Nunca escale `noivaecia_scheduler` acima de 1.** Duas instâncias do loop enviariam o
 > relatório diário duplicado ao cliente. A guarda por `AuditLog` reduz a janela, mas não
 > elimina a corrida.
 
-Para desligar o relatório temporariamente: `docker service scale noivascia_scheduler=0`.
+Para desligar o relatório temporariamente: `docker service scale noivaecia_scheduler=0`.
 
 ### 7.5 Recursos
 
 ```bash
 docker stats --no-stream
-docker stack services noivascia
+docker stack services noivaecia
 free -h
 df -h
 ```
@@ -652,7 +652,7 @@ header `Host`, e esse IP não está em `ALLOWED_HOSTS`.
 causa é `DOMAIN` não exportada no shell no momento do deploy (6.1):
 
 ```bash
-docker service inspect noivascia_app --format '{{json .Spec.Labels}}'
+docker service inspect noivaecia_app --format '{{json .Spec.Labels}}'
 ```
 
 ### Loop infinito de redirect HTTPS
@@ -668,7 +668,7 @@ docker service inspect noivascia_app --format '{{json .Spec.Labels}}'
 ### Certificado nunca é emitido
 
 ```bash
-docker service logs noivascia_traefik 2>&1 | grep -i acme
+docker service logs noivaecia_traefik 2>&1 | grep -i acme
 ```
 
 - `unable to find zone` / `Invalid request headers` → token errado, escopo insuficiente
@@ -709,11 +709,18 @@ Se aparecer erro de migração concorrente, verifique se o `scheduler` não est�
 
 ### `ACCESS_REFUSED` ou instância desconectada no Evolution API
 
-**Causa:** `EVOLUTION_API_KEY` divergente entre app e serviço, ou o container do Evolution
-foi recriado sem o volume de instâncias e perdeu o pareamento.
+**Causa:** `EVOLUTION_API_KEY` divergente entre app e serviço, ou o Evolution foi
+implantado/recriado sem a instância persistida. Uma instalação nova pode estar saudável e
+mesmo assim responder 404: `The "noivascia" instance does not exist`.
 
-**Correção:** conferir que ambos leem o mesmo valor; se o pareamento se perdeu, gerar novo
-QR e reparear a instância `noivascia`.
+**Correção:** conferir que ambos leem a mesma chave e que `EVOLUTION_INSTANCE=noivascia`.
+Liste as instâncias pela API usando a chave somente dentro da rede interna. Se a lista
+estiver vazia, crie **uma única vez** a instância `noivascia` com `POST /instance/create`,
+corpo `{"instanceName":"noivascia","integration":"WHATSAPP-BAILEYS","qrcode":true}`
+e a chave no header `apikey`; não exiba a chave nem o QR nos logs. Depois, no sistema,
+acesse `/avisos-whatsapp/?connect=1` com a permissão `notifications.manage`, gere o QR e
+leia-o no WhatsApp da loja em **Aparelhos conectados**. Por fim, confirme que
+`GET /instance/connectionState/noivascia` retorna `open` e rode:
 
 ```bash
 docker exec -it $APP python manage.py send_daily_whatsapp_report --dry-run --check
@@ -733,9 +740,9 @@ passo final. Ou use tags imutáveis por `sha`.
 ### 9.1 Backup
 
 ```bash
-cd ~/noivascia
-BACKUP_DIR=/backups ./scripts/backup.sh
-ls -lh /backups
+cd ~/noivaecia
+BACKUP_DIR="$HOME/backups" ./scripts/backup.sh
+ls -lh "$HOME/backups"
 ```
 
 Gera `db_<data>.sql.gz` e `media_<data>.tar.gz`, e remove artefatos com mais de 30 dias.
@@ -744,7 +751,7 @@ Agendar diariamente:
 
 ```bash
 crontab -e
-# 0 3 * * * BACKUP_DIR=/backups /home/deploy/noivascia/scripts/backup.sh >> /backups/cron.log 2>&1
+# 0 3 * * * BACKUP_DIR=/home/deploy/backups /home/deploy/noivaecia/scripts/backup.sh >> /home/deploy/backups/cron.log 2>&1
 ```
 
 > O `pg_dump` roda **dentro do container do Postgres**, não na imagem do app — a imagem
@@ -754,15 +761,15 @@ crontab -e
 ### 9.2 Restore do banco
 
 ```bash
-DBID=$(docker ps -qf name=noivascia_db | head -n1)
+DBID=$(docker ps -qf name=noivaecia_db | head -n1)
 
-gunzip -c /backups/db_<data>.sql.gz | docker exec -i "$DBID" psql -U noivas -d noivas_cia
+gunzip -c "$HOME/backups/db_<data>.sql.gz" | docker exec -i "$DBID" psql -U noivas -d noivas_cia
 ```
 
 Para um dump em formato custom (`pg_dump -Fc`, usado na migração do EasyPanel):
 
 ```bash
-docker cp /backups/<arquivo>.dump $DBID:/tmp/restore.dump
+docker cp "$HOME/backups/<arquivo>.dump" $DBID:/tmp/restore.dump
 docker exec -it $DBID pg_restore -U noivas -d noivas_cia --clean --if-exists /tmp/restore.dump
 docker exec -it $DBID rm /tmp/restore.dump
 ```
@@ -777,7 +784,7 @@ docker exec -it $DBID psql -U noivas -d noivas_cia -c "SELECT last_value FROM re
 ### 9.3 Restore da mídia
 
 ```bash
-docker run --rm -v noivascia_media_data:/dest -v /backups:/src alpine \
+docker run --rm -v noivaecia_media_data:/dest -v "$HOME/backups:/src" alpine \
   sh -c 'cd /dest && tar xzf /src/media_<data>.tar.gz'
 ```
 
@@ -792,7 +799,7 @@ existe "atualizar no lugar":
 ```bash
 printf '%s' '<NOVO_TOKEN>' | docker secret create CLOUDFLARE_DNS_API_TOKEN_v2 -
 # apontar docker-stack.yml para o _v2 e redeployar
-docker stack deploy -c docker-stack.yml --with-registry-auth noivascia
+docker stack deploy -c docker-stack.yml --with-registry-auth noivaecia
 # confirmar que o Traefik subiu, e só então:
 docker secret rm CLOUDFLARE_DNS_API_TOKEN
 ```

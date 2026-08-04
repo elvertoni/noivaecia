@@ -117,11 +117,30 @@ Scope and rules:
 
 The Docker image builds Tailwind in a Node 20 stage and runs Python 3.12 in the final stage. `docker-entrypoint.sh` applies migrations, collects static files, optionally starts `scripts/report_scheduler.sh`, and then launches Gunicorn. `WHATSAPP_SCHEDULER_ENABLED=0` disables the scheduler. Keep a single scheduler instance unless an explicit distributed-locking design is added.
 
-## Easypanel Deployment
+## Legacy Import Post-Processing
 
-- Production target: project `work`, service `noivaecia`, repository `elvertoni/noivaecia`, branch `main`.
-- Before deploying, inspect the service, confirm the intended commit is pushed to `origin/main`, and preserve existing source, environment, mounts, domains, ports, and resource settings.
-- Deploy with the Easypanel MCP, monitor the action to a terminal state, then inspect build/service logs and the application health endpoint.
+Every successful `import_legacy_access --reset --confirm-reset` must be followed, before releasing the system to users, by:
+
+1. Put public writes in maintenance mode, stop schedulers/background writers, and use one isolated administrative container for the operation.
+2. Preserve the configurable `Company` fields before the reset. After import, restore only configuration fields; never overwrite the PK or timestamps, and set `last_rental_number` to the maximum of the saved and imported values.
+3. Run `python manage.py post_legacy_import --dry-run`, review the counts, then run `python manage.py post_legacy_import --apply` immediately within the same maintenance window.
+4. Run the dry-run again and require zero pending city, customer-search, product-search, and positive-product-value changes.
+5. Compare the core record counts with the import manifest and run `python manage.py homologation_report`, `python manage.py cpf_duplicate_report`, `python manage.py check`, and the public `/healthz/` check.
+
+Do not treat a successful raw import as a completed migration. The post-processing command defaults to read-only preview, requires `--apply` to write, is idempotent, and intentionally does not modify `Company`. Run it only immediately after a reset import, while writers remain blocked, because positive legacy product values are cleared by business rule. See `docs/deploy/runbook-cutover-legado.md`.
+
+## Production Deployment
+
+- Current production is the Docker Swarm stack `noivaecia` on VPS `169.58.79.15`, checked out at `~/noivaecia` for user `deploy`; the public domain is `https://noivaseciabandeirantes.com.br`.
+- There is no Easypanel or Portainer on this VPS. Treat old Easypanel references as historical infrastructure only.
+- Before deploying, inspect the Swarm services, confirm the intended commit is pushed to `origin/main`, and preserve existing environment, secrets, mounts, networks, domains, ports, and resource settings.
+- Deploy through the repository's Swarm workflow, monitor every service to a converged state, then inspect build/service logs, run Django checks and migrations checks, and verify `https://noivaseciabandeirantes.com.br/healthz/`.
+- The Evolution API is a separate service in this stack. The Django setting and required
+  instance name are `EVOLUTION_INSTANCE=noivascia`. After a new Evolution deployment or
+  a lost `evolution_instances` volume, first create that instance through
+  `POST /instance/create` with `WHATSAPP-BAILEYS` and QR enabled, then pair it once from
+  `/avisos-whatsapp/?connect=1` using a user with `notifications.manage`. Do not create
+  another instance name or print the Evolution API key.
 - Never print production secret values. Report only variable names or whether required settings are configured.
 
 ## Rental Form UI/UX Conventions

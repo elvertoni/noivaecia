@@ -47,26 +47,73 @@ completo no momento do cutover.
 
 ## 2. Sequência do cutover
 
-1. **Janela de movimento zero** — loja fechada. Domingo, ou segunda antes de abrir.
-   Nunca no meio de um dia de atendimento.
-2. **Backup do Postgres de produção antes de qualquer coisa** (`scripts/backup.sh`),
-   com o dump guardado **fora da VPS**. Este é o ponto de retorno.
+1. **Janela de movimento zero com bloqueio técnico** — loja fechada e escrita pública
+   em manutenção. Na VPS, mantenha uma task do app apenas para administração, retire a
+   rota pública e pare o scheduler:
+
+   ```bash
+   cd ~/noivaecia
+   docker service scale noivaecia_scheduler=0
+   docker service update --replicas 1 \
+     --label-add 'traefik.http.routers.noivascia.rule=Host(`maintenance.invalid`)' \
+     noivaecia_app
+   docker service ps noivaecia_app
+   ```
+
+   Confirme externamente que o domínio não entrega mais as telas e que existe exatamente
+   uma task do app; use somente esse container para os comandos administrativos. Ao fim,
+   `./scripts/deploy.sh --skip-build` restaura labels e réplicas do stack. Nunca faça no
+   meio de um dia de atendimento.
+2. **Backup do Postgres de produção antes de qualquer coisa:**
+
+   ```bash
+   cd ~/noivaecia
+   BACKUP_DIR="$HOME/backups" ./scripts/backup.sh
+   ```
+
+   O script deve gerar `db_<timestamp>.sql.gz` e `media_<timestamp>.tar.gz`.
+   Valide que o `.sql.gz` não está vazio e passa em `gzip -t`; gere SHA-256, copie o
+   banco e a mídia para fora da VPS e confira os mesmos hashes no destino. Para dumps
+   custom (`pg_dump -Fc`), valide também com `pg_restore --list`. Só então prossiga.
+   Este é o ponto de retorno.
 3. **A loja para de usar o BRcom. Parada rígida, anunciada com antecedência.**
    A partir daqui o legado é somente leitura.
 4. **Export fresco do `.mdb`** — `tools/legacy_migration/export_access.ps1`
    (PowerShell 32-bit, Jet 4.0). Confirme no manifest que o `.mdb` é o do dia, não uma
    cópia velha.
-5. **`import_legacy_access --dry-run`** primeiro. Compare as contagens com o resumo do
-   import anterior — clientes, produtos, locações, recebíveis, movimentos financeiros.
-   Divergência grande para baixo significa export truncado: pare e investigue.
-6. **`import_legacy_access --reset --confirm-reset`** para valer.
-7. **Validar:**
+5. **Salvar a configuração operacional da `Company`** antes da carga. A whitelist exata
+   é: `name`, `address`, `city`, `cnpj`, `phones`, `daily_interest_rate`,
+   `late_fee_rate`, `monthly_interest_rate`, `damage_penalty_rate`,
+   `loss_penalty_rate`, `cancellation_penalty_rate`, `late_return_daily_rate`,
+   `late_return_max_days`, `footer_message`, `whatsapp_reports_enabled`,
+   `whatsapp_report_number` e `whatsapp_report_time`. Guarde esses valores em arquivo
+   protegido (`chmod 600`) sem expô-los nos logs. Registre `last_rental_number`
+   separadamente. Nunca restaure cegamente `id`, `created_at` ou `updated_at`.
+6. **`import_legacy_access --reset --confirm-reset --dry-run`** primeiro. Compare as
+   contagens com o resumo do import anterior — clientes, produtos, locações,
+   recebíveis e movimentos financeiros. Divergência grande para baixo significa
+   export truncado: pare e investigue.
+7. **`import_legacy_access --reset --confirm-reset`** para valer.
+8. **Pós-processamento obrigatório:**
+   - `python manage.py post_legacy_import --dry-run` e revisar as quantidades;
+   - `python manage.py post_legacy_import --apply` para normalizar cidades, reconstruir
+     todos os campos de busca de clientes/produtos e zerar preços positivos do cadastro;
+   - repetir `python manage.py post_legacy_import --dry-run` e exigir zero pendências;
+   - restaurar somente os campos configuráveis da `Company` salvos no passo 5. Para a
+     numeração use `max(last_rental_number_salvo, last_rental_number_importado)`; nunca
+     sobrescreva PK ou timestamps. O pós-processamento não altera a empresa.
+9. **Validar:**
    - `python manage.py homologation_report`
    - `python manage.py cpf_duplicate_report` (esperado: ~518 duplicatas legadas reais;
      não é bug, ver auditoria de 2026-07-20)
+   - comparar as contagens centrais com o manifest: clientes, produtos, locações,
+     itens e recebíveis;
+   - `python manage.py check` e `curl -fsS https://noivaseciabandeirantes.com.br/healthz/`;
    - Conferir na UI uma locação recente conhecida, com itens, recebíveis e valores.
-8. **A loja passa a usar só o sistema novo.** O BRcom vira arquivo morto — **não
-   desinstale**, guarde o `.mdb` e o executável indefinidamente.
+10. **A loja passa a usar só o sistema novo.** O BRcom vira arquivo morto — **não
+    desinstale**, guarde o `.mdb` e o executável indefinidamente. Reconcilie o stack com
+    `cd ~/noivaecia && ./scripts/deploy.sh --skip-build`, espere app e scheduler
+    convergirem e só então valide o health público e reabra a operação.
 
 ---
 
@@ -93,8 +140,9 @@ ninguém achar que lançou contrato de verdade.
 | Dois sistemas aceitando escrita | Duas fontes de verdade, reconciliação impossível | Parada rígida do legado antes do export |
 | Export de `.mdb` desatualizado | Perde semanas de movimento silenciosamente | Conferir data no manifest do export |
 | Pular o `--dry-run` | Descobre problema com as tabelas já apagadas | Sempre dry-run antes, comparando contagens |
+| Encerrar após o import bruto | Cidades e campos de busca voltam ao formato legado e correções operacionais se perdem | Executar `post_legacy_import` com dry-run antes e depois; zero pendências é gate de liberação |
 | Sem backup antes do `--reset` | Não há ponto de retorno | `scripts/backup.sh` com dump fora da VPS |
 | Locação importada como devolvida sem `Return` | Data efetiva inválida no legado deixa o estado inconsistente | Achado documentado na auditoria de 2026-07-29; decidir entre quarentena, rebaixar estado ou sintetizar data |
 | Desinstalar o BRcom após o cutover | Perde a única fonte para auditar divergência futura | Arquivar `.mdb` + binários indefinidamente |
-| **`--reset` desfaz correções manuais na `Company`** | O nome da empresa volta ao lixo do legado (`empresa.nome` = `'li ap feNOIVAS & CIA'`) e sai impresso no cabeçalho e no rodapé de todo contrato | Aconteceu na carga de 2026-08-02. `Company` está em `BUSINESS_MODELS`, então o `--reset` apaga a linha inteira e o import recria a partir do Access. **Antes de qualquer carga**, salvar o registro atual (`Company.objects.values().first()`) e reconferir campo a campo depois; na carga de 02/08 só `name` divergiu |
-| **`--reset` repõe preço em 3 produtos** | O preço do traje é digitado no ato da locação e não deve ficar no cadastro, mas 3 dos 10.315 produtos vêm do Access com valor (`CRN83` e `CRN94` = 330,00; `VF1049` = 280,00) e passam a pré-preencher o campo na grade | Zerado manualmente em 2026-08-02. Repetir depois de cada carga: `Product.objects.filter(value__gt=0).update(value=0)` |
+| **`--reset` desfaz correções manuais na `Company`** | O nome da empresa volta ao lixo do legado (`empresa.nome` = `'li ap feNOIVAS & CIA'`) e sai impresso no cabeçalho e no rodapé de todo contrato | Aconteceu na carga de 2026-08-02. Salvar antes somente os campos configuráveis e restaurá-los por whitelist; nunca PK/timestamps. Manter `last_rental_number=max(salvo, importado)` |
+| **`--reset` repõe preço em produtos** | O preço do traje é digitado no ato da locação e não deve ficar no cadastro; valores do Access passam a pré-preencher o campo na grade | `post_legacy_import` zera todo `Product.value > 0` de forma idempotente e o dry-run final comprova zero pendências |

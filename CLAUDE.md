@@ -5,11 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project overview
 
 Noivas & Cia is a Django 5 monolith for managing bridal/event clothing rentals.
-Server-rendered Django templates + TailwindCSS 3, deployed to a VPS via
-Docker/EasyPanel (GitHub `main` → EasyPanel build/deploy, project `work`,
-service `noivaecia`). If Docker is not running locally, validate container
-builds through EasyPanel build logs after push — a local daemon failure is
-not proof of a project build error.
+Server-rendered Django templates + TailwindCSS 3, deployed as Docker Swarm
+stack `noivaecia` on VPS `169.58.79.15` (`deploy`, checkout `~/noivaecia`).
+Production serves `https://noivaseciabandeirantes.com.br`. This VPS has no
+EasyPanel or Portainer; EasyPanel references describe the retired environment.
 
 ### Database
 
@@ -117,6 +116,12 @@ installments in billing and gets a `Pickup`/`Return` in movements, which syncs
   it every 30s in the deployed container.
 - Message templates are centralized (see `refactor(notifications): centralize
   templates` in history) — don't inline WhatsApp copy in views/services.
+- Production expects the Evolution instance named `noivascia`. A newly deployed
+  Evolution service has no WhatsApp session until that instance is created
+  (`POST /instance/create`, integration `WHATSAPP-BAILEYS`, QR enabled) and the
+  QR is scanned in `/avisos-whatsapp/?connect=1` by a user with
+  `notifications.manage`. Never expose its API key; do not change the instance
+  name merely because the service starts empty.
 
 `docs/arquitetura.md` has the full ER diagram; `PRD.md` and `docs/` hold
 product references. `brcom/` is the legacy VB6/Access system kept for reference
@@ -156,7 +161,7 @@ it.
 
 `accounts/ensure_admins`, `core/import_legacy_access`, `core/golive_backup`
 (SQLite backup with manifest), `core/homologation_report`,
-`core/normalize_cities`, `core/rebuild_search_fields`,
+`core/normalize_cities`, `core/rebuild_search_fields`, `core/post_legacy_import`,
 `core/cpf_duplicate_report` / `core/merge_duplicate_customers` (duplicate-CPF
 customer cleanup), `core/reconcile_negative_balances`, `core/legacy_reset`,
 `notifications/send_daily_whatsapp_report`.
@@ -185,7 +190,15 @@ Access-export helpers feeding `core/import_legacy_access`.
 
 - Tailwind build must produce `static/css/output.css` during the container
   build, and `collectstatic` must pick it up.
-- After push, check EasyPanel build/deploy logs if the deployment does not
-  refresh.
+- After push, inspect the Docker Swarm rollout, require every `noivaecia`
+  service to converge, and verify
+  `https://noivaseciabandeirantes.com.br/healthz/`.
+- A raw `import_legacy_access --reset --confirm-reset` is never the end of the
+  migration. Block public/background writers; preserve the configurable
+  `Company` fields and later restore only those fields, keeping
+  `last_rental_number=max(saved, imported)`. Then run
+  `post_legacy_import --dry-run`, `post_legacy_import --apply`, and the dry-run
+  again; the last pass must report zero pending changes. Compare core counts
+  with the import manifest and follow `docs/deploy/runbook-cutover-legado.md`.
 - For print contract changes (`templates/rentals/rental_contract.html`),
   validate by regenerating the PDF from the running app, not an old download.
