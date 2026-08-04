@@ -63,7 +63,8 @@ Use Tailwind utilities and tokens from `tailwind.config.js`; do not introduce an
 - A rental with registered payments may still have its item list adjusted, but customer, dates, and penalty remain locked.
 - `wearer_name` exists on both `Rental` and `RentalItem`. The per-item field is deliberately hidden from the dense entry grid but remains part of saved data and printed-contract compatibility; do not remove a model field merely because the grid omits it.
 - On a failed rental save, partially entered item rows must be re-rendered. Preserve the `RentalItemForm.has_user_input()` behavior and distinguish an untouched extra row from a half-filled row.
-- Customers may be individuals or companies. CPF and CNPJ are optional, separately normalized fields; preserve legacy records that have neither.
+- Customers may be individuals or companies. CPF and CNPJ are optional, separately normalized fields; preserve legacy records that have neither. Customer `district` (Bairro) is printed on the rental contract alongside address, city, and mobile phone.
+- Physical deletion of a rental with registered payments, pickups, or returns is strictly blocked to preserve audit history. If a rental is already cancelled but has history, deletion attempts display an explicit audit-preservation message rather than prompting to cancel again.
 - Financial writes should go through the services in `billing/services.py`, preserving transaction, reconciliation, and audit behavior.
 
 ## Testing Guidelines

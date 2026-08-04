@@ -138,6 +138,7 @@ it.
   `register_payment`, `reverse_payment`, `financial_kpis`, …).
 - **Rental numbering**: `Company.next_rental_number()` classmethod — the only
   place that increments `last_rental_number`.
+- **Contract & Audit Invariants**: printed contract displays customer `district` (Bairro); physical deletion of rentals with payments/movements is blocked for audit retention, displaying a clear audit message on cancelled rentals.
 - **Company is a singleton** — one row, always fetched via its helper.
 - Signals go in the app's `signals.py`, only when truly needed.
 
