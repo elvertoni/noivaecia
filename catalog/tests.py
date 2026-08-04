@@ -64,6 +64,44 @@ class CatalogFormValidationTests(TestCase):
         self.assertIn('value', form.errors)
 
 
+class InactiveProductCodesViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='catalog-codes@test.com', password='Senha12345')
+        ModulePermission.objects.create(user=self.user, module_key='catalog', allowed=True)
+        self.client.force_login(self.user)
+        self.category = Category.objects.create(prefix='VF', name='Vestidos de festa')
+        self.other_category = Category.objects.create(prefix='TRN', name='Ternos')
+
+    def test_lists_archived_and_legacy_null_codes_from_selected_category(self):
+        Product.objects.create(
+            category=self.category, code=38, description='Nulo', value=0, is_active=False,
+        )
+        Product.objects.create(
+            category=self.category, code=38, description='Nulo', value=0, is_active=True,
+        )
+        Product.objects.create(
+            category=self.category, code=39, description='Ativo', value=100, is_active=True,
+        )
+        Product.objects.create(
+            category=self.other_category, code=40, description='Nulo', value=0, is_active=False,
+        )
+
+        response = self.client.get(
+            reverse('catalog:inactive_product_codes'), {'category': self.category.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['results'], [
+            {'code': 38, 'label': 'VF38', 'records': 2},
+        ])
+
+    def test_create_form_has_inactive_code_picker(self):
+        response = self.client.get(reverse('catalog:product_create'))
+
+        self.assertContains(response, 'Reaproveitar código anulado ou retirado')
+        self.assertContains(response, reverse('catalog:inactive_product_codes'))
+
+
 class AvailabilityTests(TestCase):
     def setUp(self):
         self.customer = Customer.objects.create(name='Maria')

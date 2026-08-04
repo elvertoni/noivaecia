@@ -626,6 +626,39 @@ class ProductSearchView(View):
         return JsonResponse({'results': results})
 
 
+class InactiveProductCodesView(CatalogAccessMixin, View):
+    """List reusable codes from archived or legacy-null inventory items."""
+
+    def get(self, request, *args, **kwargs):
+        category_id = request.GET.get('category', '').strip()
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'results': []})
+
+        category = Category.objects.filter(pk=category_id).first()
+        if category is None:
+            return JsonResponse({'results': []})
+
+        codes = (
+            Product.objects.filter(category=category)
+            .filter(Q(is_active=False) | Q(description__iexact='nulo'))
+            .values('code')
+            .annotate(records=Count('pk'))
+            .order_by('code')
+        )
+        return JsonResponse({
+            'results': [
+                {
+                    'code': row['code'],
+                    'label': f'{category.prefix}{row["code"]}',
+                    'records': row['records'],
+                }
+                for row in codes
+            ],
+        })
+
+
 class ProductBrowseView(View):
     """JSON faceted browse for the rental item picker modal.
 
