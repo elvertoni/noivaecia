@@ -92,7 +92,7 @@ class DeliveriesBlockTests(TestCase):
         )
         text = build_daily_report(TODAY)
         self.assertIn('📦 *Entregas a fazer hoje: 1*', text)
-        self.assertIn('#1 Maria Silva', text)
+        self.assertIn('#1 MARIA SILVA', text)
         self.assertNotIn('⚠️', text)
 
     def test_delivery_item_summary_uses_historical_product_snapshot(self):
@@ -151,7 +151,7 @@ class PickupsBlockTests(TestCase):
                      pickup_date=TODAY, return_date=TODAY + timedelta(days=7))
         text = build_daily_report(TODAY)
         self.assertIn('👗 *Retiradas de hoje: 1*', text)
-        self.assertIn('#10 Ana Costa', text)
+        self.assertIn('#10 ANA COSTA', text)
 
     def test_overdue_pickup_is_flagged(self):
         _make_rental(11, self.customer, Rental.Status.PENDING,
@@ -175,7 +175,7 @@ class ReceivablesBlockTests(TestCase):
         _make_receivable(self.rental, due_date=TODAY, amount=Decimal('300'))
         text = build_daily_report(TODAY)
         self.assertIn('💰 *A receber hoje: R$ 300,00 (1 título)*', text)
-        self.assertIn('#20 Carla Souza — R$ 300,00', text)
+        self.assertIn('#20 CARLA SOUZA — R$ 300,00', text)
 
     def test_overdue_receivables_are_summed_separately(self):
         rental2 = _make_rental(21, self.customer, Rental.Status.RETURNED,

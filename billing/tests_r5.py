@@ -277,7 +277,7 @@ class GlobalReceivableListViewTests(TestCase):
 
     def test_list_shows_open_by_default(self):
         response = self.client.get(reverse('billing:receivables'))
-        self.assertContains(response, 'Maria Silva')
+        self.assertContains(response, 'MARIA SILVA')
 
     def test_filter_by_status_paid_hides_open(self):
         response = self.client.get(reverse('billing:receivables') + '?status=paid')
@@ -325,14 +325,14 @@ class CustomerReceivableViewTests(TestCase):
             reverse('billing:customer_receivables_search') + '?q=Maria'
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Maria Silva')
+        self.assertContains(response, 'MARIA SILVA')
 
     def test_customer_view_shows_receivables(self):
         response = self.client.get(
             reverse('billing:customer_receivables', args=[self.customer.pk])
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Maria Silva')
+        self.assertContains(response, 'MARIA SILVA')
 
     def test_customer_view_shows_total_balance(self):
         response = self.client.get(

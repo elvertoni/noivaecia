@@ -34,8 +34,8 @@ class CpfDuplicateReportTests(TestCase):
             self.assertEqual(len(files), 1)
             content = files[0].read_text(encoding='utf-8')
             self.assertIn('CPF 11111111111', content)
-            self.assertIn('Maria Silva', content)
-            self.assertIn('Maria S. Silva', content)
+            self.assertIn('MARIA SILVA', content)
+            self.assertIn('MARIA S. SILVA', content)
 
     def test_ignores_customers_without_duplicate_cpf(self):
         Customer.objects.create(name='Único', cpf='333.333.333-33')

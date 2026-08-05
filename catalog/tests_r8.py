@@ -285,8 +285,8 @@ class AvailabilityOperationalLookupTests(TestCase):
         self.assertNotIn(returned, response.context['scheduled_rentals'])
         self.assertNotIn(cancelled, response.context['scheduled_rentals'])
         self.assertContains(response, 'Locado')
-        self.assertContains(response, 'Walter Domingues')
-        self.assertContains(response, 'Ana Beatriz')
+        self.assertContains(response, 'WALTER DOMINGUES')
+        self.assertContains(response, 'ANA BEATRIZ')
         self.assertContains(response, '03/09/2026')
         self.assertContains(response, '08/09/2026')
 

@@ -245,7 +245,7 @@ class PickupReminderQueueTests(TestCase):
                      pickup_date=TODAY + timedelta(days=1), return_date=TODAY + timedelta(days=7))
         queue = pickup_reminder_queue(TODAY)
         names = [entry['customer'].name for entry in queue]
-        self.assertEqual(names, ['Alice', 'Zilda'])
+        self.assertEqual(names, ['ALICE', 'ZILDA'])
 
     def test_queue_does_not_query_items_once_per_rental(self):
         first = _make_customer(name='Alice')

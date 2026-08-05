@@ -141,7 +141,7 @@ class ARetirarReportViewTests(TestCase):
         response = self.client.get(self.url, {'format': 'csv'})
         rows = _streaming_csv_rows(response)
 
-        self.assertEqual(rows[1][1], '\'=HYPERLINK("https://example.invalid")')
+        self.assertEqual(rows[1][1], '\'=HYPERLINK("HTTPS://EXAMPLE.INVALID")')
         self.assertEqual(rows[1][4], '200,00')
 
     def test_csv_export_requires_export_action(self):
@@ -398,7 +398,7 @@ class ContasClienteReportViewTests(TestCase):
         r = self.client.get(self.url, {'customer': 'Cliente 800'})
         groups = r.context['groups']
         self.assertEqual(len(groups), 1)
-        self.assertEqual(groups[0]['customer'].name, 'Cliente 800')
+        self.assertEqual(groups[0]['customer'].name, 'CLIENTE 800')
 
     def test_status_open_filter(self):
         # Paid receivable for another rental should not appear with status=open

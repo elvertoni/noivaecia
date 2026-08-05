@@ -13,7 +13,11 @@ User = get_user_model()
 class CustomerModelTests(TestCase):
     def test_str_is_name(self):
         customer = Customer.objects.create(name='Maria Silva')
-        self.assertEqual(str(customer), 'Maria Silva')
+        self.assertEqual(str(customer), 'MARIA SILVA')
+
+    def test_name_is_uppercased_on_save(self):
+        customer = Customer.objects.create(name='  maria da silva  ')
+        self.assertEqual(customer.name, 'MARIA DA SILVA')
 
     def test_timestamps_present(self):
         customer = Customer.objects.create(name='Maria')
@@ -38,7 +42,7 @@ class CustomerCrudTests(TestCase):
             'rg': '', 'cpf': '', 'phone_home': '', 'phone_mobile': '', 'phone_work': '', 'notes': '',
         })
         self.assertEqual(response.status_code, 302)
-        customer = Customer.objects.get(name='Maria')
+        customer = Customer.objects.get(name='MARIA')
         self.assertEqual(customer.alternate_phone_contact, '')
 
     def test_create_customer_preserves_rg_and_alternate_phone_contact(self):
@@ -58,7 +62,7 @@ class CustomerCrudTests(TestCase):
         })
 
         self.assertRedirects(response, reverse('customers:list'))
-        customer = Customer.objects.get(name='Maria')
+        customer = Customer.objects.get(name='MARIA')
         self.assertEqual(customer.rg, '8.241.995-0')
         self.assertEqual(customer.rg_digits, '82419950')
         self.assertEqual(customer.alternate_phone_contact, 'Esposo João')
@@ -82,9 +86,9 @@ class CustomerCrudTests(TestCase):
         })
 
         self.assertRedirects(response, reverse('customers:list'))
-        self.assertTrue(Customer.objects.filter(name='Cliente novo').exists())
+        self.assertTrue(Customer.objects.filter(name='CLIENTE NOVO').exists())
         self.assertIn(
-            'Já existe outro cliente com este CPF: Cliente existente. Confira antes de continuar.',
+            'Já existe outro cliente com este CPF: CLIENTE EXISTENTE. Confira antes de continuar.',
             [str(message) for message in get_messages(response.wsgi_request)],
         )
 
@@ -123,8 +127,8 @@ class CustomerCrudTests(TestCase):
         Customer.objects.create(name='Ana Souza')
         Customer.objects.create(name='Carlos Lima')
         response = self.client.get('/clientes/?q=Ana')
-        self.assertContains(response, 'Ana Souza')
-        self.assertNotContains(response, 'Carlos Lima')
+        self.assertContains(response, 'ANA SOUZA')
+        self.assertNotContains(response, 'CARLOS LIMA')
 
     def test_search_by_alternate_phone_number_and_contact(self):
         customer = Customer.objects.create(
@@ -404,20 +408,20 @@ class CustomerCnpjLookupTests(TestCase):
     def test_list_search_finds_company_by_unpunctuated_cnpj(self):
         response = self.client.get(reverse('customers:list'), {'q': '11222333000181'})
 
-        self.assertContains(response, 'Construtora Alfa Ltda')
+        self.assertContains(response, 'CONSTRUTORA ALFA LTDA')
 
     def test_list_search_finds_company_by_punctuated_cnpj(self):
         response = self.client.get(
             reverse('customers:list'), {'q': '11.222.333/0001-81'},
         )
 
-        self.assertContains(response, 'Construtora Alfa Ltda')
+        self.assertContains(response, 'CONSTRUTORA ALFA LTDA')
 
     def test_rental_picker_labels_company_with_its_cnpj(self):
         response = self.client.get(reverse('customers:search'), {'q': '11222333000181'})
 
         results = response.json()['results']
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['text'], 'Construtora Alfa Ltda')
+        self.assertEqual(results[0]['text'], 'CONSTRUTORA ALFA LTDA')
         self.assertIn('CNPJ 11.222.333/0001-81', results[0]['sub'])
         self.assertNotIn('CPF', results[0]['sub'])

@@ -484,7 +484,7 @@ class ProductBrowseViewTests(TestCase):
         results = {r['code']: r for r in self._get(prefix='BMA', size='54', date='2026-06-15')['results']}
         self.assertFalse(results['BMA500']['available'])
         self.assertEqual(results['BMA500']['rental']['number'], 1)
-        self.assertEqual(results['BMA500']['rental']['customer'], 'Maria')
+        self.assertEqual(results['BMA500']['rental']['customer'], 'MARIA')
         self.assertTrue(results['BMA501']['available'])
 
     def test_availability_inline_accepts_brazilian_dates(self):

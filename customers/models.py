@@ -73,6 +73,7 @@ class Customer(TimeStampedModel):
         ]
 
     def save(self, *args, **kwargs):
+        self.name = (self.name or '').strip().upper()
         self.cpf_digits = _digits_only(self.cpf)
         self.cnpj_digits = _digits_only(self.cnpj)
         self.rg_digits = _digits_only(self.rg)

@@ -382,7 +382,7 @@ class RentalContractPaymentPlanTests(TestCase):
         self.assertContains(response, 'Saldo em aberto')
         self.assertContains(response, 'Telefone alternativo')
         self.assertContains(response, 'Diogo / 43 99999-0000')
-        self.assertContains(response, 'Locatário(a): Maria Silva')
+        self.assertContains(response, 'Locatário(a): MARIA SILVA')
         self.rental.refresh_from_db()
         self.assertEqual(self.rental.contract_version, 'v3')
 
