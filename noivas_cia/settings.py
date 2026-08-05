@@ -159,7 +159,6 @@ BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', BASE_DIR / 'var' / 'backups'))
 EVOLUTION_API_URL = os.environ.get('EVOLUTION_API_URL', '').strip().rstrip('/')
 EVOLUTION_API_KEY = os.environ.get('EVOLUTION_API_KEY', '').strip()
 EVOLUTION_INSTANCE = os.environ.get('EVOLUTION_INSTANCE', '').strip()
-EVOLUTION_PUBLIC_URL = os.environ.get('EVOLUTION_PUBLIC_URL', '').strip().rstrip('/')
 
 AUTH_PASSWORD_VALIDATORS = [
     {
