@@ -32,6 +32,7 @@ from .services import (
     reconcile_financial,
     register_payment,
     reprocess_future_installments,
+    revert_write_off_receivable,
     reverse_payment,
     total_with_interest,
 )
@@ -379,6 +380,33 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
         if self.payment.customer_id:
             return redirect('billing:customer_receivables', pk=self.payment.customer_id)
         return redirect('billing:receivables')
+
+
+class ReceivableReopenView(BillingAccessMixin, ActionRequiredMixin, View):
+    """Reopen a written-off receivable so payments can be registered again."""
+
+    action_key = 'billing.reopen'
+    action_methods = ('POST',)
+
+    def post(self, request, *args, **kwargs):
+        receivable = get_object_or_404(Receivable, pk=kwargs['pk'])
+        try:
+            revert_write_off_receivable(receivable, user=request.user)
+            messages.success(
+                request,
+                f'Baixa do recebimento (vencimento {receivable.due_date.strftime("%d/%m/%Y")}) revertida com sucesso.'
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+
+        next_url = request.POST.get('next') or request.GET.get('next')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect('billing:list', rental_pk=receivable.rental_id)
 
 
 # ---------------------------------------------------------------------------

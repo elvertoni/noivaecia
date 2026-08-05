@@ -596,6 +596,41 @@ def write_off_receivables(receivables, reason, user=None):
     return len(locked_receivables)
 
 
+def revert_write_off_receivable(receivable, user=None, reason=''):
+    """Reopen a previously written-off receivable."""
+    with transaction.atomic():
+        locked_receivable = (
+            Receivable.objects.select_for_update()
+            .select_related('rental')
+            .get(pk=receivable.pk)
+        )
+        if locked_receivable.written_off_at is None:
+            raise ValueError('Este recebimento não está baixado.')
+
+        previous_reason = locked_receivable.written_off_reason
+        locked_receivable.written_off_at = None
+        locked_receivable.written_off_reason = ''
+        locked_receivable.save(update_fields=[
+            'written_off_at',
+            'written_off_reason',
+            'balance',
+            'updated_at',
+        ])
+        AuditLog.record(
+            user=user,
+            action='revert_write_off_receivable',
+            obj=locked_receivable,
+            reason=reason or 'Reversão de baixa efetuada pelo operador',
+            metadata={
+                'amount': str(locked_receivable.amount),
+                'paid_amount': str(locked_receivable.paid_amount),
+                'new_balance': str(locked_receivable.balance),
+                'previous_written_off_reason': previous_reason,
+            },
+        )
+        return True
+
+
 def reconcile_overpayment(receivable, reason, user=None):
     """Write off a negative receivable balance and record the adjustment.
 

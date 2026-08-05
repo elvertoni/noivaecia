@@ -54,7 +54,18 @@
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
               {% if row.obj.is_written_off %}
-                <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
+                <div class="inline-flex items-center justify-end gap-2">
+                  <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
+                  {% if request.user|has_action:'billing.reopen' %}
+                    <form method="post" action="{% url 'billing:reopen' row.obj.pk %}" class="inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="text-link text-xs" onclick="return confirm('Deseja reverter a baixa deste recebimento e reabri-lo para recebimento?');">
+                        Reverter baixa
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
               {% elif not row.obj.is_paid and request.user|has_action:'billing.receive' %}
                 <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Receber</a>
               {% else %}

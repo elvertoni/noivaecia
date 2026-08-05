@@ -14,6 +14,7 @@ from .views import (
     PaymentView,
     ReceivableListView,
     ReceivablePayView,
+    ReceivableReopenView,
     ReconciliationExportView,
     ReconciliationView,
 )
@@ -28,6 +29,7 @@ urlpatterns = [
     path('cliente/<int:pk>/', CustomerReceivableView.as_view(), name='customer_receivables'),
     path('cliente/<int:pk>/baixar/', MultiPayView.as_view(), name='multi_pay'),
     path('titulo/<int:pk>/baixar/', ReceivablePayView.as_view(), name='pay_receivable'),
+    path('titulo/<int:pk>/reabrir/', ReceivableReopenView.as_view(), name='reopen_receivable'),
     path('pagamento/<int:pk>/estornar/', PaymentReversalView.as_view(), name='reverse_payment'),
     # R6 — cash, reports, reconciliation
     path('caixa/', CashMovementListView.as_view(), name='cash_movements'),
@@ -40,4 +42,5 @@ urlpatterns = [
     path('locacao/<int:rental_pk>/', ReceivableListView.as_view(), name='list'),
     path('locacao/<int:rental_pk>/gerar/', GenerateReceivablesView.as_view(), name='generate'),
     path('parcela/<int:pk>/pagar/', PaymentView.as_view(), name='pay'),
+    path('parcela/<int:pk>/reabrir/', ReceivableReopenView.as_view(), name='reopen'),
 ]
