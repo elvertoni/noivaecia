@@ -815,49 +815,48 @@ O `scripts/backup.sh` envia os dois arquivos gerados (`db_*.sql.gz`, `media_*.ta
 o Google Drive via `rclone`, se a variável `RCLONE_REMOTE` estiver definida. Sem ela, o
 script segue funcionando só com backup local — nada quebra.
 
-Usa **service account**, não OAuth de usuário — não expira, não pede reautenticação em
-cron sem sessão interativa.
+> **Não use service account.** Foi o caminho tentado primeiro e falha com `Error 403:
+> Service Accounts do not have storage quota` — contas de serviço só escrevem em
+> **Shared Drives**, recurso exclusivo de Google Workspace pago. Conta Gmail pessoal não
+> tem Shared Drive disponível. O caminho que funciona é **OAuth da própria conta Google**
+> (escreve na cota normal de 15GB dela), configurado uma vez.
 
-**1. Criar a service account (uma vez, no Google Cloud Console):**
+**1. Criar a pasta no Drive:**
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → criar projeto (ou usar um
-   existente) → **APIs & Services → Library** → ativar **Google Drive API**.
-2. **APIs & Services → Credentials → Create Credentials → Service Account** → nome
-   `noivascia-backup` → sem papéis no projeto (não precisa).
-3. Na service account criada → **Keys → Add Key → Create new key → JSON** → baixa um
-   arquivo `.json`. É o único jeito de pegar essa chave — guarde com cuidado.
-4. Copie o e-mail da service account (formato
-   `noivascia-backup@<projeto>.iam.gserviceaccount.com`).
+Crie uma pasta (ex.: "Backups Noivas & Cia") na sua conta Google normal. Pegue o ID pela
+URL: `drive.google.com/drive/folders/<ID>`.
 
-**2. Compartilhar uma pasta do Drive com ela:**
+**2. Autorizar o rclone (precisa de navegador — roda no seu PC, não na VPS):**
 
-Crie uma pasta no Google Drive (ex.: "Backups Noivas & Cia") e compartilhe com o e-mail da
-service account, papel **Editor**. Service accounts não têm cota própria de storage —
-por isso a pasta tem que ser de uma conta real (a sua) que a service account só acessa.
+```powershell
+winget install Rclone.Rclone      # se ainda não tiver
+rclone authorize "drive"
+```
 
-Pegue o ID da pasta pela URL: `drive.google.com/drive/folders/<ID>`.
+Abre o navegador, loga na conta dona da pasta, autoriza. O terminal imprime um bloco
+`{"access_token":...,"refresh_token":...}` — copie inteiro.
 
 **3. Instalar e configurar `rclone` na VPS:**
 
 ```bash
 curl https://rclone.org/install.sh | sudo bash
 
-sudo mkdir -p /home/deploy/.config/rclone
-sudo tee /home/deploy/.config/rclone/rclone.conf <<'EOF'
+mkdir -p /home/deploy/.config/rclone
+tee /home/deploy/.config/rclone/rclone.conf <<'EOF'
 [gdrive]
 type = drive
 scope = drive
-service_account_file = /home/deploy/.secrets/gdrive-backup-sa.json
+token = <COLE_O_BLOCO_JSON_DO_PASSO_2>
 root_folder_id = <ID_DA_PASTA>
 EOF
+chmod 600 /home/deploy/.config/rclone/rclone.conf
 
-sudo mkdir -p /home/deploy/.secrets
-# copie o .json baixado no passo 1 para /home/deploy/.secrets/gdrive-backup-sa.json
-sudo chown -R deploy:deploy /home/deploy/.config/rclone /home/deploy/.secrets
-sudo chmod 600 /home/deploy/.secrets/gdrive-backup-sa.json
-
-rclone lsd gdrive:   # deve listar a pasta compartilhada, sem erro
+rclone lsd gdrive:   # deve rodar sem erro (pasta vazia não imprime nada)
 ```
+
+O `refresh_token` não expira em uso normal — só se revogado manualmente na conta Google ou
+sem uso por período muito longo. `rclone` renova o `access_token` sozinho a cada chamada,
+sem precisar reautenticar.
 
 **4. Ligar no backup e no cron:**
 
@@ -877,6 +876,47 @@ cd ~/noivaecia
 BACKUP_DIR=/home/deploy/backups RCLONE_REMOTE=gdrive: ./scripts/backup.sh
 rclone ls gdrive:   # os dois arquivos novos devem aparecer
 ```
+
+### 9.6 Client ID próprio do rclone (pendente para 2026)
+
+Sem configuração extra, `rclone` usa um `client_id` **compartilhado** entre todos os
+usuários do rclone no mundo. Ao autorizar, ele avisa:
+
+```
+NOTICE: gdrive: This remote uses rclone's shared Google Drive client_id, which is being
+retired and will stop working during 2026.
+```
+
+Quando isso acontecer, o upload do cron passa a falhar (o backup local continua — o script
+só registra erro e segue). Não é urgente, mas evita virar surpresa. Para resolver:
+
+1. No mesmo projeto do Google Cloud Console usado antes → **APIs & Services →
+   Credentials → Create Credentials → OAuth client ID**.
+2. Tipo de aplicativo: **Desktop app**. Nome: `noivascia-rclone`.
+3. Se pedir tela de consentimento OAuth (`OAuth consent screen`), tipo **External**, status
+   pode ficar em "Testing" — só a conta usada no passo 9.5.2 precisa estar na lista de
+   testadores (ou publicar o app, se quiser evitar o limite de testadores).
+4. Copie **Client ID** e **Client Secret** gerados.
+5. No PC (com navegador), reautoriza informando as credenciais próprias:
+
+   ```powershell
+   rclone authorize "drive" "<CLIENT_ID>" "<CLIENT_SECRET>"
+   ```
+
+6. Atualize `/home/deploy/.config/rclone/rclone.conf` na VPS, acrescentando
+   `client_id` e `client_secret` e substituindo o `token` pelo novo:
+
+   ```ini
+   [gdrive]
+   type = drive
+   scope = drive
+   client_id = <CLIENT_ID>
+   client_secret = <CLIENT_SECRET>
+   token = <NOVO_BLOCO_JSON>
+   root_folder_id = <ID_DA_PASTA>
+   ```
+
+7. Testa: `rclone lsd gdrive:`.
 
 ---
 
