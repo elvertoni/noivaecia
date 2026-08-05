@@ -616,6 +616,13 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
         # CASCADE handles items, receivables→payments, pickup, return
         rental.delete()
 
+        # Reclaim the number if it was the most recent, keeping the sequence
+        # continuous for test cleanup.
+        from company.models import Company
+        Company.objects.filter(
+            pk=1, last_rental_number=number,
+        ).update(last_rental_number=number - 1)
+
     def _render_confirm(self, request, rental):
         from django.template.response import TemplateResponse
         return TemplateResponse(request, 'rentals/rental_delete_confirm.html', {'rental': rental})

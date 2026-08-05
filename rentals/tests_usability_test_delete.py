@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from accounts.models import ActionPermission, ModulePermission
 from billing.models import CashAccount, FinancialMovement, Payment, Receivable
+from company.models import Company
 from customers.models import Customer
 from movements.models import Pickup, Return
 from rentals.models import Rental
@@ -153,3 +154,18 @@ class AdminForceDeleteTests(TestCase):
                 Rental.objects.filter(pk=rental.pk).exists(),
                 f'Rental with status {status} was not deleted',
             )
+
+    def test_force_delete_reclaims_last_rental_number(self):
+        """Force deleting the most recent rental decrements Company.last_rental_number for reuse."""
+        company = Company.objects.create(name='Company Test', last_rental_number=100)
+        rental = self._create_rental_with_history(100)
+
+        self.client.force_login(self.operator)
+        self.client.post(
+            reverse('rentals:delete', args=[rental.pk]),
+            {'admin_password': self.admin_password},
+            follow=True,
+        )
+
+        company.refresh_from_db()
+        self.assertEqual(company.last_rental_number, 99)
