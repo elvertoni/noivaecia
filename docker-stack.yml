@@ -271,6 +271,7 @@ services:
     volumes:
       - evolution_instances:/evolution/instances
     networks:
+      - traefik_public
       - noivascia_internal
       - noivascia_egress
     healthcheck:
@@ -286,6 +287,14 @@ services:
         delay: 10s
         max_attempts: 5
         window: 120s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.evolution-api.rule=Host(`evolution.${DOMAIN}`)"
+        - "traefik.http.routers.evolution-api.entrypoints=websecure"
+        - "traefik.http.routers.evolution-api.tls=true"
+        - "traefik.http.routers.evolution-api.tls.certresolver=letsencrypt"
+        - "traefik.http.services.evolution-api.loadbalancer.server.port=8080"
+        - "traefik.http.routers.evolution-api.middlewares=traefik-auth"
       resources:
         limits:
           cpus: "1.0"

@@ -5,6 +5,7 @@ reminder, and triggers the actual send. All business logic (queue building,
 message rendering, idempotent dispatch) lives in ``notifications.services`` —
 this module only wires it to a view and a template.
 """
+import os
 import time
 from datetime import timedelta
 
@@ -74,6 +75,12 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
                     evolution_qrcode = evolution.connect_instance_qrcode()
             except evolution.EvolutionError as exc:
                 evolution_error = str(exc)
+        evolution_public_url = getattr(settings, 'EVOLUTION_PUBLIC_URL', '')
+        if not evolution_public_url:
+            domain = getattr(settings, 'DOMAIN', os.environ.get('DOMAIN', '')).strip()
+            if domain:
+                evolution_public_url = f'https://evolution.{domain}'
+
         ctx.update({
             'pickup_items': pickup_reminder_queue(today=today),
             'return_items': return_reminder_queue(today=today),
@@ -83,6 +90,7 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
             'evolution_connection_state': evolution_state,
             'evolution_qrcode': evolution_qrcode,
             'evolution_error': evolution_error,
+            'evolution_public_url': evolution_public_url,
             'pickup_message_template': template_drafts.get(
                 CustomerMessage.Kind.PICKUP_REMINDER,
                 get_default_message_template(CustomerMessage.Kind.PICKUP_REMINDER),
