@@ -34,4 +34,18 @@ docker run --rm \
 echo "[$(date)] Rotação: removendo backups com mais de 30 dias..."
 find "$BACKUP_DIR" -name "*.gz" -mtime +30 -delete 2>/dev/null || true
 
+# Envio para o Google Drive via rclone (offsite — sobrevive à perda da VPS).
+# RCLONE_REMOTE fica vazio por padrão: sem ele, backup segue só local, sem quebrar.
+# Configuração do remote: docs/deploy/guia-vps.md#95-backup-para-o-google-drive.
+if [ -n "${RCLONE_REMOTE:-}" ] && command -v rclone >/dev/null 2>&1; then
+    echo "[$(date)] Enviando para o Google Drive (${RCLONE_REMOTE})..."
+    rclone copy "${BACKUP_DIR}/db_${DATE}.sql.gz" "$RCLONE_REMOTE" --quiet
+    rclone copy "${BACKUP_DIR}/media_${DATE}.tar.gz" "$RCLONE_REMOTE" --quiet
+
+    echo "[$(date)] Rotação remota: removendo backups do Drive com mais de ${RCLONE_RETENTION_DAYS:-90} dias..."
+    rclone delete "$RCLONE_REMOTE" --min-age "${RCLONE_RETENTION_DAYS:-90}d" --quiet
+elif [ -n "${RCLONE_REMOTE:-}" ]; then
+    echo "AVISO: RCLONE_REMOTE definido mas rclone não está instalado — upload pulado."
+fi
+
 echo "[$(date)] Backup concluído: db_${DATE}.sql.gz e media_${DATE}.tar.gz"

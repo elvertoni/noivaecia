@@ -809,6 +809,75 @@ Os demais segredos vivem no `.env`: editar o arquivo e redeployar basta.
 > Rotacionar `DJANGO_SECRET_KEY` **invalida todas as sessões ativas** — todos os usuários
 > precisam logar de novo. Faça em horário de baixo movimento.
 
+### 9.5 Backup para o Google Drive
+
+O `scripts/backup.sh` envia os dois arquivos gerados (`db_*.sql.gz`, `media_*.tar.gz`) para
+o Google Drive via `rclone`, se a variável `RCLONE_REMOTE` estiver definida. Sem ela, o
+script segue funcionando só com backup local — nada quebra.
+
+Usa **service account**, não OAuth de usuário — não expira, não pede reautenticação em
+cron sem sessão interativa.
+
+**1. Criar a service account (uma vez, no Google Cloud Console):**
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → criar projeto (ou usar um
+   existente) → **APIs & Services → Library** → ativar **Google Drive API**.
+2. **APIs & Services → Credentials → Create Credentials → Service Account** → nome
+   `noivascia-backup` → sem papéis no projeto (não precisa).
+3. Na service account criada → **Keys → Add Key → Create new key → JSON** → baixa um
+   arquivo `.json`. É o único jeito de pegar essa chave — guarde com cuidado.
+4. Copie o e-mail da service account (formato
+   `noivascia-backup@<projeto>.iam.gserviceaccount.com`).
+
+**2. Compartilhar uma pasta do Drive com ela:**
+
+Crie uma pasta no Google Drive (ex.: "Backups Noivas & Cia") e compartilhe com o e-mail da
+service account, papel **Editor**. Service accounts não têm cota própria de storage —
+por isso a pasta tem que ser de uma conta real (a sua) que a service account só acessa.
+
+Pegue o ID da pasta pela URL: `drive.google.com/drive/folders/<ID>`.
+
+**3. Instalar e configurar `rclone` na VPS:**
+
+```bash
+curl https://rclone.org/install.sh | sudo bash
+
+sudo mkdir -p /home/deploy/.config/rclone
+sudo tee /home/deploy/.config/rclone/rclone.conf <<'EOF'
+[gdrive]
+type = drive
+scope = drive
+service_account_file = /home/deploy/.secrets/gdrive-backup-sa.json
+root_folder_id = <ID_DA_PASTA>
+EOF
+
+sudo mkdir -p /home/deploy/.secrets
+# copie o .json baixado no passo 1 para /home/deploy/.secrets/gdrive-backup-sa.json
+sudo chown -R deploy:deploy /home/deploy/.config/rclone /home/deploy/.secrets
+sudo chmod 600 /home/deploy/.secrets/gdrive-backup-sa.json
+
+rclone lsd gdrive:   # deve listar a pasta compartilhada, sem erro
+```
+
+**4. Ligar no backup e no cron:**
+
+```bash
+crontab -e
+# 0 3 * * * BACKUP_DIR=/home/deploy/backups RCLONE_REMOTE=gdrive: /home/deploy/noivaecia/scripts/backup.sh >> /home/deploy/backups/cron.log 2>&1
+```
+
+Retenção no Drive é separada da local: `RCLONE_RETENTION_DAYS` (padrão 90 dias) apaga lá,
+independente dos 30 dias locais. Ajuste exportando a variável na mesma linha do cron se
+quiser outro valor.
+
+**Teste manual antes de confiar no cron:**
+
+```bash
+cd ~/noivaecia
+BACKUP_DIR=/home/deploy/backups RCLONE_REMOTE=gdrive: ./scripts/backup.sh
+rclone ls gdrive:   # os dois arquivos novos devem aparecer
+```
+
 ---
 
 ## 10. Cutover para o domínio de produção
