@@ -9,7 +9,12 @@ from datetime import date as date_cls
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import DecimalField, F, Sum, Value
+from django.db.models import (
+    DecimalField,
+    F,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -594,6 +599,37 @@ def write_off_receivables(receivables, reason, user=None):
         ], batch_size=1000)
 
     return len(locked_receivables)
+
+
+def legacy_writeoff_review_queryset():
+    """Find migration write-offs hiding real debt, as seen in rental #56410.
+
+    ``core.management.commands.legacy_reset`` writes off receivables in bulk
+    via a single queryset ``.update()`` and logs one aggregate ``AuditLog``
+    row with ``object_id='bulk'`` — there is no per-receivable audit trail to
+    join against. The only per-row marker left by that command is the
+    ``written_off_reason`` text it stamps on each ``Receivable`` (its
+    ``--reason``, default ``legacy_reset.DEFAULT_REASON``), so that field is
+    the correlator used here instead of ``AuditLog``.
+    """
+    legacy_reasons = set(
+        AuditLog.objects.filter(
+            action='legacy_reset_write_off',
+            model_name='Receivable',
+        ).values_list('reason', flat=True)
+    )
+    if not legacy_reasons:
+        return Receivable.objects.none()
+    return (
+        Receivable.objects.filter(
+            written_off_at__isnull=False,
+            written_off_reason__in=legacy_reasons,
+        )
+        .annotate(hidden_balance=F('amount') - F('paid_amount'))
+        .filter(hidden_balance__gt=0)
+        .select_related('rental', 'rental__customer')
+        .order_by('due_date')
+    )
 
 
 def revert_write_off_receivable(receivable, user=None, reason=''):
