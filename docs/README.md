@@ -13,6 +13,8 @@
 | [Padrões de código](padroes-de-codigo.md) | Regras de idioma, estilo, CBVs e organização |
 | [Design system](design-system.md) | Paleta, tipografia e componentes de UI |
 | [Roadmap de sprints](roadmap.md) | Ordem de entrega, da fundação aos testes e deploy |
+| [Monitoramento e observabilidade](monitoring.md) | Prometheus, Grafana, Loki, logs, alertas e MCP |
+| [MCP administrativo do Django](mcp.md) | CRUD administrativo, métricas, autenticação e clientes MCP |
 
 ## Como usar
 

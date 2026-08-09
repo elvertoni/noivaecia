@@ -35,5 +35,15 @@ urlpatterns = [
     path('manutencao/', include('maintenance.urls')),
 ]
 
+# Scraped only through the internal Swarm network. Middleware rejects requests
+# forwarded by Traefik, and the route exists only with instrumentation enabled.
+if getattr(settings, 'PROMETHEUS_ENABLED', False):
+    urlpatterns += [path('', include('django_prometheus.urls'))]
+
+# mcp_server.urls owns the exact /mcp path. It is imported only when both
+# optional dependencies are available, preserving the current boot otherwise.
+if getattr(settings, 'MCP_ENABLED', False):
+    urlpatterns += [path('', include('mcp_server.urls'))]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

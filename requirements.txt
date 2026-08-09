@@ -7,3 +7,10 @@ tzdata==2026.2
 whitenoise==6.11.0
 psycopg[binary]>=3.2,<4
 dj-database-url>=2.2,<3
+djangorestframework==3.16.1
+django-mcp-server==0.5.6
+# django-mcp-server 0.5.6 imports FastMCP from the MCP 1.x API. Its upstream
+# dependency has no upper bound, but MCP 2.x moved that API and breaks boot.
+mcp==1.29.0
+django-prometheus @ git+https://github.com/django-commons/django-prometheus.git@77a983e676ab85d2419ae4612852bf08837526e2
+prometheus-client==0.24.1

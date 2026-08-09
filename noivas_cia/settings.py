@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import importlib.util as _importlib_util
 import os
 from pathlib import Path
 
@@ -72,7 +73,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Local apps
-    'core',
+    'core.apps.CoreConfig',
     'accounts',
     'website',
     'customers',
@@ -228,7 +229,10 @@ CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS')
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
-SECURE_REDIRECT_EXEMPT = [r'^healthz/$']
+# Health checks and metrics use HTTP directly on the internal Swarm network.
+# Without this exemption, HTTPS redirection targets port 443 in the app
+# container, where there is no listener.
+SECURE_REDIRECT_EXEMPT = [r'^healthz/$', r'^metrics$']
 SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', not DEBUG)
 CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', not DEBUG)
 SESSION_COOKIE_HTTPONLY = True
@@ -269,3 +273,79 @@ LOGGING = {
         },
     },
 }
+
+
+# ── Observability / metrics — django-prometheus (OPTIONAL stack) ──
+# Enable only when the dependency is installed. Without it this is a no-op, so
+# adding monitoring cannot break the existing production deployment.
+try:
+    import django_prometheus  # noqa: F401
+
+    PROMETHEUS_ENABLED = True
+except ImportError:
+    PROMETHEUS_ENABLED = False
+
+if PROMETHEUS_ENABLED:
+    # django-prometheus publishes `django_http_...` without a namespace prefix.
+    # Dashboards and alerts use those names directly.
+    #
+    # Prometheus scrapes /metrics through the task's internal IP, which is not
+    # in ALLOWED_HOSTS. The middleware rewrites Host only for this route before
+    # SecurityMiddleware and rejects requests forwarded by Traefik. The Before
+    # middleware still wraps the entire stack.
+    if 'noivas_cia.middleware.MetricsHostMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE = ['noivas_cia.middleware.MetricsHostMiddleware'] + MIDDLEWARE
+
+    if 'django_prometheus' not in INSTALLED_APPS:
+        INSTALLED_APPS = INSTALLED_APPS + ['django_prometheus']
+
+    if 'django_prometheus.middleware.PrometheusBeforeMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE = (
+            ['django_prometheus.middleware.PrometheusBeforeMiddleware']
+            + MIDDLEWARE
+            + ['django_prometheus.middleware.PrometheusAfterMiddleware']
+        )
+
+    # Preserve the current backend semantics while adding database metrics.
+    _PROMETHEUS_DB_ENGINE_MAP = {
+        'django.db.backends.postgresql': 'django_prometheus.db.backends.postgresql',
+        'django.db.backends.postgresql_psycopg2': (
+            'django_prometheus.db.backends.postgresql'
+        ),
+        'django.db.backends.sqlite3': 'django_prometheus.db.backends.sqlite3',
+        'django.db.backends.mysql': 'django_prometheus.db.backends.mysql',
+    }
+    for _db_config in DATABASES.values():
+        _engine = _db_config.get('ENGINE', '')
+        _db_config['ENGINE'] = _PROMETHEUS_DB_ENGINE_MAP.get(_engine, _engine)
+
+
+# -- Administrative MCP server (OPTIONAL) ---------------------------------
+# Both imports are checked before touching INSTALLED_APPS. Therefore an image
+# without the optional dependencies boots exactly as before and exposes no MCP
+# route.
+MCP_ENABLED = all(
+    _importlib_util.find_spec(module_name) is not None
+    for module_name in ('rest_framework', 'mcp_server')
+)
+
+if MCP_ENABLED:
+    INSTALLED_APPS = INSTALLED_APPS + ['rest_framework', 'mcp_server']
+    DJANGO_MCP_ENDPOINT = os.environ.get('DJANGO_MCP_ENDPOINT', 'mcp').strip()
+    DJANGO_MCP_AUTHENTICATION_CLASSES = [
+        'rest_framework.authentication.BasicAuthentication',
+    ]
+    DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
+        'name': os.environ.get(
+            'DJANGO_MCP_SERVER_NAME', 'noivas-cia-admin'
+        ).strip(),
+        'instructions': (
+            'Servidor MCP administrativo. Todas as tools exigem admin do '
+            'Django. Use list_entities e describe_entity para descobrir '
+            'slugs e campos antes de alterar dados.'
+        ),
+        'stateless': _env_bool('DJANGO_MCP_STATELESS', True),
+    }
+    # Avoid publishing the package's auxiliary instruction tool. Every tool in
+    # this server is declared in core.mcp and enforces _require_admin().
+    DJANGO_MCP_GET_SERVER_INSTRUCTIONS_TOOL = False
