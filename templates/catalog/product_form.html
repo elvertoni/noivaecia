@@ -9,7 +9,7 @@
       {% if form.instance.pk %}Editar produto{% else %}Novo produto{% endif %}
     </h1>
 
-    <form method="post" class="mt-6 space-y-4">
+    <form method="post" class="mt-6 space-y-4" id="product-form">
       {% csrf_token %}
       {% if form.non_field_errors %}
         <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
@@ -45,6 +45,20 @@
       </div>
     </form>
 
+    <script>
+      (function () {
+        const form = document.getElementById('product-form');
+        form.addEventListener('submit', function (event) {
+          if (form.dataset.submitted) {
+            event.preventDefault();
+            return;
+          }
+          form.dataset.submitted = 'true';
+          const submitButton = form.querySelector('button[type="submit"]');
+          if (submitButton) submitButton.disabled = true;
+        });
+      })();
+    </script>
     {% if not form.instance.pk %}
       <script>
         (function () {
