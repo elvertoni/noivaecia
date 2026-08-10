@@ -441,6 +441,91 @@ def register_payment(receivable, amount, payment_date, method='cash',
     return payment
 
 
+def register_payment_with_carryover(receivable, amount, payment_date, method='cash',
+                                    notes='', user=None):
+    """Receive ``amount`` on ``receivable``, spilling the excess into the other
+    open installments of the same rental (RF-21 follow-up).
+
+    Customers pay whatever they can afford in a given month, so a R$ 200 payment
+    against a R$ 60 installment must settle that one and keep going down the
+    schedule instead of being refused. Each installment still gets its own
+    ``Payment``, and no installment ever receives more than it asks for — paying
+    a single title beyond its balance would drive ``balance`` negative, which is
+    the exact corruption ``reconcile_negative_balances`` exists to undo.
+
+    Returns the list of payments created, in allocation order.
+    """
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        raise ValueError('O valor recebido deve ser maior que zero.')
+
+    payments = []
+    with transaction.atomic():
+        target = (
+            Receivable.objects.select_for_update()
+            .select_related('rental')
+            .get(pk=receivable.pk)
+        )
+        # Oldest first: a surplus should clear the debt that has been open the
+        # longest, not the one the cashier happened to click.
+        others = list(
+            Receivable.objects.select_for_update()
+            .filter(
+                rental_id=target.rental_id,
+                balance__gt=0,
+                written_off_at__isnull=True,
+            )
+            .exclude(pk=target.pk)
+            .order_by('due_date', 'pk')
+        )
+
+        # Principal first, across the whole schedule. Interest is settled last so
+        # that a surplus pays down real debt instead of overshooting the clicked
+        # title — only an overpayment beyond ``amount`` drives ``balance`` negative.
+        target_interest = total_with_interest(target) - target.balance
+        principal = [(target, target.balance)]
+        principal += [(rec, rec.balance) for rec in others]
+
+        capacity = sum((limit for _, limit in principal), Decimal('0')) + target_interest
+        if amount > capacity:
+            raise PaymentPlanError(
+                'O valor informado é maior que o saldo total desta locação '
+                f'(R$ {capacity:.2f}).',
+                field='value',
+            )
+
+        remaining = amount
+        for rec, limit in principal:
+            if remaining <= 0:
+                break
+            if limit <= 0:
+                continue
+            pay_amount = min(remaining, limit)
+            payments.append(register_payment(
+                receivable=rec,
+                amount=pay_amount,
+                payment_date=payment_date,
+                method=method,
+                notes=notes,
+                user=user,
+            ))
+            remaining -= pay_amount
+
+        # Whatever is left once every installment is settled can only be the late
+        # interest the cashier chose to charge on the title they opened.
+        if remaining > 0 and target_interest > 0:
+            payments.append(register_payment(
+                receivable=target,
+                amount=min(remaining, target_interest),
+                payment_date=payment_date,
+                method=method,
+                interest_amount=min(remaining, target_interest),
+                notes=notes,
+                user=user,
+            ))
+    return payments
+
+
 def reverse_payment(payment, reason, user=None):
     """Create reversal Payment (negative amount) and FinancialMovement outflow (R5.09)."""
     reason = (reason or '').strip()

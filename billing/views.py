@@ -31,6 +31,7 @@ from .services import (
     interest_breakdown,
     reconcile_financial,
     register_payment,
+    register_payment_with_carryover,
     reprocess_future_installments,
     revert_write_off_receivable,
     reverse_payment,
@@ -775,28 +776,43 @@ class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        title_total = total_with_interest(self.receivable)
+        others_balance = (
+            Receivable.objects.filter(
+                rental_id=self.receivable.rental_id,
+                balance__gt=0,
+                written_off_at__isnull=True,
+            )
+            .exclude(pk=self.receivable.pk)
+            .aggregate(total=Sum('balance'))['total'] or Decimal('0')
+        )
         context['receivable'] = self.receivable
-        context['total_with_interest'] = total_with_interest(self.receivable)
+        context['total_with_interest'] = title_total
+        context['rental_open_total'] = title_total + others_balance
+        context['has_future_installments'] = others_balance > 0
         return context
 
     def form_valid(self, form):
-        expected_total = total_with_interest(self.receivable)
-        if form.cleaned_data['value'] > expected_total:
-            form.add_error(
-                'value',
-                'O valor informado é maior que o saldo total deste título.',
-            )
-            return self.form_invalid(form)
         try:
-            register_payment(
+            payments = register_payment_with_carryover(
                 receivable=self.receivable,
                 amount=form.cleaned_data['value'],
                 payment_date=form.cleaned_data['payment_date'],
                 method=Payment.Method.CASH,
                 user=self.request.user,
             )
+        except PaymentPlanError as exc:
+            form.add_error(exc.field or 'value', str(exc))
+            return self.form_invalid(form)
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, 'Recebimento registrado com sucesso.')
+        if len(payments) > 1:
+            messages.success(
+                self.request,
+                'Recebimento registrado com sucesso e distribuído entre '
+                f'{len(payments)} parcelas.',
+            )
+        else:
+            messages.success(self.request, 'Recebimento registrado com sucesso.')
         return redirect('billing:list', rental_pk=self.receivable.rental_id)
