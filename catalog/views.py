@@ -640,9 +640,14 @@ class InactiveProductCodesView(CatalogAccessMixin, View):
         if category is None:
             return JsonResponse({'results': []})
 
+        codes_in_use = Product.objects.filter(
+            category=category, is_active=True,
+        ).exclude(description__iexact='nulo').values('code')
+
         codes = (
             Product.objects.filter(category=category)
             .filter(Q(is_active=False) | Q(description__iexact='nulo'))
+            .exclude(code__in=codes_in_use)
             .values('code')
             .annotate(records=Count('pk'))
             .order_by('code')
