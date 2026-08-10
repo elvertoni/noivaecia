@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "noivaecia_django_mcp": {
+      "type": "http",
+      "url": "https://noivaseciabandeirantes.com.br/mcp",
+      "headers": {
+        "Authorization": "Basic ${NOIVAECIA_MCP_BASIC_AUTH}"
+      }
+    }
+  }
+}
