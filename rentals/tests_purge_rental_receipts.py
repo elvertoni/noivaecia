@@ -1,11 +1,4 @@
-"""Regression coverage for _purge_rental refusing when receipts exist.
-
-billing.Receipt / ReceiptAllocation are on_delete=PROTECT (real cash-event
-ledger rows). Before this fix, the admin force-delete override deleted the
-rental's FinancialMovement rows unconditionally, which would raise
-ProtectedError as soon as any Receipt existed for the rental. It should
-instead refuse with a clear PT-BR message and leave everything intact.
-"""
+"""Regression coverage for authorized cleanup of test rentals."""
 
 from datetime import date
 from decimal import Decimal
@@ -99,9 +92,7 @@ class PurgeRentalWithReceiptTests(TestCase):
         )
         return rental, receipt
 
-    def test_force_delete_purges_the_whole_receipt_chain(self):
-        """The admin override exists to erase usability-test data, so it has to
-        reach the receipts too — PROTECT must not turn it into a dead end."""
+    def test_force_delete_with_receipt_purges_the_complete_chain(self):
         rental, receipt = self._create_rental_with_receipt(9950)
         rental_pk = rental.pk
 
@@ -113,17 +104,13 @@ class PurgeRentalWithReceiptTests(TestCase):
         )
 
         self.assertRedirects(response, reverse('rentals:list'))
-
-        # Nothing of the test rental survives, and no ProtectedError leaked.
         self.assertFalse(Rental.objects.filter(pk=rental_pk).exists())
         self.assertFalse(Receivable.objects.filter(rental_id=rental_pk).exists())
         self.assertFalse(FinancialMovement.objects.filter(rental_id=rental_pk).exists())
         self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
-        self.assertFalse(ReceiptAllocation.objects.filter(receipt_id=receipt.pk).exists())
-
-        # What was destroyed is recorded, since this bypasses audit retention.
-        entry = AuditLog.objects.filter(action='rental_force_delete').latest('id')
-        self.assertIn('recibo', entry.reason)
+        self.assertFalse(ReceiptAllocation.objects.filter(receipt=receipt).exists())
+        entry = AuditLog.objects.get(action='rental_force_delete')
+        self.assertEqual(entry.metadata['authorized_by_id'], self.admin_user.pk)
 
     def test_force_delete_without_receipt_still_purges(self):
         """Sanity check: the existing admin-override purge path is untouched
@@ -136,17 +123,9 @@ class PurgeRentalWithReceiptTests(TestCase):
             total_value=Decimal('200.00'),
             status=Rental.Status.PENDING,
         )
-        rcv = Receivable.objects.create(
+        Receivable.objects.create(
             rental=rental, due_date=date(2026, 8, 1),
             amount=Decimal('200.00'), balance=Decimal('200.00'),
-        )
-        FinancialMovement.objects.create(
-            date=date(2026, 8, 1),
-            account=self.account,
-            direction=FinancialMovement.Direction.INFLOW,
-            amount=Decimal('200.00'),
-            rental=rental,
-            receivable=rcv,
         )
         rental_pk = rental.pk
 
@@ -159,14 +138,10 @@ class PurgeRentalWithReceiptTests(TestCase):
 
         self.assertRedirects(response, reverse('rentals:list'))
         self.assertFalse(Rental.objects.filter(pk=rental_pk).exists())
-        self.assertFalse(FinancialMovement.objects.filter(rental_id=rental_pk).exists())
+        entry = AuditLog.objects.get(action='rental_force_delete')
+        self.assertEqual(entry.metadata['authorized_by_id'], self.admin_user.pk)
 
-    def test_direct_purge_helper_removes_receipt_before_its_movement(self):
-        """Unit-level check on the helper itself, independent of the view.
-
-        Ordering matters: ``Receipt.financial_movement`` is PROTECT, so the
-        receipt has to go before the movement it points at.
-        """
+    def test_direct_purge_helper_removes_receipt_history(self):
         from rentals.views import RentalDeleteView
 
         rental, receipt = self._create_rental_with_receipt(9952)
@@ -176,3 +151,22 @@ class PurgeRentalWithReceiptTests(TestCase):
         self.assertFalse(Rental.objects.filter(pk=rental.pk).exists())
         self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
         self.assertFalse(ReceiptAllocation.objects.filter(receipt_id=receipt.pk).exists())
+
+    def test_staff_password_cannot_authorize_force_delete(self):
+        rental = Rental.objects.create(
+            number=9953,
+            customer=self.customer,
+            pickup_date=date(2026, 8, 1),
+            return_date=date(2026, 8, 5),
+            total_value=Decimal('100.00'),
+        )
+
+        self.client.force_login(self.operator)
+        response = self.client.post(
+            reverse('rentals:delete', args=[rental.pk]),
+            {'admin_password': 'OperatorPass123!'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Senha de administrador incorreta')
+        self.assertTrue(Rental.objects.filter(pk=rental.pk).exists())

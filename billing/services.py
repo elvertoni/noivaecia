@@ -9,7 +9,7 @@ import hashlib
 import json
 from datetime import date as date_cls
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.db import IntegrityError, transaction
 from django.db.models import (
@@ -1003,10 +1003,12 @@ def create_rental_payment_plan(
 
         entry_receivable = None
         entry_payment = None
+        entry_receipt = None
         if entry_amount > 0:
-            # Fail fast with the plan-specific message; the entry itself is
-            # posted by register_payment, which re-checks the account.
-            if _active_cash_account() is None:
+            # Fail fast with the plan-specific message; register_receipt also
+            # locks and re-checks the selected account before posting cash.
+            cash_account = _active_cash_account()
+            if cash_account is None:
                 raise PaymentPlanError(
                     'Ative uma conta de caixa antes de registrar a entrada.'
                 )
@@ -1015,14 +1017,30 @@ def create_rental_payment_plan(
                 due_date=down_payment_date,
                 amount=entry_amount,
             )
-            entry_payment = register_payment(
-                entry_receivable,
-                amount=entry_amount,
-                payment_date=down_payment_date,
-                method=down_payment_method,
-                notes='Entrada na criação da locação',
-                user=user,
-            )
+            try:
+                entry_receipt = register_receipt(
+                    idempotency_key=uuid4(),
+                    payload={
+                        'rental_id': locked_rental.pk,
+                        'cash_account_id': cash_account.pk,
+                        'received_on': down_payment_date,
+                        'amount': entry_amount,
+                        'method': down_payment_method,
+                        'notes': 'Entrada na criação da locação',
+                        'allocations': [{
+                            'receivable_id': entry_receivable.pk,
+                            'cash_amount': entry_amount,
+                            'interest_amount': Decimal('0.00'),
+                            'discount_amount': Decimal('0.00'),
+                        }],
+                    },
+                    user=user,
+                )
+            except ReceiptServiceError as exc:
+                raise PaymentPlanError(str(exc)) from exc
+            entry_payment = entry_receipt.allocations.select_related(
+                'payment',
+            ).get().payment
             entry_receivable.refresh_from_db()
 
         future_receivables = []
@@ -1047,6 +1065,7 @@ def create_rental_payment_plan(
     return {
         'entry_receivable': entry_receivable,
         'entry_payment': entry_payment,
+        'entry_receipt': entry_receipt,
         'future_receivables': future_receivables,
     }
 

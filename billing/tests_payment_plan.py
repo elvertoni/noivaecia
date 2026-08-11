@@ -8,7 +8,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import ModulePermission
-from billing.models import CashAccount, FinancialMovement, Payment, Receivable
+from billing.models import (
+    CashAccount,
+    FinancialMovement,
+    Payment,
+    Receipt,
+    ReceiptAllocation,
+    Receivable,
+)
 from billing.services import (
     PaymentPlanError,
     create_rental_payment_plan,
@@ -55,7 +62,18 @@ class RentalPaymentPlanServiceTests(TestCase):
         )
         self.assertEqual(result['entry_receivable'].pk, receivables[0].pk)
         self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Receipt.objects.count(), 1)
+        self.assertEqual(ReceiptAllocation.objects.count(), 1)
         self.assertEqual(FinancialMovement.objects.count(), 1)
+        receipt = Receipt.objects.get()
+        allocation = ReceiptAllocation.objects.get(receipt=receipt)
+        self.assertEqual(receipt.amount, Decimal('150.00'))
+        self.assertEqual(
+            receipt.financial_movement_id,
+            FinancialMovement.objects.get().pk,
+        )
+        self.assertEqual(allocation.payment_id, result['entry_payment'].pk)
+        self.assertEqual(result['entry_receipt'].pk, receipt.pk)
         self.assertEqual(
             sum((item.amount for item in receivables), Decimal('0')),
             self.rental.total_value,
@@ -99,6 +117,8 @@ class RentalPaymentPlanServiceTests(TestCase):
         self.assertEqual(receivable.paid_amount, Decimal('300.00'))
         self.assertEqual(receivable.balance, Decimal('0.00'))
         self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Receipt.objects.count(), 1)
+        self.assertEqual(ReceiptAllocation.objects.count(), 1)
 
     def test_enforced_plan_requires_a_positive_entry(self):
         with self.assertRaisesMessage(

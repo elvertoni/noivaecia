@@ -16,7 +16,7 @@ User = get_user_model()
 
 
 class AdminForceDeleteTests(TestCase):
-    """Tests for force-deleting any rental with admin password override."""
+    """Tests for authorized cleanup of real usability-test rentals."""
 
     def setUp(self):
         self.admin_password = 'SuperAdminPass123!'
@@ -73,7 +73,7 @@ class AdminForceDeleteTests(TestCase):
         return rental
 
     def test_force_delete_with_valid_admin_password_purges_everything(self):
-        """Admin password override deletes the rental and all associated records."""
+        """Superuser authorization removes the complete test data chain."""
         rental = self._create_rental_with_history(9901)
         rental_pk = rental.pk
 
@@ -139,7 +139,7 @@ class AdminForceDeleteTests(TestCase):
         self.assertFalse(Rental.objects.filter(pk=rental.pk).exists())
 
     def test_force_delete_works_for_any_status(self):
-        """Admin override deletes pending, picked-up, or returned rentals alike."""
+        """Admin override deletes test rentals in any status."""
         for i, status in enumerate([Rental.Status.PENDING, Rental.Status.PICKED_UP, Rental.Status.RETURNED]):
             rental = self._create_rental_with_history(9910 + i, status=status)
 
