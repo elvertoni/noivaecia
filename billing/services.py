@@ -449,8 +449,12 @@ def reverse_receipt(receipt, *, idempotency_key, payload, user=None):
 
     with transaction.atomic():
         try:
+            # ``financial_movement`` and ``customer`` are both nullable, so
+            # select_related joins them as LEFT OUTER JOINs and Postgres refuses
+            # to apply FOR UPDATE to the nullable side. Lock only the receipt
+            # row: it is what serializes concurrent reversals of this receipt.
             original = (
-                Receipt.objects.select_for_update()
+                Receipt.objects.select_for_update(of=('self',))
                 .select_related('financial_movement', 'customer')
                 .get(pk=receipt_id)
             )
