@@ -18,6 +18,7 @@ from accounts.models import ActionPermission, ModulePermission
 from billing.models import (
     CashAccount, FinancialMovement, Payment, Receipt, ReceiptAllocation, Receivable,
 )
+from core.models import AuditLog
 from customers.models import Customer
 from movements.models import Pickup
 from rentals.models import Rental
@@ -98,7 +99,9 @@ class PurgeRentalWithReceiptTests(TestCase):
         )
         return rental, receipt
 
-    def test_force_delete_with_receipt_is_refused_and_nothing_is_deleted(self):
+    def test_force_delete_purges_the_whole_receipt_chain(self):
+        """The admin override exists to erase usability-test data, so it has to
+        reach the receipts too — PROTECT must not turn it into a dead end."""
         rental, receipt = self._create_rental_with_receipt(9950)
         rental_pk = rental.pk
 
@@ -109,16 +112,18 @@ class PurgeRentalWithReceiptTests(TestCase):
             follow=True,
         )
 
-        # Refused, not a 500/ProtectedError leaking to the client.
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'recibos')
+        self.assertRedirects(response, reverse('rentals:list'))
 
-        # Nothing was purged: the whole chain is intact.
-        self.assertTrue(Rental.objects.filter(pk=rental_pk).exists())
-        self.assertTrue(Receivable.objects.filter(rental_id=rental_pk).exists())
-        self.assertTrue(FinancialMovement.objects.filter(rental_id=rental_pk).exists())
-        self.assertTrue(Receipt.objects.filter(pk=receipt.pk).exists())
-        self.assertTrue(ReceiptAllocation.objects.filter(receipt=receipt).exists())
+        # Nothing of the test rental survives, and no ProtectedError leaked.
+        self.assertFalse(Rental.objects.filter(pk=rental_pk).exists())
+        self.assertFalse(Receivable.objects.filter(rental_id=rental_pk).exists())
+        self.assertFalse(FinancialMovement.objects.filter(rental_id=rental_pk).exists())
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+        self.assertFalse(ReceiptAllocation.objects.filter(receipt_id=receipt.pk).exists())
+
+        # What was destroyed is recorded, since this bypasses audit retention.
+        entry = AuditLog.objects.filter(action='rental_force_delete').latest('id')
+        self.assertIn('recibo', entry.reason)
 
     def test_force_delete_without_receipt_still_purges(self):
         """Sanity check: the existing admin-override purge path is untouched
@@ -156,14 +161,18 @@ class PurgeRentalWithReceiptTests(TestCase):
         self.assertFalse(Rental.objects.filter(pk=rental_pk).exists())
         self.assertFalse(FinancialMovement.objects.filter(rental_id=rental_pk).exists())
 
-    def test_direct_purge_helper_raises_when_receipt_exists(self):
-        """Unit-level check on the helper itself, independent of the view."""
-        from rentals.views import RentalDeleteView, RentalPurgeBlocked
+    def test_direct_purge_helper_removes_receipt_before_its_movement(self):
+        """Unit-level check on the helper itself, independent of the view.
+
+        Ordering matters: ``Receipt.financial_movement`` is PROTECT, so the
+        receipt has to go before the movement it points at.
+        """
+        from rentals.views import RentalDeleteView
 
         rental, receipt = self._create_rental_with_receipt(9952)
 
-        with self.assertRaises(RentalPurgeBlocked):
-            RentalDeleteView._purge_rental(rental, self.admin_user)
+        RentalDeleteView._purge_rental(rental, self.admin_user)
 
-        # No ProtectedError either — the refusal happens before any delete.
-        self.assertTrue(Rental.objects.filter(pk=rental.pk).exists())
+        self.assertFalse(Rental.objects.filter(pk=rental.pk).exists())
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+        self.assertFalse(ReceiptAllocation.objects.filter(receipt_id=receipt.pk).exists())

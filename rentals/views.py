@@ -491,30 +491,17 @@ class RentalCancelView(RentalAccessMixin, ActionRequiredMixin, FormView):
 
 # ── Delete ────────────────────────────────────────────────────────────────────
 
-class RentalPurgeBlocked(Exception):
-    """Raised by ``_purge_rental`` when the rental has receipts on file.
-
-    A ``billing.Receipt`` is a real cash event (idempotency key, payload
-    hash) and both it and ``ReceiptAllocation`` use ``on_delete=PROTECT`` by
-    design — the same audit-retention intent that already blocks physical
-    deletion of rentals with payments/movements in the standard flow below.
-    The admin-override purge must not try to cascade through those PROTECT
-    relations; it refuses instead.
-    """
-
-
 class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
     """Physically delete a rental (R7.11).
 
     Standard flow: only cancelled rentals with no movements/payments can be
-    deleted.
+    deleted — that is where audit retention is enforced.
 
     Admin override: when an administrator password is provided, the rental and
-    all associated records (receivables, payments, financial movements,
-    pickup, return) are purged regardless of status.  This is intended for
-    cleaning up usability-test data during the testing phase. It still
-    refuses when the rental has any billing.Receipt on file — see
-    ``RentalPurgeBlocked``.
+    all associated records (receivables, payments, receipts, receipt
+    allocations, financial movements, pickup, return) are purged regardless of
+    status.  This is intended for cleaning up usability-test data during the
+    testing phase, so it must reach every record the test created.
     """
 
     action_key = 'rentals.delete'
@@ -537,11 +524,7 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
                     messages.error(request, 'Senha de administrador incorreta.')
                     return self._render_confirm(request, rental)
 
-                try:
-                    self._purge_rental(rental, request.user)
-                except RentalPurgeBlocked as exc:
-                    messages.error(request, str(exc))
-                    return self._render_confirm(request, rental)
+                self._purge_rental(rental, request.user)
                 messages.success(
                     request,
                     f'Locação #{rental.number} excluída com autorização administrativa.',
@@ -612,10 +595,12 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
     def _purge_rental(rental, acting_user):
         """Delete a rental and every associated financial / movement record.
 
-        Raises ``RentalPurgeBlocked`` instead of purging when the rental has
-        any ``billing.Receipt`` on file (directly, via a ``ReceiptAllocation``
-        on one of its receivables/payments, or via the ``FinancialMovement``
-        rows this method is about to delete) — see ``RentalPurgeBlocked``.
+        This is the administrative escape hatch for usability-test data, so it
+        also removes the receipts and allocations that ``PROTECT`` would
+        otherwise block.  Audit retention is enforced by the standard flow
+        above, which refuses any rental with payments; only the
+        password-guarded override reaches this method, and it records what it
+        destroyed in the ``AuditLog``.
         """
         from billing.models import FinancialMovement, Receipt, ReceiptAllocation
         from django.db.models import Q
@@ -626,27 +611,41 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
             | Q(payment__rental=rental)
             | Q(payment__receivable__rental=rental)
         )
-
-        has_receipts = (
-            Receipt.objects.filter(
-                financial_movement__in=FinancialMovement.objects.filter(fm_scope)
-            ).exists()
-            or ReceiptAllocation.objects.filter(
-                Q(receivable__rental=rental)
-                | Q(payment__rental=rental)
-                | Q(payment__receivable__rental=rental)
-            ).exists()
+        allocation_scope = (
+            Q(receivable__rental=rental)
+            | Q(payment__rental=rental)
+            | Q(payment__receivable__rental=rental)
         )
-        if has_receipts:
-            raise RentalPurgeBlocked(
-                'Não é possível excluir fisicamente esta locação: existem recibos '
-                'registrados vinculados a ela. Recibos são registros financeiros '
-                'mantidos para auditoria e não podem ser apagados, nem mesmo com '
-                'autorização administrativa.'
-            )
 
-        # Financial movements first (they reference payments/receivables)
-        FinancialMovement.objects.filter(fm_scope).delete()
+        receipt_ids = set(
+            Receipt.objects.filter(
+                financial_movement__in=FinancialMovement.objects.filter(fm_scope),
+            ).values_list('pk', flat=True)
+        )
+        receipt_ids |= set(
+            ReceiptAllocation.objects.filter(allocation_scope)
+            .values_list('receipt_id', flat=True)
+        )
+        # A reversal receipt PROTECTs the receipt it reverses, so it has to be
+        # deleted before its original.
+        receipt_ids |= set(
+            Receipt.objects.filter(reversal_of_id__in=receipt_ids)
+            .values_list('pk', flat=True)
+        )
+
+        allocation_count = 0
+        if receipt_ids:
+            allocation_count = ReceiptAllocation.objects.filter(
+                receipt_id__in=receipt_ids,
+            ).delete()[0]
+            Receipt.objects.filter(
+                pk__in=receipt_ids, reversal_of__isnull=False,
+            ).delete()
+            Receipt.objects.filter(pk__in=receipt_ids).delete()
+
+        # Financial movements next: they reference payments/receivables, and
+        # the receipts deleted above reference them through PROTECT.
+        movement_count = FinancialMovement.objects.filter(fm_scope).delete()[0]
 
         number = rental.number
         AuditLog.objects.create(
@@ -655,7 +654,12 @@ class RentalDeleteView(RentalAccessMixin, ActionRequiredMixin, View):
             model_name='Rental',
             object_id=str(rental.pk),
             object_repr=f'Locação #{number}',
-            reason='Exclusão forçada autorizada por senha de administrador (limpeza de teste).',
+            reason=(
+                'Exclusão forçada autorizada por senha de administrador '
+                '(limpeza de teste). Destruídos: '
+                f'{len(receipt_ids)} recibo(s), {allocation_count} alocação(ões), '
+                f'{movement_count} movimento(s) financeiro(s).'
+            ),
         )
         # CASCADE handles items, receivables→payments, pickup, return
         rental.delete()
