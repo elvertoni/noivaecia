@@ -1,11 +1,70 @@
-name: Build and push image
+name: CI and image build
 
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
+  test:
+    name: Test suite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    # Production runs Postgres 16. Running the suite on the same engine is the
+    # point of this job: SQLite would silently pass row locking, advisory locks
+    # and the migration backfills that only behave correctly on Postgres.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noivascia
+          POSTGRES_PASSWORD: noivascia
+          POSTGRES_DB: noivascia_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noivascia"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # DEBUG keeps the dev secret and the plain staticfiles storage, so the
+      # suite needs no Tailwind build or collectstatic to render templates.
+      # DATABASE_URL still wins over the SQLite fallback, so the tests run on
+      # Postgres regardless.
+      DJANGO_DEBUG: 'True'
+      DATABASE_URL: postgres://noivascia:noivascia@localhost:5432/noivascia_ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Models and migrations are in sync
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: python manage.py test --verbosity 2
+
   build-and-push:
+    name: Build and push image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
