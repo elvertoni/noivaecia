@@ -5,13 +5,18 @@ Interest uses the company's monthly rate divided by 30 and applied for each over
 day, with the legacy daily rate as a fallback when the monthly rate is zero.
 """
 
+import hashlib
+import json
 from datetime import date as date_cls
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import (
+    Count,
     DecimalField,
     F,
+    Q,
     Sum,
     Value,
 )
@@ -21,17 +26,582 @@ from django.utils import timezone
 from company.models import Company
 from core.models import AuditLog
 
-from .models import CashAccount, FinancialMovement, Payment, Receivable
+from .models import (
+    CashAccount,
+    FinancialMovement,
+    Payment,
+    Receivable,
+    Receipt,
+    ReceiptAllocation,
+    payment_principal_expression,
+)
 
 
 PENALTY_NOTE_PREFIX = 'penalty:'
+MONEY_QUANTUM = Decimal('0.01')
+
+
+def _quantize_money(value):
+    """Round a Decimal monetary value using the application's money policy."""
+    return value.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _normalize_money(value, label):
+    """Convert a monetary input to finite cents using one rounding policy."""
+    try:
+        raw_amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f'O {label} informado é inválido.') from exc
+    if not raw_amount.is_finite():
+        raise ValueError(f'O {label} informado é inválido.')
+    if raw_amount < 0:
+        raise ValueError(f'O {label} não pode ser negativo.')
+    try:
+        return _quantize_money(raw_amount)
+    except InvalidOperation as exc:
+        raise ValueError(f'O {label} informado é inválido.') from exc
+
+
+class ReceiptServiceError(ValueError):
+    """Raised when a real receipt would violate a financial invariant."""
+
+
+class ReceiptIdempotencyConflict(ReceiptServiceError):
+    """Raised when an idempotency key is reused with a different payload."""
+
+
+def _normalize_idempotency_key(value):
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ReceiptServiceError('A chave de idempotência é inválida.') from exc
+
+
+def _normalize_receipt_date(value, label='data do recebimento'):
+    if type(value) is date_cls:
+        normalized = value
+    else:
+        try:
+            normalized = date_cls.fromisoformat(str(value))
+        except (TypeError, ValueError) as exc:
+            raise ReceiptServiceError(f'A {label} é inválida.') from exc
+    if normalized > timezone.localdate():
+        raise ReceiptServiceError(f'A {label} não pode estar no futuro.')
+    return normalized
+
+
+def _positive_integer(value, label):
+    if isinstance(value, bool):
+        raise ReceiptServiceError(f'O {label} é inválido.')
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ReceiptServiceError(f'O {label} é inválido.') from exc
+    if normalized <= 0:
+        raise ReceiptServiceError(f'O {label} é inválido.')
+    return normalized
+
+
+def _payload_hash(payload):
+    serialized = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(',', ':'),
+        sort_keys=True,
+    )
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def _normalize_receipt_payload(payload):
+    """Validate and canonicalize the public payload for ``register_receipt``."""
+    if not isinstance(payload, dict):
+        raise ReceiptServiceError('O conteúdo do recibo deve ser um objeto.')
+    allowed_keys = {
+        'rental_id',
+        'cash_account_id',
+        'received_on',
+        'amount',
+        'method',
+        'notes',
+        'allocations',
+    }
+    unknown_keys = set(payload) - allowed_keys
+    if unknown_keys:
+        raise ReceiptServiceError(
+            'O conteúdo do recibo possui campos desconhecidos: '
+            + ', '.join(sorted(unknown_keys))
+            + '.',
+        )
+
+    rental_id = _positive_integer(payload.get('rental_id'), 'ID da locação')
+    account_id = _positive_integer(
+        payload.get('cash_account_id'),
+        'ID da conta caixa',
+    )
+    received_on = _normalize_receipt_date(payload.get('received_on'))
+    amount = _normalize_money(payload.get('amount'), 'valor do recibo')
+    if amount <= 0:
+        raise ReceiptServiceError('O valor do recibo deve ser maior que zero.')
+    method = str(payload.get('method') or '').strip()
+    if method not in Payment.Method.values:
+        raise ReceiptServiceError('A forma de recebimento informada é inválida.')
+    notes = str(payload.get('notes') or '').strip()
+
+    raw_allocations = payload.get('allocations')
+    if not isinstance(raw_allocations, list) or not raw_allocations:
+        raise ReceiptServiceError('Informe ao menos uma alocação para o recibo.')
+
+    allocations = []
+    seen_receivables = set()
+    for position, raw_allocation in enumerate(raw_allocations, start=1):
+        if not isinstance(raw_allocation, dict):
+            raise ReceiptServiceError(f'A alocação {position} é inválida.')
+        unknown_allocation_keys = set(raw_allocation) - {
+            'receivable_id',
+            'cash_amount',
+            'interest_amount',
+            'discount_amount',
+        }
+        if unknown_allocation_keys:
+            raise ReceiptServiceError(
+                f'A alocação {position} possui campos desconhecidos: '
+                + ', '.join(sorted(unknown_allocation_keys))
+                + '.',
+            )
+        receivable_id = _positive_integer(
+            raw_allocation.get('receivable_id'),
+            f'ID do título da alocação {position}',
+        )
+        if receivable_id in seen_receivables:
+            raise ReceiptServiceError(
+                'Cada título pode ser alocado apenas uma vez no mesmo recibo.'
+            )
+        seen_receivables.add(receivable_id)
+        cash_amount = _normalize_money(
+            raw_allocation.get('cash_amount'),
+            f'valor em caixa da alocação {position}',
+        )
+        interest_amount = _normalize_money(
+            raw_allocation.get('interest_amount') or 0,
+            f'valor dos juros da alocação {position}',
+        )
+        discount_amount = _normalize_money(
+            raw_allocation.get('discount_amount') or 0,
+            f'valor do desconto da alocação {position}',
+        )
+        principal_amount = cash_amount + discount_amount - interest_amount
+        if principal_amount < 0:
+            raise ReceiptServiceError(
+                f'Os juros da alocação {position} superam o caixa somado ao desconto.'
+            )
+        allocations.append({
+            'receivable_id': receivable_id,
+            'cash_amount': cash_amount,
+            'principal_amount': principal_amount,
+            'interest_amount': interest_amount,
+            'discount_amount': discount_amount,
+        })
+
+    allocations.sort(key=lambda item: item['receivable_id'])
+    allocated_cash = sum(
+        (item['cash_amount'] for item in allocations),
+        Decimal('0'),
+    )
+    if amount != allocated_cash:
+        raise ReceiptServiceError(
+            'O valor do recibo deve ser igual à soma em caixa das alocações.'
+        )
+
+    canonical = {
+        'operation': Receipt.Kind.INFLOW,
+        'rental_id': rental_id,
+        'cash_account_id': account_id,
+        'received_on': received_on.isoformat(),
+        'amount': f'{amount:.2f}',
+        'method': method,
+        'notes': notes,
+        'allocations': [
+            {
+                'receivable_id': item['receivable_id'],
+                'cash_amount': f'{item["cash_amount"]:.2f}',
+                'principal_amount': f'{item["principal_amount"]:.2f}',
+                'interest_amount': f'{item["interest_amount"]:.2f}',
+                'discount_amount': f'{item["discount_amount"]:.2f}',
+            }
+            for item in allocations
+        ],
+    }
+    return {
+        'rental_id': rental_id,
+        'account_id': account_id,
+        'received_on': received_on,
+        'amount': amount,
+        'method': method,
+        'notes': notes,
+        'allocations': allocations,
+        'payload_hash': _payload_hash(canonical),
+    }
+
+
+def _normalize_reversal_payload(receipt_id, payload):
+    if not isinstance(payload, dict):
+        raise ReceiptServiceError('O conteúdo do estorno deve ser um objeto.')
+    unknown_keys = set(payload) - {'received_on', 'reason'}
+    if unknown_keys:
+        raise ReceiptServiceError(
+            'O conteúdo do estorno possui campos desconhecidos: '
+            + ', '.join(sorted(unknown_keys))
+            + '.',
+        )
+    received_on = _normalize_receipt_date(
+        payload.get('received_on'),
+        label='data do estorno',
+    )
+    reason = str(payload.get('reason') or '').strip()
+    if not reason:
+        raise ReceiptServiceError('Informe o motivo do estorno.')
+    canonical = {
+        'operation': Receipt.Kind.REVERSAL,
+        'receipt_id': receipt_id,
+        'received_on': received_on.isoformat(),
+        'reason': reason,
+    }
+    return {
+        'received_on': received_on,
+        'reason': reason,
+        'payload_hash': _payload_hash(canonical),
+    }
+
+
+def _existing_receipt(idempotency_key, payload_hash):
+    receipt = Receipt.objects.filter(idempotency_key=idempotency_key).first()
+    if receipt is None:
+        return None
+    if receipt.payload_hash != payload_hash:
+        raise ReceiptIdempotencyConflict(
+            'A chave de idempotência já foi usada com outro conteúdo.'
+        )
+    return receipt
+
+
+def _create_idempotent_receipt(*, idempotency_key, payload_hash, **fields):
+    """Create under a savepoint and resolve a concurrent unique-key winner."""
+    try:
+        with transaction.atomic():
+            receipt = Receipt.objects.create(
+                idempotency_key=idempotency_key,
+                payload_hash=payload_hash,
+                **fields,
+            )
+        return receipt, True
+    except IntegrityError:
+        existing = _existing_receipt(idempotency_key, payload_hash)
+        if existing is not None:
+            return existing, False
+        raise
+
+
+def register_receipt(*, idempotency_key, payload, user=None):
+    """Register one cash inflow and allocate it across one rental's titles.
+
+    ``payload`` contains ``rental_id``, ``cash_account_id``, ``received_on``,
+    ``amount``, ``method``, optional ``notes`` and an ``allocations`` list. Each
+    allocation contains ``receivable_id``, ``cash_amount`` and optional interest
+    and discount amounts. The stable idempotency key makes safe retries return
+    the original receipt without duplicating money.
+    """
+    from rentals.models import Rental
+
+    key = _normalize_idempotency_key(idempotency_key)
+    normalized = _normalize_receipt_payload(payload)
+    existing = _existing_receipt(key, normalized['payload_hash'])
+    if existing is not None:
+        return existing
+
+    with transaction.atomic():
+        try:
+            rental = (
+                Rental.objects.select_for_update()
+                .select_related('customer')
+                .get(pk=normalized['rental_id'])
+            )
+        except Rental.DoesNotExist as exc:
+            raise ReceiptServiceError('A locação informada não existe.') from exc
+
+        existing = (
+            Receipt.objects.select_for_update()
+            .filter(idempotency_key=key)
+            .first()
+        )
+        if existing is not None:
+            if existing.payload_hash != normalized['payload_hash']:
+                raise ReceiptIdempotencyConflict(
+                    'A chave de idempotência já foi usada com outro conteúdo.'
+                )
+            return existing
+
+        receivable_ids = [
+            item['receivable_id'] for item in normalized['allocations']
+        ]
+        receivables = list(
+            Receivable.objects.select_for_update(of=('self',))
+            .filter(pk__in=receivable_ids, rental=rental)
+            .order_by('pk')
+        )
+        if len(receivables) != len(receivable_ids):
+            raise ReceiptServiceError(
+                'Um ou mais títulos não pertencem à locação informada.'
+            )
+        receivable_by_id = {item.pk: item for item in receivables}
+
+        try:
+            account = (
+                CashAccount.objects.select_for_update()
+                .get(pk=normalized['account_id'])
+            )
+        except CashAccount.DoesNotExist as exc:
+            raise ReceiptServiceError('A conta caixa informada não existe.') from exc
+        if not account.active:
+            raise ReceiptServiceError('A conta caixa informada está inativa.')
+
+        for allocation in normalized['allocations']:
+            receivable = receivable_by_id[allocation['receivable_id']]
+            if receivable.written_off_at is not None:
+                raise ReceiptServiceError(
+                    f'O título #{receivable.pk} está baixado e não pode receber valor.'
+                )
+            if allocation['principal_amount'] > receivable.balance:
+                raise ReceiptServiceError(
+                    f'O principal aplicado ao título #{receivable.pk} supera seu saldo.'
+                )
+
+        receipt, created = _create_idempotent_receipt(
+            idempotency_key=key,
+            payload_hash=normalized['payload_hash'],
+            kind=Receipt.Kind.INFLOW,
+            customer=rental.customer,
+            received_on=normalized['received_on'],
+            amount=normalized['amount'],
+            method=normalized['method'],
+            notes=normalized['notes'],
+            operator=user,
+        )
+        if not created:
+            return receipt
+
+        payments = []
+        for allocation in normalized['allocations']:
+            receivable = receivable_by_id[allocation['receivable_id']]
+            payment = Payment.objects.create(
+                receivable=receivable,
+                customer=rental.customer,
+                rental=rental,
+                payment_date=normalized['received_on'],
+                amount=allocation['cash_amount'],
+                interest_amount=allocation['interest_amount'],
+                discount_amount=allocation['discount_amount'],
+                method=normalized['method'],
+                notes=normalized['notes'],
+                user=user,
+            )
+            ReceiptAllocation.objects.create(
+                receipt=receipt,
+                receivable=receivable,
+                payment=payment,
+                cash_amount=allocation['cash_amount'],
+                principal_amount=allocation['principal_amount'],
+                interest_amount=allocation['interest_amount'],
+                discount_amount=allocation['discount_amount'],
+            )
+            receivable.recalculate_from_payments()
+            payments.append(payment)
+
+        movement = FinancialMovement.objects.create(
+            date=normalized['received_on'],
+            account=account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=normalized['amount'],
+            description=f'Recibo — Locação #{rental.number}',
+            source=FinancialMovement.Source.PAYMENT,
+            customer=rental.customer,
+            receivable=(receivables[0] if len(receivables) == 1 else None),
+            payment=(payments[0] if len(payments) == 1 else None),
+            rental=rental,
+            created_by=user,
+        )
+        receipt.financial_movement = movement
+        receipt.save(update_fields=['financial_movement', 'updated_at'])
+        return receipt
+
+
+def reverse_receipt(receipt, *, idempotency_key, payload, user=None):
+    """Reverse an entire receipt atomically with one cash outflow."""
+    from rentals.models import Rental
+
+    receipt_id = getattr(receipt, 'pk', None)
+    if not receipt_id:
+        raise ReceiptServiceError('O recibo informado não existe.')
+    key = _normalize_idempotency_key(idempotency_key)
+    normalized = _normalize_reversal_payload(receipt_id, payload)
+    existing = _existing_receipt(key, normalized['payload_hash'])
+    if existing is not None:
+        return existing
+
+    with transaction.atomic():
+        try:
+            original = (
+                Receipt.objects.select_for_update()
+                .select_related('financial_movement', 'customer')
+                .get(pk=receipt_id)
+            )
+        except Receipt.DoesNotExist as exc:
+            raise ReceiptServiceError('O recibo informado não existe.') from exc
+        existing = (
+            Receipt.objects.select_for_update()
+            .filter(idempotency_key=key)
+            .first()
+        )
+        if existing is not None:
+            if existing.payload_hash != normalized['payload_hash']:
+                raise ReceiptIdempotencyConflict(
+                    'A chave de idempotência já foi usada com outro conteúdo.'
+                )
+            return existing
+        if original.kind == Receipt.Kind.REVERSAL:
+            raise ReceiptServiceError('Não é possível estornar um estorno.')
+        if hasattr(original, 'reversal'):
+            raise ReceiptServiceError('Este recibo já foi estornado.')
+        if original.financial_movement_id is None:
+            raise ReceiptServiceError(
+                'O recibo não possui movimento financeiro para estorno.'
+            )
+        original_movement = original.financial_movement
+        if (
+            original_movement.direction != FinancialMovement.Direction.INFLOW
+            or original_movement.amount != original.amount
+        ):
+            raise ReceiptServiceError(
+                'O movimento financeiro diverge do recibo. Reconcilie antes de estornar.'
+            )
+
+        original_allocations = list(
+            ReceiptAllocation.objects.select_for_update()
+            .filter(receipt=original)
+            .select_related('payment', 'receivable__rental')
+            .order_by('receivable_id')
+        )
+        if not original_allocations:
+            raise ReceiptServiceError('O recibo não possui alocações para estorno.')
+        rental_ids = sorted({
+            allocation.receivable.rental_id
+            for allocation in original_allocations
+        })
+        list(
+            Rental.objects.select_for_update()
+            .filter(pk__in=rental_ids)
+            .order_by('pk')
+        )
+        receivable_ids = sorted({
+            allocation.receivable_id for allocation in original_allocations
+        })
+        locked_receivables = list(
+            Receivable.objects.select_for_update(of=('self',))
+            .filter(pk__in=receivable_ids)
+            .order_by('pk')
+        )
+        receivable_by_id = {item.pk: item for item in locked_receivables}
+        original_payment_ids = sorted(
+            allocation.payment_id for allocation in original_allocations
+        )
+        original_payments = list(
+            Payment.objects.select_for_update(of=('self',))
+            .filter(pk__in=original_payment_ids)
+            .order_by('pk')
+        )
+        payment_by_id = {item.pk: item for item in original_payments}
+        if any(payment.reversed_by_id for payment in original_payments):
+            raise ReceiptServiceError(
+                'Uma ou mais alocações deste recibo já foram estornadas.'
+            )
+        account = CashAccount.objects.select_for_update().get(
+            pk=original_movement.account_id,
+        )
+
+        reversal, created = _create_idempotent_receipt(
+            idempotency_key=key,
+            payload_hash=normalized['payload_hash'],
+            kind=Receipt.Kind.REVERSAL,
+            customer=original.customer,
+            received_on=normalized['received_on'],
+            amount=original.amount,
+            method=original.method,
+            notes=f'Estorno: {normalized["reason"]}',
+            operator=user,
+            reversal_of=original,
+        )
+        if not created:
+            return reversal
+
+        reversal_payments = []
+        for allocation in original_allocations:
+            receivable = receivable_by_id[allocation.receivable_id]
+            original_payment = payment_by_id[allocation.payment_id]
+            reversal_payment = Payment.objects.create(
+                receivable=receivable,
+                customer=original_payment.customer,
+                rental=original_payment.rental,
+                payment_date=normalized['received_on'],
+                amount=-allocation.cash_amount,
+                interest_amount=-allocation.interest_amount,
+                discount_amount=-allocation.discount_amount,
+                method=original.method,
+                notes=f'Estorno: {normalized["reason"]}',
+                user=user,
+                is_reversal=True,
+            )
+            original_payment.reversed_by = reversal_payment
+            original_payment.save(update_fields=['reversed_by', 'updated_at'])
+            ReceiptAllocation.objects.create(
+                receipt=reversal,
+                receivable=receivable,
+                payment=reversal_payment,
+                cash_amount=allocation.cash_amount,
+                principal_amount=allocation.principal_amount,
+                interest_amount=allocation.interest_amount,
+                discount_amount=allocation.discount_amount,
+            )
+            receivable.recalculate_from_payments()
+            reversal_payments.append(reversal_payment)
+
+        reversal_movement = FinancialMovement.objects.create(
+            date=normalized['received_on'],
+            account=account,
+            direction=FinancialMovement.Direction.OUTFLOW,
+            amount=original.amount,
+            description=f'Estorno do recibo #{original.pk}',
+            source=FinancialMovement.Source.REVERSAL,
+            customer=original.customer,
+            receivable=(
+                locked_receivables[0] if len(locked_receivables) == 1 else None
+            ),
+            payment=(
+                reversal_payments[0] if len(reversal_payments) == 1 else None
+            ),
+            rental=(
+                locked_receivables[0].rental if len(rental_ids) == 1 else None
+            ),
+            created_by=user,
+        )
+        reversal.financial_movement = reversal_movement
+        reversal.save(update_fields=['financial_movement', 'updated_at'])
+        return reversal
 
 
 def _percentage_amount(base_amount, rate):
     """Apply a Company percentage without imposing an artificial 100% ceiling."""
     base = Decimal(str(base_amount or 0))
     percentage = Decimal(str(rate or 0))
-    return (base * percentage / Decimal('100')).quantize(Decimal('0.01'))
+    return _quantize_money(base * percentage / Decimal('100'))
 
 
 def days_overdue(receivable, on_date=None):
@@ -55,14 +625,14 @@ def compute_interest(receivable, on_date=None, company=None):
         else company.daily_interest_rate or Decimal('0')
     )
     interest = receivable.balance * (daily_rate / Decimal('100')) * days
-    return interest.quantize(Decimal('0.01'))
+    return _quantize_money(interest)
 
 
 def total_with_interest(receivable, on_date=None, company=None):
     """Open balance plus accrued late interest."""
-    return (
+    return _quantize_money(
         receivable.balance + compute_interest(receivable, on_date, company=company)
-    ).quantize(Decimal('0.01'))
+    )
 
 
 def interest_breakdown(receivable, on_date=None, company=None):
@@ -70,7 +640,7 @@ def interest_breakdown(receivable, on_date=None, company=None):
     interest = compute_interest(receivable, on_date, company=company)
     return {
         'interest': interest,
-        'total_with_interest': (receivable.balance + interest).quantize(Decimal('0.01')),
+        'total_with_interest': _quantize_money(receivable.balance + interest),
         'days_overdue': days_overdue(receivable, on_date),
     }
 
@@ -100,13 +670,29 @@ def generate_for_rental(rental, installments=1, first_due_date=None, total_amoun
     if total < 0:
         raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
 
+    enforced_policy = (
+        rental.financial_policy_version
+        == rental.FinancialPolicy.ENFORCED_V1
+    )
     if last_due_date:
         due_dates = [_add_months(last_due_date, -(installments - 1 - i)) for i in range(installments)]
+    elif first_due_date:
+        due_dates = [_add_months(first_due_date, i) for i in range(installments)]
+    elif enforced_policy:
+        due_dates = [
+            _add_months(rental.pickup_date, -(installments - 1 - i))
+            for i in range(installments)
+        ]
     else:
-        first_due = first_due_date or rental.return_date
-        due_dates = [_add_months(first_due, i) for i in range(installments)]
+        due_dates = [_add_months(rental.return_date, i) for i in range(installments)]
 
-    base = (total / installments).quantize(Decimal('0.01'))
+    if enforced_policy and max(due_dates) > rental.pickup_date:
+        raise PaymentPlanError(
+            'A última parcela deve vencer até a data de retirada.',
+            field='first_due_date',
+        )
+
+    base = _quantize_money(total / installments)
     remainder = total - base * installments
 
     created = []
@@ -132,6 +718,17 @@ def reprocess_future_installments(
     intact.  The remaining contract amount is split into a fresh schedule.  This
     allows the attendant to reorganize the future balance after an entry was
     recorded without deleting or duplicating financial history.
+
+    A *partially* paid title is closed at the amount already received and its
+    open balance joins the amount being rescheduled, under every financial
+    policy.  That keeps the schedule reorganizable after the customer pays an
+    arbitrary amount (the normal case), while every ``Payment`` stays attached to
+    the title that received it.
+
+    Returns a dict with ``protected``, ``created``, ``scheduled_amount`` and --
+    added for the partial-title disclosure -- ``adjusted_partials`` (one entry
+    per rewritten title, with its previous and new amount) and
+    ``released_amount``.  Both are also written to the ``AuditLog`` entry.
     """
     installments = int(installments or 0)
     if installments < 1:
@@ -163,22 +760,52 @@ def reprocess_future_installments(
                 or len(receivable.payments.all()) > 0
             )
         ]
-        replaceable_ids = [
-            receivable.pk for receivable in existing if receivable not in protected
-        ]
-        adjusted_partial_ids = []
-        for receivable in protected:
+        enforced_policy = (
+            locked_rental.financial_policy_version
+            == locked_rental.FinancialPolicy.ENFORCED_V1
+        )
+        partial = [
+            receivable for receivable in protected
             if (
                 receivable.written_off_at is None
                 and receivable.paid_amount > 0
                 and receivable.balance > 0
-            ):
-                # Legacy entries were recorded as a partial payment against one
-                # title for the full contract. Convert its paid portion into a
-                # closed historical title before scheduling the remaining balance.
-                receivable.amount = receivable.paid_amount
-                receivable.save(update_fields=['amount', 'balance', 'updated_at'])
-                adjusted_partial_ids.append(receivable.pk)
+            )
+        ]
+        replaceable_ids = [
+            receivable.pk for receivable in existing if receivable not in protected
+        ]
+        # A partially paid title is the normal outcome of the informal payment
+        # flow: ``register_payment_with_carryover`` settles whatever the customer
+        # handed over and leaves the last title it reaches with a residual
+        # balance. Refusing to reorganize (the former ENFORCED_V1 behaviour)
+        # froze the schedule of every rental that ever received an off-boundary
+        # amount -- in practice, every rental. Both policies now take the same
+        # path: the paid part is frozen as a closed historical title and only its
+        # still-open balance returns to the pool that feeds the new schedule.
+        # No Payment row is read, moved or rewritten, and the rental's
+        # receivables keep summing to ``final_value`` because the amount removed
+        # from the partial title is exactly the amount added to ``remaining``.
+        # The rewrite is disclosed in the AuditLog and in the return value so the
+        # operator is told which titles changed instead of finding out later.
+        adjusted_partials = []
+        for receivable in partial:
+            previous_amount = receivable.amount
+            released = receivable.balance
+            receivable.amount = receivable.paid_amount
+            receivable.save(update_fields=['amount', 'balance', 'updated_at'])
+            adjusted_partials.append({
+                'id': receivable.pk,
+                'due_date': receivable.due_date.isoformat(),
+                'previous_amount': str(previous_amount),
+                'amount': str(receivable.amount),
+                'released_amount': str(released),
+            })
+        adjusted_partial_ids = [item['id'] for item in adjusted_partials]
+        released_total = sum(
+            (Decimal(item['released_amount']) for item in adjusted_partials),
+            Decimal('0'),
+        )
         protected_total = sum(
             (receivable.amount for receivable in protected),
             Decimal('0'),
@@ -193,7 +820,28 @@ def reprocess_future_installments(
             raise PaymentPlanError(
                 'Não há saldo sem histórico financeiro para gerar novas parcelas.'
             )
-        effective_due_date = first_due_date or locked_rental.return_date
+        if enforced_policy:
+            if first_due_date:
+                due_dates = [
+                    _add_months(first_due_date, index)
+                    for index in range(installments)
+                ]
+            else:
+                due_dates = [
+                    _add_months(
+                        locked_rental.pickup_date,
+                        -(installments - 1 - index),
+                    )
+                    for index in range(installments)
+                ]
+            if max(due_dates) > locked_rental.pickup_date:
+                raise PaymentPlanError(
+                    'A última parcela deve vencer até a data de retirada.',
+                    field='first_due_date',
+                )
+            effective_due_date = due_dates[0]
+        else:
+            effective_due_date = first_due_date or locked_rental.return_date
         payment_dates = [
             receivable.last_payment_date
             for receivable in protected
@@ -205,12 +853,15 @@ def reprocess_future_installments(
             )
 
         Receivable.objects.filter(pk__in=replaceable_ids).delete()
-        created = generate_for_rental(
-            locked_rental,
-            installments=installments,
-            first_due_date=effective_due_date,
-            total_amount=remaining,
-        )
+        generate_kwargs = {
+            'installments': installments,
+            'total_amount': remaining,
+        }
+        if enforced_policy and first_due_date is None:
+            generate_kwargs['last_due_date'] = locked_rental.pickup_date
+        else:
+            generate_kwargs['first_due_date'] = effective_due_date
+        created = generate_for_rental(locked_rental, **generate_kwargs)
         AuditLog.record(
             user=user,
             action='reprocess_future_installments',
@@ -220,6 +871,8 @@ def reprocess_future_installments(
                 'previous_schedule': previous_schedule,
                 'protected_receivable_ids': [item.pk for item in protected],
                 'adjusted_partial_receivable_ids': adjusted_partial_ids,
+                'adjusted_partials': adjusted_partials,
+                'released_amount': str(released_total),
                 'deleted_receivable_ids': replaceable_ids,
                 'new_schedule': [
                     {
@@ -242,6 +895,10 @@ def reprocess_future_installments(
         'protected': protected,
         'created': created,
         'scheduled_amount': remaining,
+        # Additive keys: the caller may warn the operator that a partially paid
+        # title was closed at the amount already received.
+        'adjusted_partials': adjusted_partials,
+        'released_amount': released_total,
     }
 
 
@@ -262,9 +919,19 @@ def create_rental_payment_plan(
     evenly into monthly future installments, with cent rounding applied to the
     first future installment.
     """
-    total = rental.final_value
-    entry_amount = Decimal(str(down_payment_amount or 0))
+    try:
+        total = _normalize_money(rental.final_value, 'valor total da locação')
+        entry_amount = _normalize_money(
+            down_payment_amount or 0,
+            'valor da entrada',
+        )
+    except ValueError as exc:
+        raise PaymentPlanError(str(exc), field='down_payment_amount') from exc
     installments = int(installments or 0)
+    enforced_policy = (
+        rental.financial_policy_version
+        == rental.FinancialPolicy.ENFORCED_V1
+    )
 
     if entry_amount < 0:
         raise PaymentPlanError(
@@ -273,6 +940,11 @@ def create_rental_payment_plan(
     if entry_amount > total:
         raise PaymentPlanError(
             'O valor da entrada não pode superar o total da locação.',
+            field='down_payment_amount',
+        )
+    if enforced_policy and total > 0 and entry_amount <= 0:
+        raise PaymentPlanError(
+            'Informe uma entrada maior que zero para confirmar a locação.',
             field='down_payment_amount',
         )
 
@@ -297,13 +969,24 @@ def create_rental_payment_plan(
             field='installment_count',
         )
     if entry_amount > 0 and remaining > 0:
-        if not first_due_date:
+        if first_due_date:
+            due_dates = [
+                _add_months(first_due_date, index)
+                for index in range(installments)
+            ]
+        else:
+            due_dates = [
+                _add_months(rental.pickup_date, -(installments - 1 - index))
+                for index in range(installments)
+            ]
+        if enforced_policy and max(due_dates) > rental.pickup_date:
             raise PaymentPlanError(
-                'Informe a data do próximo pagamento.', field='first_due_date',
+                'A última parcela deve vencer até a data de retirada.',
+                field='first_due_date',
             )
-        if first_due_date <= down_payment_date:
+        if min(due_dates) <= down_payment_date:
             raise PaymentPlanError(
-                'O próximo vencimento deve ser posterior à data da entrada.',
+                'As parcelas futuras devem vencer depois da data da entrada.',
                 field='first_due_date',
             )
 
@@ -317,13 +1000,9 @@ def create_rental_payment_plan(
         entry_receivable = None
         entry_payment = None
         if entry_amount > 0:
-            account = (
-                CashAccount.objects.select_for_update()
-                .filter(active=True)
-                .order_by('id')
-                .first()
-            )
-            if account is None:
+            # Fail fast with the plan-specific message; the entry itself is
+            # posted by register_payment, which re-checks the account.
+            if _active_cash_account() is None:
                 raise PaymentPlanError(
                     'Ative uma conta de caixa antes de registrar a entrada.'
                 )
@@ -379,12 +1058,50 @@ def _add_months(start, months):
     return date_cls(year, month, min(start.day, last_day))
 
 
+def _active_cash_account():
+    """Pick the account that receives cash, without serializing the hot path.
+
+    This selection used to be ``select_for_update()``. With a single active
+    account -- the real production setup -- every ``register_payment`` in the
+    system queued behind that one row until the whole transaction committed, so
+    unrelated cashiers serialized against each other. ``no_key=True`` would not
+    have helped: FOR NO KEY UPDATE conflicts with itself, so the queue would
+    remain.
+
+    What the lock actually bought was "do not post cash to an account that is
+    being deactivated", and that is restored by ``_assert_cash_account_active``
+    instead. Removing the lock also removes this row from the canonical
+    Rental -> Receivable -> CashAccount ordering in ``register_payment``, so that
+    path can no longer take part in a lock cycle at all.
+    """
+    return CashAccount.objects.filter(active=True).order_by('id').first()
+
+
+def _assert_cash_account_active(account):
+    """Re-check the account right after posting, replacing the old row lock.
+
+    Called once the ``FinancialMovement`` insert already holds the implicit FOR
+    KEY SHARE lock on the parent row, so the account can no longer be deleted
+    underneath the receipt. Under READ COMMITTED this re-read sees any
+    deactivation committed before this point and rolls the whole receipt back.
+    A deactivation committing in the instant between this check and our own
+    commit still wins the race; that is deliberate and harmless -- the money was
+    genuinely received while the account was active -- and it is the price of
+    not holding a global lock for the duration of every payment.
+    """
+    if not CashAccount.objects.filter(pk=account.pk, active=True).exists():
+        raise ValueError(
+            'A conta caixa foi desativada durante o recebimento. '
+            'Refaça a operação em uma conta ativa.'
+        )
+
+
 def register_payment(receivable, amount, payment_date, method='cash',
                      interest_amount=None, discount_amount=None, notes='', user=None):
     """Create Payment, recalculate receivable balance, create FinancialMovement inflow (R5.06)."""
-    amount = Decimal(str(amount))
-    interest_amount = Decimal(str(interest_amount or 0))
-    discount_amount = Decimal(str(discount_amount or 0))
+    amount = _normalize_money(amount, 'valor recebido')
+    interest_amount = _normalize_money(interest_amount or 0, 'valor dos juros')
+    discount_amount = _normalize_money(discount_amount or 0, 'valor do desconto')
     if amount <= 0:
         raise ValueError('O valor recebido deve ser maior que zero.')
     if method not in Payment.Method.values:
@@ -393,19 +1110,32 @@ def register_payment(receivable, amount, payment_date, method='cash',
         raise ValueError('A data do recebimento não pode estar no futuro.')
 
     with transaction.atomic():
+        from rentals.models import Rental
+
+        rental_id = (
+            Receivable.objects.filter(pk=receivable.pk)
+            .values_list('rental_id', flat=True)
+            .get()
+        )
+        Rental.objects.select_for_update().only('pk').get(pk=rental_id)
         locked_receivable = (
-            Receivable.objects.select_for_update()
+            Receivable.objects.select_for_update(of=('self',))
             .select_related('rental__customer')
             .get(pk=receivable.pk)
         )
         if locked_receivable.written_off_at is not None:
             raise ValueError('Não é possível receber um título baixado.')
-        account = (
-            CashAccount.objects.select_for_update()
-            .filter(active=True)
-            .order_by('id')
-            .first()
-        )
+        principal_amount = amount - interest_amount + discount_amount
+        if principal_amount < 0:
+            raise ValueError(
+                'O valor dos juros não pode superar o dinheiro recebido '
+                'somado ao desconto.'
+            )
+        if principal_amount > locked_receivable.balance:
+            raise ValueError(
+                'O valor aplicado ao principal não pode superar o saldo do título.'
+            )
+        account = _active_cash_account()
         if account is None:
             raise ValueError(
                 'Não é possível registrar recebimento sem uma conta caixa ativa. '
@@ -438,7 +1168,191 @@ def register_payment(receivable, amount, payment_date, method='cash',
             rental=locked_receivable.rental,
             created_by=user,
         )
+        _assert_cash_account_active(account)
     return payment
+
+
+def register_recovered_legacy_payment(receivable, amount, payment_date,
+                                      method='cash', notes='', user=None):
+    """Materialize an audited Payment for principal already cached by Access.
+
+    The approved one-time recovery starts with ``paid_amount`` populated but no
+    Payment row. Clear that cache under the canonical locks, then delegate the
+    actual financial write to ``register_payment`` so the final balance and cash
+    movement are rebuilt from the recovered event exactly once.
+    """
+    amount = _normalize_money(amount, 'valor recebido')
+    with transaction.atomic():
+        from rentals.models import Rental
+
+        rental_id = (
+            Receivable.objects.filter(pk=receivable.pk)
+            .values_list('rental_id', flat=True)
+            .get()
+        )
+        Rental.objects.select_for_update().only('pk').get(pk=rental_id)
+        locked_receivable = Receivable.objects.select_for_update(of=('self',)).get(
+            pk=receivable.pk,
+        )
+        if locked_receivable.legacy_source != 'pagar':
+            raise ValueError('A recuperação só aceita títulos importados do Access.')
+        if locked_receivable.written_off_at is not None:
+            raise ValueError('Não é possível recuperar pagamento de título baixado.')
+        if locked_receivable.payments.exists():
+            raise ValueError('O pagamento legado deste título já foi recuperado.')
+        if locked_receivable.paid_amount != amount:
+            raise ValueError('O valor legado diverge do pagamento a recuperar.')
+
+        locked_receivable.paid_amount = Decimal('0')
+        locked_receivable.last_payment_date = None
+        locked_receivable.save(
+            update_fields=['paid_amount', 'last_payment_date', 'updated_at'],
+        )
+        return register_payment(
+            locked_receivable,
+            amount=amount,
+            payment_date=payment_date,
+            method=method,
+            notes=notes,
+            user=user,
+        )
+
+
+def _new_allocation(receivable_id, cash_amount):
+    return {
+        'receivable_id': receivable_id,
+        'cash_amount': cash_amount,
+        'interest_amount': Decimal('0.00'),
+        'discount_amount': Decimal('0.00'),
+    }
+
+
+def allocated_cash(allocations):
+    """Total cash across ``allocations`` — the receipt ``amount`` to declare."""
+    return sum(
+        (item['cash_amount'] for item in allocations),
+        Decimal('0.00'),
+    )
+
+
+def plan_carryover_allocations(*, target, schedule, amount, target_interest=0):
+    """Spread ``amount`` over one rental's schedule, clicked title first.
+
+    This is the single source of truth for carryover allocation policy: the
+    clicked title is settled first, the surplus then clears the remaining open
+    titles from oldest to newest, no title ever receives more than its own
+    balance, and the late interest of the clicked title is settled last.
+    ``register_receipt`` consumes the result directly, and
+    ``register_payment_with_carryover`` materializes the same plan as one
+    ``Payment`` per title.
+
+    ``schedule`` must hold every receivable of the rental already ordered by
+    ``(due_date, pk)`` and must contain ``target``. ``target_interest`` is the
+    late interest the cashier may charge on the clicked title; it is only
+    consumed once every open principal is settled. Nothing here touches the
+    database — callers load and lock the rows, so the planner stays trivially
+    testable and never changes the lock hierarchy.
+
+    Interest rides inside the clicked title's own allocation
+    (``cash = principal + interest``) because ``ReceiptAllocation`` is unique
+    per ``(receipt, receivable)``.
+
+    Raises ``PaymentPlanError`` (field ``value``) when the amount exceeds what
+    the whole rental can absorb, and ``ValueError`` when the clicked title is
+    not receivable at all.
+    """
+    amount = _normalize_money(amount, 'valor recebido')
+    if amount <= 0:
+        raise PaymentPlanError(
+            'O valor recebido deve ser maior que zero.',
+            field='value',
+        )
+    if target.written_off_at is not None:
+        raise ValueError('Não é possível receber um título baixado.')
+    if target.balance <= 0:
+        raise ValueError(
+            'Não é possível receber um título quitado ou com saldo inválido.'
+        )
+
+    target_interest = _normalize_money(target_interest or 0, 'valor dos juros')
+    others = [
+        item for item in schedule
+        if (
+            item.pk != target.pk
+            and item.balance > 0
+            and item.written_off_at is None
+        )
+    ]
+    principal_order = [(target, target.balance)]
+    principal_order += [(item, item.balance) for item in others]
+
+    principal_total = sum((limit for _, limit in principal_order), Decimal('0'))
+    capacity = principal_total + target_interest
+    if amount > capacity:
+        composition = f'R$ {principal_total:.2f} de saldo em aberto'
+        if target_interest > 0:
+            composition += f' e R$ {target_interest:.2f} de juros deste título'
+        message = (
+            'O valor informado é maior que o saldo total desta locação '
+            f'(R$ {capacity:.2f} = {composition}).'
+        )
+        if any(days_overdue(item) > 0 for item, _ in principal_order[1:]):
+            message += (
+                ' Os demais títulos vencidos são quitados sem juros neste '
+                'recebimento; para cobrar juros deles, receba cada título '
+                'pela sua própria tela.'
+            )
+        raise PaymentPlanError(message, field='value')
+
+    allocations = []
+    remaining = amount
+    for receivable, limit in principal_order:
+        if remaining <= 0:
+            break
+        if limit <= 0:
+            continue
+        applied = min(remaining, limit)
+        allocations.append(_new_allocation(receivable.pk, applied))
+        remaining -= applied
+
+    # Whatever is left once every installment's principal is settled can only be
+    # the late interest the cashier chose to charge on the title they opened:
+    # ``capacity`` above admits no other surplus.
+    if remaining > 0 and target_interest > 0:
+        charged_interest = min(remaining, target_interest)
+        allocation = next(
+            (item for item in allocations if item['receivable_id'] == target.pk),
+            None,
+        )
+        if allocation is None:
+            allocation = _new_allocation(target.pk, Decimal('0.00'))
+            allocations.append(allocation)
+        allocation['cash_amount'] += charged_interest
+        allocation['interest_amount'] += charged_interest
+        remaining -= charged_interest
+
+    return allocations
+
+
+def plan_selected_allocations(*, receivables, amount):
+    """Spread ``amount`` over hand-picked titles, in the given order.
+
+    Used by the multi-title screen, where the operator already chose which
+    titles the cash settles. Only principal is allocated; no title receives more
+    than its own balance, and titles that are closed or written off are skipped
+    instead of driving a balance negative.
+    """
+    remaining = _normalize_money(amount, 'valor recebido')
+    allocations = []
+    for receivable in receivables:
+        if remaining <= 0:
+            break
+        if receivable.balance <= 0 or receivable.written_off_at is not None:
+            continue
+        applied = min(remaining, receivable.balance)
+        allocations.append(_new_allocation(receivable.pk, applied))
+        remaining -= applied
+    return allocations
 
 
 def register_payment_with_carryover(receivable, amount, payment_date, method='cash',
@@ -453,73 +1367,86 @@ def register_payment_with_carryover(receivable, amount, payment_date, method='ca
     a single title beyond its balance would drive ``balance`` negative, which is
     the exact corruption ``reconcile_negative_balances`` exists to undo.
 
+    **Interest policy: only the title the cashier opened accrues late interest
+    here.** The rental has two inviolable rules -- an entry at contract time and
+    a debt fully settled by the pickup date -- so the due dates of the
+    intermediate installments organize the expectation but are not an obligation
+    the customer can be charged late interest for. Titles reached by the cascade
+    are therefore settled at their plain balance. Charging them automatically
+    would also push the debt above the ceiling the payment screen shows the
+    operator (this title's total with interest plus the plain balance of the
+    others), turning a mistyped amount into an interest charge instead of an
+    error. To charge interest on another overdue title, receive that title
+    directly. ``amount`` is capped at that same ceiling.
+
     Returns the list of payments created, in allocation order.
     """
-    amount = Decimal(str(amount))
+    amount = _normalize_money(amount, 'valor recebido')
     if amount <= 0:
         raise ValueError('O valor recebido deve ser maior que zero.')
 
     payments = []
     with transaction.atomic():
-        target = (
-            Receivable.objects.select_for_update()
-            .select_related('rental')
-            .get(pk=receivable.pk)
+        from rentals.models import Rental
+
+        rental_id = (
+            Receivable.objects.filter(pk=receivable.pk)
+            .values_list('rental_id', flat=True)
+            .get()
         )
-        # Oldest first: a surplus should clear the debt that has been open the
-        # longest, not the one the cashier happened to click.
-        others = list(
-            Receivable.objects.select_for_update()
-            .filter(
-                rental_id=target.rental_id,
-                balance__gt=0,
-                written_off_at__isnull=True,
-            )
-            .exclude(pk=target.pk)
+        Rental.objects.select_for_update().only('pk').get(pk=rental_id)
+        schedule = list(
+            Receivable.objects.select_for_update(of=('self',))
+            .filter(rental_id=rental_id)
+            .select_related('rental')
             .order_by('due_date', 'pk')
         )
+        target = next((item for item in schedule if item.pk == receivable.pk), None)
+        if target is None:
+            raise ValueError('O título informado não pertence mais a esta locação.')
+        if target.written_off_at is not None:
+            raise ValueError('Não é possível receber um título baixado.')
+        if target.balance <= 0:
+            raise ValueError('Não é possível receber um título quitado ou com saldo inválido.')
 
-        # Principal first, across the whole schedule. Interest is settled last so
-        # that a surplus pays down real debt instead of overshooting the clicked
-        # title — only an overpayment beyond ``amount`` drives ``balance`` negative.
-        target_interest = total_with_interest(target) - target.balance
-        principal = [(target, target.balance)]
-        principal += [(rec, rec.balance) for rec in others]
+        # One allocation policy, two materializations: the plan below is the same
+        # one ``register_receipt`` consumes. All rows were locked above in
+        # canonical order, so the planner sees a stable schedule.
+        by_id = {item.pk: item for item in schedule}
+        allocations = plan_carryover_allocations(
+            target=target,
+            schedule=schedule,
+            amount=amount,
+            target_interest=total_with_interest(target) - target.balance,
+        )
 
-        capacity = sum((limit for _, limit in principal), Decimal('0')) + target_interest
-        if amount > capacity:
-            raise PaymentPlanError(
-                'O valor informado é maior que o saldo total desta locação '
-                f'(R$ {capacity:.2f}).',
-                field='value',
-            )
-
-        remaining = amount
-        for rec, limit in principal:
-            if remaining <= 0:
-                break
-            if limit <= 0:
+        # Principal first, across the whole schedule, in allocation order.
+        # Interest is settled last as its own Payment: recalculate_from_payments
+        # excludes it from principal, so it cannot push any title into a
+        # negative balance.
+        charged_interest = Decimal('0.00')
+        for allocation in allocations:
+            interest = allocation['interest_amount']
+            charged_interest += interest
+            principal_amount = allocation['cash_amount'] - interest
+            if principal_amount <= 0:
                 continue
-            pay_amount = min(remaining, limit)
             payments.append(register_payment(
-                receivable=rec,
-                amount=pay_amount,
+                receivable=by_id[allocation['receivable_id']],
+                amount=principal_amount,
                 payment_date=payment_date,
                 method=method,
                 notes=notes,
                 user=user,
             ))
-            remaining -= pay_amount
 
-        # Whatever is left once every installment is settled can only be the late
-        # interest the cashier chose to charge on the title they opened.
-        if remaining > 0 and target_interest > 0:
+        if charged_interest > 0:
             payments.append(register_payment(
                 receivable=target,
-                amount=min(remaining, target_interest),
+                amount=charged_interest,
                 payment_date=payment_date,
                 method=method,
-                interest_amount=min(remaining, target_interest),
+                interest_amount=charged_interest,
                 notes=notes,
                 user=user,
             ))
@@ -533,8 +1460,16 @@ def reverse_payment(payment, reason, user=None):
         raise ValueError('Informe o motivo do estorno.')
     today = timezone.localdate()
     with transaction.atomic():
+        from rentals.models import Rental
+
+        rental_id = (
+            Payment.objects.filter(pk=payment.pk)
+            .values_list('receivable__rental_id', flat=True)
+            .get()
+        )
+        Rental.objects.select_for_update().only('pk').get(pk=rental_id)
         locked_payment = (
-            Payment.objects.select_for_update()
+            Payment.objects.select_for_update(of=('self',))
             .select_related('receivable', 'customer', 'rental')
             .get(pk=payment.pk)
         )
@@ -542,9 +1477,37 @@ def reverse_payment(payment, reason, user=None):
             raise ValueError('Este recebimento já foi estornado.')
 
         receivable = (
-            Receivable.objects.select_for_update()
+            Receivable.objects.select_for_update(of=('self',))
             .select_related('rental__customer')
             .get(pk=locked_payment.receivable_id)
+        )
+        original_movements = list(
+            FinancialMovement.objects.select_for_update()
+            .filter(
+                payment=locked_payment,
+                direction=FinancialMovement.Direction.INFLOW,
+                source=FinancialMovement.Source.PAYMENT,
+            )
+            .order_by('pk')[:2]
+        )
+        if len(original_movements) != 1:
+            raise ValueError(
+                'O recebimento precisa ter exatamente um movimento de entrada '
+                'para ser estornado com segurança.'
+            )
+        original_movement = original_movements[0]
+        if (
+            original_movement.amount != locked_payment.amount
+            or original_movement.receivable_id != locked_payment.receivable_id
+            or original_movement.rental_id != locked_payment.rental_id
+        ):
+            raise ValueError(
+                'O movimento de entrada diverge do recebimento. Execute a '
+                'reconciliação financeira antes de estornar.'
+            )
+        account = (
+            CashAccount.objects.select_for_update()
+            .get(pk=original_movement.account_id)
         )
         reversal = Payment.objects.create(
             receivable=receivable,
@@ -563,24 +1526,22 @@ def reverse_payment(payment, reason, user=None):
         locked_payment.save(update_fields=['reversed_by', 'updated_at'])
         receivable.recalculate_from_payments()
 
-        account = CashAccount.objects.select_for_update().filter(active=True).order_by('id').first()
-        if account:
-            FinancialMovement.objects.create(
-                date=today,
-                account=account,
-                direction=FinancialMovement.Direction.OUTFLOW,
-                amount=locked_payment.amount,
-                description=(
-                    f'Estorno pgto #{locked_payment.pk} — '
-                    f'Locação #{locked_payment.rental.number if locked_payment.rental else "?"}'
-                ),
-                source=FinancialMovement.Source.REVERSAL,
-                customer=locked_payment.customer,
-                receivable=receivable,
-                payment=reversal,
-                rental=locked_payment.rental,
-                created_by=user,
-            )
+        FinancialMovement.objects.create(
+            date=today,
+            account=account,
+            direction=FinancialMovement.Direction.OUTFLOW,
+            amount=locked_payment.amount,
+            description=(
+                f'Estorno pgto #{locked_payment.pk} — '
+                f'Locação #{locked_payment.rental.number if locked_payment.rental else "?"}'
+            ),
+            source=FinancialMovement.Source.REVERSAL,
+            customer=locked_payment.customer,
+            receivable=receivable,
+            payment=reversal,
+            rental=locked_payment.rental,
+            created_by=user,
+        )
     return reversal
 
 
@@ -813,7 +1774,7 @@ def compute_moratoria(receivable, on_date=None, company=None):
     company = company or Company.load()
     rate = company.late_fee_rate or Decimal('0')
     fee = receivable.balance * (rate / Decimal('100'))
-    return fee.quantize(Decimal('0.01'))
+    return _quantize_money(fee)
 
 
 def compute_monthly_interest(receivable, on_date=None, company=None):
@@ -849,7 +1810,7 @@ def create_penalty_receivable(
     details='',
 ):
     """Create an auditable receivable generated by an operational penalty."""
-    amount = Decimal(str(amount or 0)).quantize(Decimal('0.01'))
+    amount = _quantize_money(Decimal(str(amount or 0)))
     if amount <= 0:
         return None
     notes = f'{PENALTY_NOTE_PREFIX}{kind}'
@@ -1012,13 +1973,14 @@ def reconcile_financial():
         paid_no_payments.aggregate(v=Sum('amount'))['v'] or Decimal('0')
     )
 
-    # Divergence 2: open receivables where paid_amount != sum(payments.amount)
+    # Divergence 2: open receivables where stored settled principal differs from
+    # cash minus interest plus discounts, including negative reversal rows.
     inconsistent_qs = (
         Receivable.objects.filter(balance__gt=0)
         .select_related('rental')
         .annotate(
             payment_sum=Coalesce(
-                Sum('payments__amount'),
+                Sum(payment_principal_expression('payments__')),
                 Value(Decimal('0')),
                 output_field=DecimalField(max_digits=10, decimal_places=2),
             )
@@ -1038,15 +2000,111 @@ def reconcile_financial():
             'diff': rec.paid_amount - rec.payment_sum,
         })
 
-    # Divergence 3: payments without a corresponding FinancialMovement
-    payments_without_movement = (
-        Payment.objects.filter(is_reversal=False)
-        .exclude(financial_movements__source=FinancialMovement.Source.PAYMENT)
-        .distinct()
+    # Divergence 3: a legacy Payment has one direct movement; a real Receipt has
+    # one grouped movement reached through ReceiptAllocation. In the grouped
+    # case every allocation must match its Payment cash, while the receipt total
+    # must match both the allocation sum and its single movement.
+    valid_inflow_receipts = (
+        Receipt.objects.filter(
+            kind=Receipt.Kind.INFLOW,
+            financial_movement__source=FinancialMovement.Source.PAYMENT,
+            financial_movement__direction=FinancialMovement.Direction.INFLOW,
+        )
+        .annotate(allocated_cash=Sum('allocations__cash_amount'))
+        .filter(
+            amount=F('allocated_cash'),
+            financial_movement__amount=F('amount'),
+        )
+        .values('pk')
     )
-    payments_without_movement_count = payments_without_movement.count()
-    payments_without_movement_ids = list(
-        payments_without_movement.values_list('pk', flat=True)[:200]
+    active_payments = Payment.objects.filter(is_reversal=False)
+    valid_direct_payments = (
+        active_payments
+        .annotate(
+            movement_count=Count('financial_movements'),
+            expected_movement_count=Count(
+                'financial_movements',
+                filter=Q(
+                    financial_movements__source=FinancialMovement.Source.PAYMENT,
+                    financial_movements__direction=FinancialMovement.Direction.INFLOW,
+                    financial_movements__amount=F('amount'),
+                    financial_movements__receivable_id=F('receivable_id'),
+                ),
+            ),
+        )
+        .filter(movement_count=1, expected_movement_count=1)
+        .values('pk')
+    )
+    valid_grouped_payments = (
+        active_payments.filter(
+            financial_movements__isnull=True,
+            receipt_allocation__cash_amount=F('amount'),
+            receipt_allocation__interest_amount=F('interest_amount'),
+            receipt_allocation__discount_amount=F('discount_amount'),
+            receipt_allocation__receivable_id=F('receivable_id'),
+            receipt_allocation__receipt_id__in=valid_inflow_receipts,
+        )
+        .values('pk')
+    )
+    payments_with_movement_issue = (
+        active_payments
+        .exclude(pk__in=valid_direct_payments)
+        .exclude(pk__in=valid_grouped_payments)
+    )
+    payments_with_movement_issue_count = payments_with_movement_issue.count()
+    payments_with_movement_issue_ids = list(
+        payments_with_movement_issue.values_list('pk', flat=True)[:200]
+    )
+    valid_reversal_receipts = (
+        Receipt.objects.filter(
+            kind=Receipt.Kind.REVERSAL,
+            financial_movement__source=FinancialMovement.Source.REVERSAL,
+            financial_movement__direction=FinancialMovement.Direction.OUTFLOW,
+        )
+        .annotate(allocated_cash=Sum('allocations__cash_amount'))
+        .filter(
+            amount=F('allocated_cash'),
+            financial_movement__amount=F('amount'),
+        )
+        .values('pk')
+    )
+    reversal_payments = Payment.objects.filter(is_reversal=True)
+    valid_direct_reversals = (
+        reversal_payments
+        .annotate(
+            movement_count=Count('financial_movements'),
+            expected_movement_count=Count(
+                'financial_movements',
+                filter=Q(
+                    financial_movements__source=FinancialMovement.Source.REVERSAL,
+                    financial_movements__direction=FinancialMovement.Direction.OUTFLOW,
+                    financial_movements__amount=-F('amount'),
+                    financial_movements__receivable_id=F('receivable_id'),
+                ),
+            ),
+        )
+        .filter(movement_count=1, expected_movement_count=1)
+        .values('pk')
+    )
+    valid_grouped_reversals = (
+        reversal_payments.filter(
+            financial_movements__isnull=True,
+            receipt_allocation__cash_amount=-F('amount'),
+            receipt_allocation__interest_amount=-F('interest_amount'),
+            receipt_allocation__discount_amount=-F('discount_amount'),
+            receipt_allocation__receivable_id=F('receivable_id'),
+            receipt_allocation__receipt_id__in=valid_reversal_receipts,
+        )
+        .values('pk')
+    )
+    reversals_with_movement_issue = (
+        reversal_payments
+        .exclude(pk__in=valid_direct_reversals)
+        .exclude(pk__in=valid_grouped_reversals)
+    )
+    reversals_with_movement_issue_count = reversals_with_movement_issue.count()
+    reversals_with_movement_issue_ids = list(
+        reversals_with_movement_issue.values_list('pk', flat=True)[:200]
     )
 
     return {
@@ -1062,7 +2120,14 @@ def reconcile_financial():
         'paid_no_payments_sum': paid_no_payments_sum,
         'inconsistent_balances': inconsistent_balances,
         'inconsistent_count': inconsistent_count,
-        'payments_without_movement_count': payments_without_movement_count,
+        'payments_without_movement_count': payments_with_movement_issue_count,
+        'payments_without_movement_ids': payments_with_movement_issue_ids,
+        'payments_with_movement_issue_count': payments_with_movement_issue_count,
+        'payments_with_movement_issue_ids': payments_with_movement_issue_ids,
+        'reversals_without_movement_count': reversals_with_movement_issue_count,
+        'reversals_without_movement_ids': reversals_with_movement_issue_ids,
+        'reversals_with_movement_issue_count': reversals_with_movement_issue_count,
+        'reversals_with_movement_issue_ids': reversals_with_movement_issue_ids,
     }
 
 
@@ -1087,11 +2152,19 @@ def financial_kpis(today=None):
     due_week_balance = due_week_qs.aggregate(v=Sum('balance'))['v'] or Decimal('0')
 
     received_today = (
-        Payment.objects.filter(payment_date=today, is_reversal=False)
+        Payment.objects.filter(
+            payment_date=today,
+            is_reversal=False,
+            reversed_by__isnull=True,
+        )
         .aggregate(v=Sum('amount'))['v'] or Decimal('0')
     )
     received_month = (
-        Payment.objects.filter(payment_date__gte=month_start, is_reversal=False)
+        Payment.objects.filter(
+            payment_date__gte=month_start,
+            is_reversal=False,
+            reversed_by__isnull=True,
+        )
         .aggregate(v=Sum('amount'))['v'] or Decimal('0')
     )
 

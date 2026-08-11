@@ -9,24 +9,79 @@
 
     <div>
       <h1 class="page-title">Estornar recebimento</h1>
-      <p class="page-description">Esta ação é irreversível e gera um movimento de saída no caixa.</p>
+      {% if receipt %}
+        <p class="page-description">
+          Este recebimento faz parte de um recibo único. O estorno desfaz o recibo
+          inteiro e gera um único movimento de saída no caixa.
+        </p>
+      {% else %}
+        <p class="page-description">Esta ação é irreversível e gera um movimento de saída no caixa.</p>
+      {% endif %}
     </div>
 
-    <!-- Payment info -->
+    <!-- Cash act info -->
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm space-y-1">
-      <p><span class="text-app-muted">Data:</span> <strong>{{ payment.payment_date|date:'d/m/Y' }}</strong></p>
-      <p><span class="text-app-muted">Valor:</span> <strong class="text-app-ink">R$ {{ payment.amount|brl }}</strong></p>
-      {% if payment.receivable %}
-        <p><span class="text-app-muted">Título:</span> Locação #{{ payment.receivable.rental.number }}</p>
-      {% endif %}
-      {% if payment.notes %}
-        <p><span class="text-app-muted">Obs.:</span> {{ payment.notes }}</p>
+      {% if receipt %}
+        <p><span class="text-app-muted">Data:</span> <strong>{{ receipt.received_on|date:'d/m/Y' }}</strong></p>
+        <p>
+          <span class="text-app-muted">Valor total do recibo:</span>
+          <strong class="text-app-ink">R$ {{ receipt.amount|brl }}</strong>
+        </p>
+        <p><span class="text-app-muted">Forma:</span> {{ receipt.get_method_display }}</p>
+        {% if receipt.notes %}
+          <p><span class="text-app-muted">Obs.:</span> {{ receipt.notes }}</p>
+        {% endif %}
+      {% else %}
+        <p><span class="text-app-muted">Data:</span> <strong>{{ payment.payment_date|date:'d/m/Y' }}</strong></p>
+        <p><span class="text-app-muted">Valor:</span> <strong class="text-app-ink">R$ {{ payment.amount|brl }}</strong></p>
+        {% if payment.receivable %}
+          <p><span class="text-app-muted">Título:</span> Locação #{{ payment.receivable.rental.number }}</p>
+        {% endif %}
+        {% if payment.notes %}
+          <p><span class="text-app-muted">Obs.:</span> {{ payment.notes }}</p>
+        {% endif %}
       {% endif %}
     </div>
+
+    {% if receipt_allocations %}
+      <div>
+        <h2 class="section-title mb-2">Títulos que voltam a ficar em aberto</h2>
+        <div class="table-shell">
+          <table class="data-table">
+            <caption class="sr-only">Títulos afetados pelo estorno do recibo</caption>
+            <thead>
+              <tr>
+                <th scope="col">Vencimento</th>
+                <th scope="col">Locação</th>
+                <th scope="col" class="text-right">Juros</th>
+                <th scope="col" class="text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for allocation in receipt_allocations %}
+                <tr>
+                  <td>{{ allocation.receivable.due_date|date:'d/m/Y' }}</td>
+                  <td>#{{ allocation.receivable.rental.number }}</td>
+                  <td class="text-right">R$ {{ allocation.interest_amount|brl }}</td>
+                  <td class="text-right font-medium">R$ {{ allocation.cash_amount|brl }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="font-semibold">
+                <td colspan="3" class="text-right">Total:</td>
+                <td class="text-right">R$ {{ receipt.amount|brl }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    {% endif %}
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
-      {% for field in form %}
+      {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+      {% for field in form.visible_fields %}
         {% include 'includes/form_field.html' with field=field only %}
       {% endfor %}
 

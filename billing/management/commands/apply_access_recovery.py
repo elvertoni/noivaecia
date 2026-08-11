@@ -14,7 +14,7 @@ from django.db import transaction
 from billing.models import FinancialMovement, Payment, Receivable
 from billing.services import (
     reconcile_overpayment,
-    register_payment,
+    register_recovered_legacy_payment,
     write_off_receivables,
 )
 
@@ -227,7 +227,7 @@ class Command(BaseCommand):
             receivables, cutoff, settled, overpayments = targets
             for payment in payments:
                 event_id = payment['source_payment']['id']
-                register_payment(
+                register_recovered_legacy_payment(
                     receivables[payment['candidate_legacy']['id']],
                     amount=payment['amount'],
                     payment_date=date.fromisoformat(payment['payment_date']),

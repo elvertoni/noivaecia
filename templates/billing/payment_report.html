@@ -54,7 +54,7 @@
   </div>
 
   <!-- Table -->
-  {% if payments %}
+  {% if cash_acts %}
     <div class="table-shell">
       <table class="data-table">
         <caption class="sr-only">Recebimentos do período</caption>
@@ -64,26 +64,42 @@
             <th scope="col">Cliente</th>
             <th scope="col">Locação</th>
             <th scope="col">Forma</th>
+            <th scope="col" class="text-right">Títulos</th>
             <th scope="col">Observações</th>
             <th scope="col" class="text-right">Valor</th>
+            <th scope="col" class="text-right print:hidden">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {% for p in payments %}
+          {% for act in cash_acts %}
           <tr>
-            <td>{{ p.payment_date|date:'d/m/Y' }}</td>
-            <td>{{ p.customer.name|default:p.receivable.rental.customer.name|default:'—' }}</td>
-            <td>{% if p.receivable %}#{{ p.receivable.rental.number }}{% else %}—{% endif %}</td>
-            <td>{{ p.get_method_display }}</td>
-            <td class="max-w-xs truncate text-app-muted text-xs">{{ p.notes|default:'—' }}</td>
-            <td class="text-right font-medium text-emerald-700">R$ {{ p.amount|brl }}</td>
+            <td>{{ act.payment_date|date:'d/m/Y' }}</td>
+            <td>{{ act.customer.name|default:'—' }}</td>
+            <td>{% if act.rental_number %}#{{ act.rental_number }}{% else %}—{% endif %}</td>
+            <td>{{ act.method_display }}</td>
+            <td class="text-right">
+              {{ act.title_count }}
+              {% if act.title_count > 1 %}
+                <span class="badge badge-info">recibo</span>
+              {% endif %}
+            </td>
+            <td class="max-w-xs truncate text-app-muted text-xs">{{ act.notes|default:'—' }}</td>
+            <td class="text-right font-medium text-emerald-700">R$ {{ act.amount|brl }}</td>
+            <td class="text-right print:hidden">
+              {% if request.user|has_action:'billing.reverse' %}
+                <a href="{% url 'billing:reverse_payment' act.payment.pk %}" class="text-link">Estornar</a>
+              {% else %}
+                <span class="text-app-muted">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
         <tfoot>
           <tr class="font-semibold">
-            <td colspan="5" class="text-right">Total:</td>
+            <td colspan="6" class="text-right">Total:</td>
             <td class="text-right text-emerald-700">R$ {{ total_received|brl }}</td>
+            <td class="print:hidden"></td>
           </tr>
         </tfoot>
       </table>

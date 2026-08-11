@@ -73,6 +73,9 @@ class RentalPaymentPlanServiceTests(TestCase):
             self.rental,
             installments=1,
             first_due_date=date(2027, 1, 15),
+            down_payment_amount=Decimal('30.00'),
+            down_payment_date=date(2026, 7, 27),
+            down_payment_method=Payment.Method.PIX,
         )
 
         receivables = list(self.rental.receivables.order_by('due_date', 'pk'))
@@ -97,23 +100,20 @@ class RentalPaymentPlanServiceTests(TestCase):
         self.assertEqual(receivable.balance, Decimal('0.00'))
         self.assertEqual(Payment.objects.count(), 1)
 
-    def test_plan_without_entry_defaults_first_due_date_to_pickup(self):
-        create_rental_payment_plan(
-            self.rental,
-            installments=1,
-        )
+    def test_enforced_plan_requires_a_positive_entry(self):
+        with self.assertRaisesMessage(
+            PaymentPlanError,
+            'Informe uma entrada maior que zero para confirmar a locação.',
+        ):
+            create_rental_payment_plan(self.rental, installments=1)
 
-        receivable = self.rental.receivables.get()
-        self.assertEqual(receivable.due_date, self.rental.pickup_date)
-        self.assertEqual(receivable.amount, Decimal('300.00'))
-        self.assertEqual(receivable.balance, Decimal('300.00'))
+        self.assertFalse(Receivable.objects.exists())
         self.assertFalse(Payment.objects.exists())
 
     def test_remaining_balance_is_split_across_multiple_future_dates(self):
         create_rental_payment_plan(
             self.rental,
             installments=3,
-            first_due_date=date(2027, 1, 15),
             down_payment_amount=Decimal('100.00'),
             down_payment_date=date(2026, 7, 27),
             down_payment_method=Payment.Method.CARD_DEBIT,
@@ -122,7 +122,7 @@ class RentalPaymentPlanServiceTests(TestCase):
         future = list(self.rental.receivables.filter(balance__gt=0).order_by('due_date'))
         self.assertEqual(
             [item.due_date for item in future],
-            [date(2027, 1, 15), date(2027, 2, 15), date(2027, 3, 15)],
+            [date(2026, 11, 15), date(2026, 12, 15), date(2027, 1, 15)],
         )
         self.assertEqual(
             sum((item.amount for item in future), Decimal('0')),
@@ -185,7 +185,7 @@ class RentalPaymentPlanServiceTests(TestCase):
     def test_future_due_date_must_follow_entry_date(self):
         with self.assertRaisesMessage(
             PaymentPlanError,
-            'O próximo vencimento deve ser posterior à data da entrada.',
+            'As parcelas futuras devem vencer depois da data da entrada.',
         ):
             create_rental_payment_plan(
                 self.rental,
@@ -197,6 +197,23 @@ class RentalPaymentPlanServiceTests(TestCase):
             )
 
         self.assertFalse(Receivable.objects.exists())
+
+    def test_last_future_installment_cannot_pass_pickup_date(self):
+        with self.assertRaisesMessage(
+            PaymentPlanError,
+            'A última parcela deve vencer até a data de retirada.',
+        ):
+            create_rental_payment_plan(
+                self.rental,
+                installments=3,
+                first_due_date=date(2027, 1, 15),
+                down_payment_amount=Decimal('100.00'),
+                down_payment_date=date(2026, 7, 27),
+                down_payment_method=Payment.Method.PIX,
+            )
+
+        self.assertFalse(Receivable.objects.exists())
+        self.assertFalse(Payment.objects.exists())
 
     def test_duplicate_processing_is_rejected_without_duplication(self):
         plan = {
@@ -251,7 +268,6 @@ class RentalPaymentPlanServiceTests(TestCase):
         result = reprocess_future_installments(
             self.rental,
             installments=3,
-            first_due_date=date(2027, 1, 15),
         )
 
         self.assertEqual([item.pk for item in result['protected']], [entry_pk])
@@ -274,6 +290,8 @@ class RentalPaymentPlanServiceTests(TestCase):
         )
 
     def test_reprocessing_splits_legacy_partial_title_into_paid_and_future_parts(self):
+        self.rental.financial_policy_version = Rental.FinancialPolicy.LEGACY_ACCESS
+        self.rental.save(update_fields=['financial_policy_version', 'updated_at'])
         legacy_receivable = Receivable.objects.create(
             rental=self.rental,
             due_date=date(2027, 1, 15),
@@ -310,6 +328,65 @@ class RentalPaymentPlanServiceTests(TestCase):
             audit.metadata['adjusted_partial_receivable_ids'],
             [legacy_receivable.pk],
         )
+
+    def test_reprocessing_enforced_partial_title_freezes_paid_part_and_discloses_it(self):
+        """ENFORCED_V1 used to refuse this outright, freezing the schedule."""
+        receivable = Receivable.objects.create(
+            rental=self.rental,
+            due_date=self.rental.pickup_date,
+            amount=Decimal('200.00'),
+        )
+        payment = register_payment(
+            receivable,
+            amount=Decimal('100.00'),
+            payment_date=date(2026, 7, 27),
+            method=Payment.Method.PIX,
+        )
+
+        result = reprocess_future_installments(
+            self.rental,
+            installments=1,
+            first_due_date=date(2027, 1, 15),
+        )
+
+        # The paid part is frozen as a closed historical title; its open
+        # balance goes back into the pool that feeds the new schedule.
+        receivable.refresh_from_db()
+        self.assertEqual(receivable.amount, Decimal('100.00'))
+        self.assertEqual(receivable.paid_amount, Decimal('100.00'))
+        self.assertEqual(receivable.balance, Decimal('0.00'))
+        self.assertEqual(result['created'][0].amount, Decimal('200.00'))
+        self.assertEqual(result['released_amount'], Decimal('100.00'))
+        self.assertEqual(
+            result['adjusted_partials'],
+            [{
+                'id': receivable.pk,
+                'due_date': self.rental.pickup_date.isoformat(),
+                'previous_amount': '200.00',
+                'amount': '100.00',
+                'released_amount': '100.00',
+            }],
+        )
+
+        # The rewrite is disclosed, never silent.
+        audit = AuditLog.objects.get(action='reprocess_future_installments')
+        self.assertEqual(
+            audit.metadata['adjusted_partial_receivable_ids'], [receivable.pk],
+        )
+        self.assertEqual(audit.metadata['released_amount'], '100.00')
+
+        # Invariants: the schedule still sums to the rental value, and the
+        # payment is untouched and still attached to its original title.
+        self.assertEqual(
+            sum(
+                (item.amount for item in self.rental.receivables.all()),
+                Decimal('0'),
+            ),
+            self.rental.total_value,
+        )
+        payment.refresh_from_db()
+        self.assertEqual(payment.receivable_id, receivable.pk)
+        self.assertEqual(Payment.objects.count(), 1)
 
     def test_reprocessing_rejects_due_date_before_preserved_entry(self):
         plan = create_rental_payment_plan(
@@ -391,14 +468,13 @@ class RentalContractPaymentPlanTests(TestCase):
         rental = Rental.objects.create(
             number=103,
             customer=customer,
-            pickup_date=date(2027, 3, 1),
-            return_date=date(2027, 3, 5),
+            pickup_date=date(2027, 4, 20),
+            return_date=date(2027, 4, 25),
             total_value=Decimal('1000.00'),
         )
         create_rental_payment_plan(
             rental,
             installments=9,
-            first_due_date=date(2026, 8, 20),
             down_payment_amount=Decimal('100.00'),
             down_payment_date=date(2026, 7, 20),
             down_payment_method=Payment.Method.PIX,

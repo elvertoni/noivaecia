@@ -255,12 +255,17 @@ class RentalCreateFlowTests(TestCase):
         self.other_product = Product.objects.create(category=cat, code=2, description='B', value=150)
 
     def test_create_rental_generates_sequential_number_and_total(self):
+        CashAccount.objects.create(name='Caixa principal')
         data = {
             'customer': self.customer.pk,
-            'pickup_date': '2026-06-10',
-            'return_date': '2026-06-15',
+            'pickup_date': '2027-06-10',
+            'return_date': '2027-06-15',
             'penalty_value': '0',
             'notes': '',
+            'installment_count': '1',
+            'down_payment_amount': '150,00',
+            'down_payment_method': Payment.Method.PIX,
+            'down_payment_date': '2026-07-27',
             'items-TOTAL_FORMS': '1',
             'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0',
@@ -287,6 +292,29 @@ class RentalCreateFlowTests(TestCase):
         self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
         # Proof photo is served as a streaming FileResponse.
         self.assertGreater(len(b''.join(response.streaming_content)), 0)
+
+    def test_create_positive_rental_requires_entry(self):
+        response = self.client.post('/locacoes/nova/', {
+            'customer': self.customer.pk,
+            'pickup_date': '2027-06-10',
+            'return_date': '2027-06-15',
+            'installment_count': '1',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': 'Branco M',
+            'items-0-value': '300,00',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Informe uma entrada maior que zero para confirmar a locação.',
+        )
+        self.assertFalse(Rental.objects.exists())
 
     def test_create_rental_records_entry_and_schedules_remaining_balance(self):
         CashAccount.objects.create(name='Caixa principal')
@@ -712,6 +740,7 @@ class RentalItemAvailabilityTests(TestCase):
         self.other_customer = Customer.objects.create(name='Joana')
         cat = Category.objects.create(prefix='VN', name='Vestidos')
         self.product = Product.objects.create(category=cat, code=1, description='A', value=300)
+        CashAccount.objects.create(name='Caixa disponibilidade')
         # Existing active rental holding the product over an overlapping window.
         self.existing = Rental.objects.create(
             number=50, customer=self.other_customer,
@@ -726,6 +755,10 @@ class RentalItemAvailabilityTests(TestCase):
             'return_date': return_d,
             'penalty_value': '0',
             'notes': '',
+            'installment_count': '1',
+            'down_payment_amount': '1,00',
+            'down_payment_method': Payment.Method.CASH,
+            'down_payment_date': '2026-06-01',
             'items-TOTAL_FORMS': '1',
             'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0',
@@ -1426,7 +1459,14 @@ class ClientCorrectionsTests(TestCase):
 
     def test_create_rental_payment_plan_defaults_last_installment_to_pickup_date(self):
         from billing.services import create_rental_payment_plan
-        result = create_rental_payment_plan(self.rental, installments=3)
+        CashAccount.objects.create(name='Caixa plano')
+        result = create_rental_payment_plan(
+            self.rental,
+            installments=3,
+            down_payment_amount=Decimal('50.00'),
+            down_payment_date=date(2026, 5, 10),
+            down_payment_method=Payment.Method.PIX,
+        )
         future = result['future_receivables']
         self.assertEqual(len(future), 3)
         self.assertEqual(future[-1].due_date, self.rental.pickup_date)
@@ -1498,6 +1538,7 @@ class ContractCapacityLimitsTests(TestCase):
         )
         self.client.force_login(self.user)
         Company.objects.create(name='Noivas & Cia', last_rental_number=0)
+        CashAccount.objects.create(name='Caixa capacidade')
         self.customer = Customer.objects.create(name='Cliente Teste')
         cat = Category.objects.create(prefix='TR', name='Trajes')
         self.products = [
@@ -1512,6 +1553,10 @@ class ContractCapacityLimitsTests(TestCase):
             'return_date': '2026-06-15',
             'penalty_value': '0',
             'notes': '',
+            'installment_count': '1',
+            'down_payment_amount': '10,00',
+            'down_payment_method': Payment.Method.CASH,
+            'down_payment_date': '2026-06-01',
             'items-TOTAL_FORMS': str(len(product_list)),
             'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0',

@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django import forms
@@ -14,6 +15,35 @@ def _reject_future_date(value, label):
     return value
 
 
+class SubmissionTokenForm(forms.Form):
+    """Carry a per-render token so a resubmitted page is the same cash event.
+
+    The token is minted when the page is rendered and posted back untouched, so
+    a double click (or a browser retry) reaches the service with the same
+    idempotency key and registers the money exactly once. It is never trusted
+    as a key on its own — views derive a UUID5 from it under their own
+    namespace.
+    """
+
+    submission_token = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+        initial=lambda: str(uuid.uuid4()),
+    )
+
+    def clean_submission_token(self):
+        """Fall back to a fresh token instead of rejecting the receipt.
+
+        A stale page or a stripped field only costs the double-submit guard;
+        refusing the submission would cost the operator a real payment.
+        """
+        raw_token = (self.cleaned_data.get('submission_token') or '').strip()
+        try:
+            return str(uuid.UUID(raw_token))
+        except (AttributeError, TypeError, ValueError):
+            return str(uuid.uuid4())
+
+
 class GenerateReceivablesForm(forms.Form):
     """Generate N installments for a rental (RF-19)."""
 
@@ -28,7 +58,7 @@ class GenerateReceivablesForm(forms.Form):
     )
 
 
-class PaymentForm(forms.Form):
+class PaymentForm(SubmissionTokenForm):
     """Register a payment against a receivable (RF-21)."""
 
     value = BRMoneyField(
@@ -47,7 +77,7 @@ class PaymentForm(forms.Form):
         )
 
 
-class ReceivablePayForm(forms.Form):
+class ReceivablePayForm(SubmissionTokenForm):
     """Enhanced payment form that creates a Payment record (R5.06/R5.08)."""
 
     amount = BRMoneyField(
@@ -76,10 +106,6 @@ class ReceivablePayForm(forms.Form):
         label='Observações', required=False,
         widget=forms.Textarea(attrs={'class': INPUT_CLASS, 'rows': 2}),
     )
-    confirm_overpayment = forms.BooleanField(
-        label='Confirmar recebimento acima do saldo', required=False,
-    )
-
     def clean_payment_date(self):
         return _reject_future_date(
             self.cleaned_data['payment_date'],
@@ -87,7 +113,7 @@ class ReceivablePayForm(forms.Form):
         )
 
 
-class ReversalForm(forms.Form):
+class ReversalForm(SubmissionTokenForm):
     """Reversal reason form (R5.09)."""
 
     reason = forms.CharField(
@@ -160,7 +186,7 @@ class ManualMovementForm(forms.Form):
         return customer_name
 
 
-class MultiPayForm(forms.Form):
+class MultiPayForm(SubmissionTokenForm):
     """Multi-receivable payment form (R5.07)."""
 
     total_amount = BRMoneyField(

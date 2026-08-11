@@ -21,7 +21,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from billing.models import FinancialMovement, Payment
+from billing.models import FinancialMovement, Payment, Receipt
 from core.models import AuditLog
 from customers.models import Customer
 from notifications.models import CustomerMessage
@@ -103,7 +103,7 @@ class Command(BaseCommand):
         )
 
         merged = skipped_invalid = already_done = 0
-        total_rentals = total_payments = total_movements = total_messages = 0
+        total_rentals = total_payments = total_movements = total_messages = total_receipts = 0
 
         for group in in_scope:
             cpf = group['cpf']
@@ -145,16 +145,18 @@ class Command(BaseCommand):
             payments_n = Payment.objects.filter(customer_id__in=loser_ids).count()
             movements_n = FinancialMovement.objects.filter(customer_id__in=loser_ids).count()
             messages_n = CustomerMessage.objects.filter(customer_id__in=loser_ids).count()
+            receipts_n = Receipt.objects.filter(customer_id__in=loser_ids).count()
             self.stdout.write(
                 f'  CPF {cpf} [{group["tier"]}]: vencedor #{winner_id}, '
                 f'perdedores {loser_ids} — {rentals_n} locações, '
                 f'{payments_n} pagamentos, {movements_n} movimentos, '
-                f'{messages_n} avisos'
+                f'{messages_n} avisos, {receipts_n} recibos'
             )
             total_rentals += rentals_n
             total_payments += payments_n
             total_movements += movements_n
             total_messages += messages_n
+            total_receipts += receipts_n
 
             if not apply_changes:
                 merged += 1
@@ -179,6 +181,10 @@ class Command(BaseCommand):
                     Payment.objects.filter(customer=loser).update(customer=winner)
                     FinancialMovement.objects.filter(customer=loser).update(customer=winner)
                     CustomerMessage.objects.filter(customer=loser).update(customer=winner)
+                    # Receipt.customer is PROTECT (billing/models.py:325-332):
+                    # deleting the loser without reassigning would raise
+                    # ProtectedError once any receipt exists.
+                    Receipt.objects.filter(customer=loser).update(customer=winner)
                     loser.is_active = False
                     loser.legacy_notes = (
                         f'{loser.legacy_notes}\n{MERGED_MARKER}{winner.pk} em {today} '
@@ -207,6 +213,7 @@ class Command(BaseCommand):
                         'payments_moved': payments_n,
                         'movements_moved': movements_n,
                         'messages_moved': messages_n,
+                        'receipts_moved': receipts_n,
                     },
                 )
             merged += 1
@@ -215,7 +222,8 @@ class Command(BaseCommand):
             f'Grupos processados: {merged} · já mesclados: {already_done} · '
             f'inválidos pulados: {skipped_invalid} · '
             f'locações: {total_rentals} · pagamentos: {total_payments} · '
-            f'movimentos: {total_movements} · avisos: {total_messages}'
+            f'movimentos: {total_movements} · avisos: {total_messages} · '
+            f'recibos: {total_receipts}'
         )
         if apply_changes:
             self.stdout.write(self.style.SUCCESS(summary))

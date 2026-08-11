@@ -4,9 +4,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.db.models import Sum
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import ModulePermission
 from billing.models import CashAccount, Payment, Receivable
@@ -88,24 +90,141 @@ class PickupStatusUpdateTests(TestCase):
         self.user = _make_user()
         self.client.force_login(self.user)
         self.rental = _make_rental(300, status='pending')
+        self.receivable = Receivable.objects.create(
+            rental=self.rental,
+            due_date=TODAY,
+            amount=self.rental.final_value,
+            paid_amount=self.rental.final_value,
+            last_payment_date=TODAY,
+        )
+
+    def _post_pickup(self):
+        url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
+        return self.client.post(url, {'pickup_date': TODAY.isoformat()})
+
+    @staticmethod
+    def _response_messages(response):
+        return [str(message) for message in get_messages(response.wsgi_request)]
 
     def test_pickup_updates_rental_status(self):
-        url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
-        self.client.post(url, {'pickup_date': TODAY.isoformat()})
+        self._post_pickup()
         self.rental.refresh_from_db()
         self.assertEqual(self.rental.status, Rental.Status.PICKED_UP)
 
     def test_pickup_creates_pickup_record(self):
-        url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
-        self.client.post(url, {'pickup_date': TODAY.isoformat()})
+        self._post_pickup()
+        self.assertTrue(Pickup.objects.filter(rental=self.rental).exists())
+
+    def test_enforced_unpaid_contract_is_blocked_with_pending_amount(self):
+        self.receivable.paid_amount = Decimal('100.00')
+        self.receivable.save(update_fields=['paid_amount', 'balance', 'updated_at'])
+
+        response = self._post_pickup()
+
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'saldo contratual pendente de R$ 200,00',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_enforced_missing_schedule_is_blocked(self):
+        self.receivable.delete()
+
+        response = self._post_pickup()
+
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'saldo contratual pendente de R$ 300,00',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_enforced_incomplete_schedule_counts_unscheduled_principal(self):
+        self.receivable.amount = Decimal('100.00')
+        self.receivable.paid_amount = Decimal('100.00')
+        self.receivable.save(
+            update_fields=['amount', 'paid_amount', 'balance', 'updated_at'],
+        )
+
+        response = self._post_pickup()
+
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'saldo contratual pendente de R$ 200,00',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_paid_penalty_does_not_hide_unpaid_contract_principal(self):
+        self.receivable.paid_amount = Decimal('0')
+        self.receivable.save(update_fields=['paid_amount', 'balance', 'updated_at'])
+        Receivable.objects.create(
+            rental=self.rental,
+            due_date=TODAY,
+            amount=Decimal('300.00'),
+            paid_amount=Decimal('300.00'),
+            last_payment_date=TODAY,
+            legacy_notes='penalty:damage',
+        )
+
+        response = self._post_pickup()
+
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'saldo contratual pendente de R$ 300,00',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_enforced_written_off_unpaid_title_is_still_blocked(self):
+        self.receivable.paid_amount = Decimal('0')
+        self.receivable.written_off_at = timezone.now()
+        self.receivable.written_off_reason = 'Teste de baixa'
+        self.receivable.save()
+        self.assertEqual(self.receivable.balance, Decimal('0'))
+
+        response = self._post_pickup()
+
+        self.assertFalse(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'saldo contratual pendente de R$ 300,00',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_enforced_fully_paid_contract_is_allowed(self):
+        response = self._post_pickup()
+
+        self.assertTrue(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertNotIn(
+            'Retirada bloqueada',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_legacy_unpaid_contract_is_allowed_with_warning(self):
+        self.rental.financial_policy_version = Rental.FinancialPolicy.LEGACY_ACCESS
+        self.rental.save(update_fields=['financial_policy_version', 'updated_at'])
+        self.receivable.paid_amount = Decimal('0')
+        self.receivable.save(update_fields=['paid_amount', 'balance', 'updated_at'])
+
+        response = self._post_pickup()
+
+        self.assertTrue(Pickup.objects.filter(rental=self.rental).exists())
+        self.assertIn(
+            'Retirada permitida pela política legada',
+            ' '.join(self._response_messages(response)),
+        )
+
+    def test_zero_final_value_is_allowed_without_schedule(self):
+        self.receivable.delete()
+        self.rental.total_value = Decimal('0')
+        self.rental.save(update_fields=['total_value', 'updated_at'])
+
+        self._post_pickup()
+
         self.assertTrue(Pickup.objects.filter(rental=self.rental).exists())
 
     def test_cancelled_rental_cannot_be_picked_up_by_direct_url(self):
         self.rental.status = Rental.Status.CANCELLED
         self.rental.save(update_fields=['status', 'updated_at'])
-        url = reverse('movements:pickup', kwargs={'rental_pk': self.rental.pk})
 
-        response = self.client.post(url, {'pickup_date': TODAY.isoformat()})
+        response = self._post_pickup()
 
         self.assertEqual(response.status_code, 302)
         self.rental.refresh_from_db()

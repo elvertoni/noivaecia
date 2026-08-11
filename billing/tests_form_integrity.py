@@ -8,7 +8,13 @@ from django.utils import timezone
 
 from accounts.models import ActionPermission, ModulePermission
 from billing.forms import ManualMovementForm, PaymentForm
-from billing.models import CashAccount, FinancialMovement, Payment, Receivable
+from billing.models import (
+    CashAccount,
+    FinancialMovement,
+    Payment,
+    Receivable,
+    Receipt,
+)
 from company.models import Company
 from customers.models import Customer
 from rentals.models import Rental
@@ -108,6 +114,7 @@ class BillingFormIntegrityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'maior que o saldo dos títulos selecionados')
+        self.assertEqual(Receipt.objects.count(), 0)
         self.assertEqual(Payment.objects.count(), 0)
         self.assertEqual(FinancialMovement.objects.count(), 0)
 
@@ -141,6 +148,7 @@ class BillingFormIntegrityTests(TestCase):
         )
 
         self.assertRedirects(response, reverse('billing:list', args=[self.rental.pk]))
+        self.assertEqual(Receipt.objects.count(), 1)
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(FinancialMovement.objects.count(), 1)
         self.receivable.refresh_from_db()

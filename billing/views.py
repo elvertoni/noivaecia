@@ -1,9 +1,11 @@
 import csv
+import uuid
 from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import F, Sum
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -27,20 +29,63 @@ from .forms import (
 from .models import CashAccount, FinancialMovement, Payment, Receivable
 from .services import (
     PaymentPlanError,
+    ReceiptIdempotencyConflict,
+    allocated_cash,
     financial_kpis,
     interest_breakdown,
+    plan_carryover_allocations,
+    plan_selected_allocations,
     reconcile_financial,
-    register_payment,
-    register_payment_with_carryover,
+    register_receipt,
     reprocess_future_installments,
     revert_write_off_receivable,
     reverse_payment,
+    reverse_receipt,
     total_with_interest,
 )
 
 
 class BillingAccessMixin(ModuleAccessMixin):
     module_key = 'billing'
+
+
+# Namespace for deriving receipt idempotency keys. The browser-supplied
+# submission token is never used as a key directly: hashing it together with a
+# server-controlled scope keeps a crafted token from colliding with an existing
+# receipt and silently swallowing real money.
+RECEIPT_KEY_NAMESPACE = uuid.UUID('4d0f7d4b-6f0e-5b1a-9c2d-0b7a1f3e5c81')
+
+NO_ACTIVE_CASH_ACCOUNT_MESSAGE = (
+    'Não é possível registrar recebimento sem uma conta caixa ativa. '
+    'Configure uma conta em Financeiro > Contas.'
+)
+
+DUPLICATE_SUBMISSION_MESSAGE = (
+    'Este recebimento já foi enviado com outros valores. Recarregue a tela e '
+    'confira o que foi registrado antes de tentar de novo.'
+)
+
+
+def _receipt_key(scope, token):
+    """Derive a stable receipt idempotency key from one page submission."""
+    return uuid.uuid5(RECEIPT_KEY_NAMESPACE, f'{scope}:{token}')
+
+
+def _active_cash_account():
+    """First active cash account by id — the criterion the services use.
+
+    Locked with the rest of the financial write so the canonical lock order
+    (Rental -> Receivable -> CashAccount) is preserved.
+    """
+    account = (
+        CashAccount.objects.select_for_update()
+        .filter(active=True)
+        .order_by('id')
+        .first()
+    )
+    if account is None:
+        raise ValueError(NO_ACTIVE_CASH_ACCOUNT_MESSAGE)
+    return account
 
 
 def _filters_for_display(request):
@@ -180,7 +225,7 @@ class CustomerReceivableView(BillingAccessMixin, TemplateView):
 
 
 class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
-    """Pay a single receivable — creates Payment + FinancialMovement (R5.06, R5.08)."""
+    """Receive one title as a single-allocation receipt (R5.06, R5.08)."""
 
     action_key = 'billing.receive'
 
@@ -216,24 +261,44 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         amount = form.cleaned_data['amount']
         expected_total = total_with_interest(self.receivable, company=Company.load())
 
-        if amount > expected_total and not form.cleaned_data.get('confirm_overpayment'):
+        if amount > expected_total:
             form.add_error(
-                'confirm_overpayment',
-                f'Valor acima do total com juros (R$ {expected_total:.2f}). Marque para confirmar.'
+                'amount',
+                f'O valor não pode superar o total com juros (R$ {expected_total:.2f}).'
             )
             return self.form_invalid(form)
 
         try:
-            register_payment(
-                receivable=self.receivable,
-                amount=amount,
-                payment_date=form.cleaned_data['payment_date'],
-                method=form.cleaned_data['method'],
-                interest_amount=form.cleaned_data.get('interest_amount'),
-                discount_amount=form.cleaned_data.get('discount_amount'),
-                notes=form.cleaned_data.get('notes', ''),
-                user=self.request.user,
-            )
+            with transaction.atomic():
+                account = _active_cash_account()
+                register_receipt(
+                    idempotency_key=_receipt_key(
+                        f'billing:pay_receivable:{self.receivable.pk}',
+                        form.cleaned_data['submission_token'],
+                    ),
+                    payload={
+                        'rental_id': self.receivable.rental_id,
+                        'cash_account_id': account.pk,
+                        'received_on': form.cleaned_data['payment_date'],
+                        'amount': amount,
+                        'method': form.cleaned_data['method'],
+                        'notes': form.cleaned_data.get('notes', ''),
+                        'allocations': [{
+                            'receivable_id': self.receivable.pk,
+                            'cash_amount': amount,
+                            'interest_amount': (
+                                form.cleaned_data.get('interest_amount') or 0
+                            ),
+                            'discount_amount': (
+                                form.cleaned_data.get('discount_amount') or 0
+                            ),
+                        }],
+                    },
+                    user=self.request.user,
+                )
+        except ReceiptIdempotencyConflict:
+            messages.error(self.request, DUPLICATE_SUBMISSION_MESSAGE)
+            return self.form_invalid(form)
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
@@ -296,6 +361,21 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
 
         try:
             with transaction.atomic():
+                rental_ids = list(
+                    Receivable.objects.filter(
+                        pk__in=receivable_ids,
+                        rental__customer=self.customer,
+                    )
+                    .values_list('rental_id', flat=True)
+                    .distinct()
+                )
+                # All financial writers use the same lock hierarchy to avoid
+                # PostgreSQL deadlocks: Rental -> Receivable -> CashAccount.
+                list(
+                    Rental.objects.select_for_update()
+                    .filter(pk__in=rental_ids)
+                    .order_by('pk')
+                )
                 # Lock and recalculate the selected balances inside the transaction.
                 # A second cashier may have paid one of these titles after the page
                 # was opened, so a pre-lock total must never drive the allocation.
@@ -307,7 +387,7 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
                         balance__gt=0,
                     )
                     .select_related('rental')
-                    .order_by('due_date')
+                    .order_by('due_date', 'pk')
                 )
                 selected_total = sum((rec.balance for rec in selected), Decimal('0'))
                 if not selected_total:
@@ -321,32 +401,74 @@ class MultiPayView(BillingAccessMixin, ActionRequiredMixin, FormView):
                     )
                     return self.form_invalid(form)
 
-                remaining = form.cleaned_data['total_amount']
-                paid_count = 0
-                for rec in selected:
-                    if remaining <= 0:
-                        break
-                    pay_amount = min(remaining, rec.balance)
-                    register_payment(
-                        receivable=rec,
-                        amount=pay_amount,
-                        payment_date=form.cleaned_data['payment_date'],
-                        method=form.cleaned_data['method'],
-                        notes=form.cleaned_data.get('notes', ''),
+                allocations = plan_selected_allocations(
+                    receivables=selected,
+                    amount=form.cleaned_data['total_amount'],
+                )
+                if not allocations:
+                    form.add_error('total_amount', 'Nenhum título em aberto foi selecionado.')
+                    return self.form_invalid(form)
+
+                # A receipt belongs to exactly one rental, so a customer paying
+                # across rentals gets one receipt per rental. They are written
+                # inside this single transaction, so the whole cash act still
+                # succeeds or fails together, and each receipt stays reversible
+                # as a coherent unit.
+                receivable_by_id = {rec.pk: rec for rec in selected}
+                grouped = {}
+                for allocation in allocations:
+                    rental_id = receivable_by_id[allocation['receivable_id']].rental_id
+                    grouped.setdefault(rental_id, []).append(allocation)
+
+                account = _active_cash_account()
+                paid_count = len(allocations)
+                receipt_count = 0
+                for rental_id, rental_allocations in grouped.items():
+                    register_receipt(
+                        idempotency_key=_receipt_key(
+                            f'billing:multi_pay:{self.customer.pk}:{rental_id}',
+                            form.cleaned_data['submission_token'],
+                        ),
+                        payload={
+                            'rental_id': rental_id,
+                            'cash_account_id': account.pk,
+                            'received_on': form.cleaned_data['payment_date'],
+                            'amount': allocated_cash(rental_allocations),
+                            'method': form.cleaned_data['method'],
+                            'notes': form.cleaned_data.get('notes', ''),
+                            'allocations': rental_allocations,
+                        },
                         user=self.request.user,
                     )
-                    remaining -= pay_amount
-                    paid_count += 1
+                    receipt_count += 1
+        except ReceiptIdempotencyConflict:
+            messages.error(self.request, DUPLICATE_SUBMISSION_MESSAGE)
+            return self.form_invalid(form)
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
 
-        messages.success(self.request, f'{paid_count} título(s) recebido(s) com sucesso.')
+        if receipt_count > 1:
+            messages.success(
+                self.request,
+                f'{paid_count} título(s) recebido(s) com sucesso em '
+                f'{receipt_count} recibos, um por locação.',
+            )
+        else:
+            messages.success(self.request, f'{paid_count} título(s) recebido(s) com sucesso.')
         return redirect('billing:customer_receivables', pk=self.customer.pk)
 
 
 class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
-    """Reverse a payment, creating an outflow movement (R5.09)."""
+    """Undo one cash act, creating a single outflow movement (R5.09).
+
+    A payment that belongs to a receipt is only a slice of the money that
+    crossed the counter, so reversing it alone would leave the rest of the
+    receipt standing and mint a second cash movement over an inflow that the
+    ``Receipt`` model already owns. Those are routed to ``reverse_receipt``,
+    which undoes the whole act atomically. Payments predating the receipt model
+    keep the legacy per-payment path.
+    """
 
     action_key = 'billing.reverse'
 
@@ -354,8 +476,21 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
     form_class = ReversalForm
 
     def dispatch(self, request, *args, **kwargs):
-        self.payment = get_object_or_404(Payment, pk=kwargs['pk'])
-        if self.payment.is_reversal or self.payment.reversed_by_id is not None:
+        self.payment = get_object_or_404(
+            Payment.objects.select_related(
+                'receipt_allocation__receipt',
+                'receivable__rental',
+            ),
+            pk=kwargs['pk'],
+        )
+        allocation = getattr(self.payment, 'receipt_allocation', None)
+        self.receipt = allocation.receipt if allocation is not None else None
+        already_reversed = (
+            self.payment.is_reversal
+            or self.payment.reversed_by_id is not None
+            or (self.receipt is not None and hasattr(self.receipt, 'reversal'))
+        )
+        if already_reversed:
             messages.error(request, 'Este recebimento já foi estornado.')
             if self.payment.customer_id:
                 return redirect('billing:customer_receivables', pk=self.payment.customer_id)
@@ -365,15 +500,42 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['payment'] = self.payment
+        context['receipt'] = self.receipt
+        if self.receipt is not None:
+            # The operator must see the whole act they are undoing, not just
+            # the slice they clicked on.
+            context['receipt_allocations'] = list(
+                self.receipt.allocations
+                .select_related('receivable__rental')
+                .order_by('receivable__due_date', 'receivable_id')
+            )
         return context
 
     def form_valid(self, form):
+        reason = form.cleaned_data['reason']
         try:
-            reverse_payment(
-                self.payment,
-                reason=form.cleaned_data['reason'],
-                user=self.request.user,
-            )
+            if self.receipt is not None:
+                reverse_receipt(
+                    self.receipt,
+                    idempotency_key=_receipt_key(
+                        f'billing:reverse_receipt:{self.receipt.pk}',
+                        form.cleaned_data['submission_token'],
+                    ),
+                    payload={
+                        'received_on': timezone.localdate(),
+                        'reason': reason,
+                    },
+                    user=self.request.user,
+                )
+            else:
+                reverse_payment(
+                    self.payment,
+                    reason=reason,
+                    user=self.request.user,
+                )
+        except ReceiptIdempotencyConflict:
+            messages.error(self.request, DUPLICATE_SUBMISSION_MESSAGE)
+            return redirect('billing:receivables')
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return redirect('billing:receivables')
@@ -514,7 +676,14 @@ class ManualCashMovementView(BillingAccessMixin, ActionRequiredMixin, FormView):
 
 
 class PaymentReportView(BillingAccessMixin, ListView):
-    """Report of received payments by period (R6.03)."""
+    """Report of received cash acts by period (R6.03).
+
+    One receipt can settle several titles, and each of those settlements is a
+    ``Payment``. Listing payments one per row would inflate the number of cash
+    acts, so rows of the same receipt are folded back into a single line. The
+    ordering keys on the receipt so its payments stay adjacent; the period total
+    still sums every payment, which keeps the money identical either way.
+    """
 
     template_name = 'billing/payment_report.html'
     context_object_name = 'payments'
@@ -522,9 +691,21 @@ class PaymentReportView(BillingAccessMixin, ListView):
 
     def get_queryset(self):
         qs = (
-            Payment.objects.filter(is_reversal=False)
+            Payment.objects.filter(is_reversal=False, reversed_by__isnull=True)
             .select_related('receivable', 'receivable__rental', 'customer', 'user')
-            .order_by('-payment_date', '-created_at')
+            .annotate(
+                receipt_group_id=F('receipt_allocation__receipt_id'),
+                receipt_group_order=Coalesce(
+                    'receipt_allocation__receipt__created_at',
+                    'created_at',
+                ),
+            )
+            .order_by(
+                '-payment_date',
+                '-receipt_group_order',
+                'receipt_group_id',
+                'pk',
+            )
         )
 
         date_from = parse_br_date(self.request.GET.get('date_from'))
@@ -547,11 +728,39 @@ class PaymentReportView(BillingAccessMixin, ListView):
 
         return qs
 
+    @staticmethod
+    def _fold_into_cash_acts(payments):
+        """Collapse the payments of one receipt into a single report row."""
+        rows = []
+        for payment in payments:
+            group_id = payment.receipt_group_id
+            if group_id and rows and rows[-1]['receipt_id'] == group_id:
+                row = rows[-1]
+                row['amount'] += payment.amount
+                row['payments'].append(payment)
+                continue
+            rental = payment.receivable.rental if payment.receivable_id else None
+            rows.append({
+                'receipt_id': group_id,
+                'payment': payment,
+                'payments': [payment],
+                'payment_date': payment.payment_date,
+                'customer': payment.customer or (rental.customer if rental else None),
+                'rental_number': rental.number if rental else None,
+                'method_display': payment.get_method_display(),
+                'notes': payment.notes,
+                'amount': payment.amount,
+            })
+        for row in rows:
+            row['title_count'] = len(row['payments'])
+        return rows
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         qs = self.object_list
         total = qs.aggregate(v=Sum('amount'))['v'] or Decimal('0')
         context.update({
+            'cash_acts': self._fold_into_cash_acts(context['payments']),
             'total_received': total,
             'methods': Payment.Method.choices,
             'filters': _filters_for_display(self.request),
@@ -673,6 +882,11 @@ class ReconciliationExportView(
                 str(item['diff']).replace('.', ','),
             ])
 
+        for payment_id in recon['payments_with_movement_issue_ids']:
+            writer.writerow(['Recebimento sem movimento de caixa válido único', payment_id])
+        for payment_id in recon['reversals_with_movement_issue_ids']:
+            writer.writerow(['Estorno sem movimento de caixa válido único', payment_id])
+
         return response
 
 
@@ -764,7 +978,11 @@ class GenerateReceivablesView(
 
 
 class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
-    """Legacy payment view kept for backward compatibility (RF-21)."""
+    """Receive on one installment, spilling the surplus into the rest (RF-21).
+
+    The whole act is a single ``Receipt``: one cash movement, one allocation per
+    installment it settles. That is what makes it reversible in one step later.
+    """
 
     form_class = PaymentForm
     template_name = 'billing/payment_form.html'
@@ -794,24 +1012,63 @@ class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
 
     def form_valid(self, form):
         try:
-            payments = register_payment_with_carryover(
-                receivable=self.receivable,
-                amount=form.cleaned_data['value'],
-                payment_date=form.cleaned_data['payment_date'],
-                method=Payment.Method.CASH,
-                user=self.request.user,
-            )
+            with transaction.atomic():
+                # Canonical lock order across every financial writer:
+                # Rental -> Receivable -> CashAccount.
+                Rental.objects.select_for_update().only('pk').get(
+                    pk=self.receivable.rental_id,
+                )
+                schedule = list(
+                    Receivable.objects.select_for_update(of=('self',))
+                    .filter(rental_id=self.receivable.rental_id)
+                    .order_by('due_date', 'pk')
+                )
+                target = next(
+                    (item for item in schedule if item.pk == self.receivable.pk),
+                    None,
+                )
+                if target is None:
+                    raise ValueError(
+                        'O título informado não pertence mais a esta locação.'
+                    )
+                allocations = plan_carryover_allocations(
+                    target=target,
+                    schedule=schedule,
+                    amount=form.cleaned_data['value'],
+                    target_interest=total_with_interest(target) - target.balance,
+                )
+                account = _active_cash_account()
+                receipt = register_receipt(
+                    idempotency_key=_receipt_key(
+                        f'billing:pay:{self.receivable.pk}',
+                        form.cleaned_data['submission_token'],
+                    ),
+                    payload={
+                        'rental_id': self.receivable.rental_id,
+                        'cash_account_id': account.pk,
+                        'received_on': form.cleaned_data['payment_date'],
+                        'amount': allocated_cash(allocations),
+                        'method': Payment.Method.CASH,
+                        'notes': '',
+                        'allocations': allocations,
+                    },
+                    user=self.request.user,
+                )
         except PaymentPlanError as exc:
             form.add_error(exc.field or 'value', str(exc))
+            return self.form_invalid(form)
+        except ReceiptIdempotencyConflict:
+            messages.error(self.request, DUPLICATE_SUBMISSION_MESSAGE)
             return self.form_invalid(form)
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
-        if len(payments) > 1:
+        installment_count = receipt.allocations.count()
+        if installment_count > 1:
             messages.success(
                 self.request,
                 'Recebimento registrado com sucesso e distribuído entre '
-                f'{len(payments)} parcelas.',
+                f'{installment_count} parcelas.',
             )
         else:
             messages.success(self.request, 'Recebimento registrado com sucesso.')

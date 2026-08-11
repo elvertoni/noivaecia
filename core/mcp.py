@@ -35,6 +35,8 @@ ENTITIES = {
     'pickup': 'movements.Pickup',
     'product': 'catalog.Product',
     'receivable': 'billing.Receivable',
+    'receipt': 'billing.Receipt',
+    'receipt_allocation': 'billing.ReceiptAllocation',
     'rental': 'rentals.Rental',
     'rental_item': 'rentals.RentalItem',
     'return_record': 'movements.Return',

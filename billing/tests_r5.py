@@ -5,12 +5,19 @@ from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 from django.urls import reverse
 
 from accounts.models import ActionPermission, ModulePermission
-from billing.models import CashAccount, FinancialMovement, Payment, Receivable
+from billing.models import (
+    CashAccount,
+    FinancialMovement,
+    Payment,
+    Receivable,
+    Receipt,
+)
 from billing.services import financial_kpis, register_payment, reverse_payment
 from company.models import Company
 from customers.models import Customer
@@ -56,6 +63,32 @@ class RegisterPaymentServiceTests(TestCase):
         self.rec.refresh_from_db()
         self.assertEqual(self.rec.paid_amount, Decimal('100'))
         self.assertEqual(self.rec.balance, Decimal('200'))
+
+    def test_interest_is_cash_but_does_not_reduce_principal(self):
+        register_payment(
+            self.rec,
+            Decimal('110.00'),
+            date(2026, 6, 20),
+            interest_amount=Decimal('10.00'),
+        )
+
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.paid_amount, Decimal('100.00'))
+        self.assertEqual(self.rec.balance, Decimal('200.00'))
+        self.assertEqual(FinancialMovement.objects.get().amount, Decimal('110.00'))
+
+    def test_discount_reduces_principal_without_increasing_cash(self):
+        register_payment(
+            self.rec,
+            Decimal('90.00'),
+            date(2026, 6, 20),
+            discount_amount=Decimal('10.00'),
+        )
+
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.paid_amount, Decimal('100.00'))
+        self.assertEqual(self.rec.balance, Decimal('200.00'))
+        self.assertEqual(FinancialMovement.objects.get().amount, Decimal('90.00'))
 
     def test_creates_financial_movement_inflow(self):
         payment = register_payment(self.rec, Decimal('150'), date(2026, 6, 20))
@@ -114,11 +147,16 @@ class RegisterPaymentServiceTests(TestCase):
         self.rec.refresh_from_db()
         self.assertTrue(self.rec.is_paid)
 
-    def test_overpayment_stored(self):
-        # R5.08: overpayment is allowed when confirmed (service doesn't block it)
-        register_payment(self.rec, Decimal('400'), date(2026, 6, 20))
+    def test_overpayment_is_rejected_without_negative_balance(self):
+        with self.assertRaisesMessage(
+            ValueError,
+            'O valor aplicado ao principal não pode superar o saldo do título.',
+        ):
+            register_payment(self.rec, Decimal('400'), date(2026, 6, 20))
+
         self.rec.refresh_from_db()
-        self.assertEqual(self.rec.balance, Decimal('-100'))
+        self.assertEqual(self.rec.balance, Decimal('300'))
+        self.assertFalse(Payment.objects.exists())
 
     def test_rejects_invalid_service_inputs(self):
         with self.assertRaises(ValueError):
@@ -177,6 +215,61 @@ class ReversePaymentServiceTests(TestCase):
         self.assertEqual(outflow.source, FinancialMovement.Source.REVERSAL)
         self.assertEqual(outflow.payment, reversal)
 
+    def test_reversal_uses_original_account_even_when_inactive(self):
+        self.account.active = False
+        self.account.save(update_fields=['active', 'updated_at'])
+
+        reverse_payment(self.payment, reason='Motivo')
+
+        outflow = FinancialMovement.objects.get(
+            direction=FinancialMovement.Direction.OUTFLOW,
+        )
+        self.assertEqual(outflow.account, self.account)
+
+    def test_reversal_refuses_missing_original_movement(self):
+        FinancialMovement.objects.filter(payment=self.payment).delete()
+
+        with self.assertRaisesMessage(
+            ValueError,
+            'O recebimento precisa ter exatamente um movimento de entrada',
+        ):
+            reverse_payment(self.payment, reason='Motivo')
+
+        self.assertEqual(Payment.objects.count(), 1)
+        self.payment.refresh_from_db()
+        self.assertIsNone(self.payment.reversed_by)
+
+    def test_database_refuses_duplicate_payment_movements(self):
+        original = FinancialMovement.objects.get(payment=self.payment)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                FinancialMovement.objects.create(
+                    date=original.date,
+                    account=original.account,
+                    direction=original.direction,
+                    amount=original.amount,
+                    source=original.source,
+                    customer=original.customer,
+                    receivable=original.receivable,
+                    payment=self.payment,
+                    rental=original.rental,
+                )
+
+        self.assertEqual(Payment.objects.count(), 1)
+
+    def test_reversal_refuses_movement_with_divergent_amount(self):
+        FinancialMovement.objects.filter(payment=self.payment).update(
+            amount=Decimal('199.99'),
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            'O movimento de entrada diverge do recebimento',
+        ):
+            reverse_payment(self.payment, reason='Motivo')
+
+        self.assertEqual(Payment.objects.count(), 1)
+
     def test_rolls_back_reversal_when_movement_fails(self):
         with mock.patch(
             'billing.services.FinancialMovement.objects.create',
@@ -223,7 +316,7 @@ class FinancialKPIsTests(TestCase):
         p = register_payment(self.rec, Decimal('100'), today)
         reverse_payment(p, reason='Teste')
         kpis = financial_kpis(today=today)
-        self.assertEqual(kpis['received_today'], Decimal('100'))  # reversal doesn't use payment_date=today
+        self.assertEqual(kpis['received_today'], Decimal('0'))
 
     def test_zero_counts_when_no_receivables(self):
         Receivable.objects.all().delete()
@@ -367,10 +460,12 @@ class ReceivablePayViewTests(TestCase):
                 'interest_amount': '0',
                 'discount_amount': '0',
                 'notes': '',
-                'confirm_overpayment': '',
             },
         )
         self.assertEqual(response.status_code, 302)
+        # One cash act: a receipt holding a single allocation, its Payment and
+        # the one inflow movement that receipt owns.
+        self.assertEqual(Receipt.objects.count(), 1)
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(FinancialMovement.objects.count(), 1)
 
@@ -387,7 +482,6 @@ class ReceivablePayViewTests(TestCase):
                 'interest_amount': '0',
                 'discount_amount': '0',
                 'notes': '',
-                'confirm_overpayment': '',
             },
         )
 
@@ -400,7 +494,7 @@ class ReceivablePayViewTests(TestCase):
         self.assertFalse(Payment.objects.exists())
         self.assertFalse(FinancialMovement.objects.exists())
 
-    def test_overpayment_requires_confirmation(self):
+    def test_overpayment_is_rejected(self):
         response = self.client.post(
             reverse('billing:pay_receivable', args=[self.rec.pk]),
             {
@@ -410,13 +504,13 @@ class ReceivablePayViewTests(TestCase):
                 'interest_amount': '0',
                 'discount_amount': '0',
                 'notes': '',
-                'confirm_overpayment': '',  # not checked
             },
         )
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'O valor não pode superar o total com juros')
         self.assertEqual(Payment.objects.count(), 0)
 
-    def test_overpayment_with_confirmation_succeeds(self):
+    def test_forged_overpayment_confirmation_does_not_bypass_cap(self):
         response = self.client.post(
             reverse('billing:pay_receivable', args=[self.rec.pk]),
             {
@@ -429,8 +523,8 @@ class ReceivablePayViewTests(TestCase):
                 'confirm_overpayment': 'on',
             },
         )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Payment.objects.count(), 0)
 
 
 class MultiPayViewTests(TestCase):
@@ -473,6 +567,10 @@ class MultiPayViewTests(TestCase):
         self.assertTrue(self.rec.is_paid)
         self.assertTrue(self.rec2.is_paid)
         self.assertEqual(Payment.objects.count(), 2)
+        # The two titles belong to different rentals, and a receipt is bound to
+        # one rental, so the act is recorded as one receipt per rental.
+        self.assertEqual(Receipt.objects.count(), 2)
+        self.assertEqual(FinancialMovement.objects.count(), 2)
 
     def test_multi_pay_partial_amount_covers_first(self):
         self.client.post(

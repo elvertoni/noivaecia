@@ -11,7 +11,7 @@ ACTIONS = [
     ('rentals.delete', 'Excluir locações'),
     ('rentals.cancel', 'Cancelar locações'),
     ('billing.receive', 'Registrar recebimentos'),
-    ('billing.reverse', 'Estornar pagamentos'),
+    ('billing.reverse', 'Estornar recebimentos e recibos'),
     ('billing.reopen', 'Reverter baixa de recebimentos'),
     ('billing.cash', 'Lançar movimentos manuais de caixa'),
     ('reports.export', 'Exportar relatórios (CSV)'),

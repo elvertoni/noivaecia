@@ -77,8 +77,9 @@
         <h2 class="section-title mb-3">Receber títulos</h2>
         <form method="post" action="{% url 'billing:multi_pay' customer.pk %}">
           {% csrf_token %}
+          {% for field in multi_pay_form.hidden_fields %}{{ field }}{% endfor %}
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {% for field in multi_pay_form %}
+            {% for field in multi_pay_form.visible_fields %}
               {% include 'includes/form_field.html' with field=field only %}
             {% endfor %}
           </div>

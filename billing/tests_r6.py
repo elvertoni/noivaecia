@@ -194,6 +194,30 @@ class ReconcileFinancialTests(TestCase):
         result = reconcile_financial()
         self.assertEqual(result['payments_without_movement_count'], 1)
 
+    def test_reconciliation_detects_movement_with_divergent_amount(self):
+        payment = Payment.objects.create(
+            receivable=self.rec,
+            customer=self.customer,
+            rental=self.rental,
+            payment_date=date(2026, 6, 20),
+            amount=Decimal('100'),
+        )
+        FinancialMovement.objects.create(
+            date=payment.payment_date,
+            account=self.account,
+            direction=FinancialMovement.Direction.INFLOW,
+            amount=Decimal('99.99'),
+            source=FinancialMovement.Source.PAYMENT,
+            receivable=self.rec,
+            payment=payment,
+            rental=self.rental,
+        )
+
+        result = reconcile_financial()
+
+        self.assertEqual(result['payments_with_movement_issue_count'], 1)
+        self.assertEqual(result['payments_with_movement_issue_ids'], [payment.pk])
+
 
 class CashMovementListViewTests(TestCase):
     def setUp(self):
@@ -286,6 +310,25 @@ class PaymentReportViewTests(TestCase):
         response = self.client.get(
             reverse('billing:payment_report'), {'date_from': '2026-07-01'}
         )
+        self.assertEqual(response.context['total_received'], Decimal('0'))
+
+    def test_report_excludes_original_payment_after_reversal(self):
+        payment = Payment.objects.get()
+        reversal = Payment.objects.create(
+            receivable=self.rec,
+            customer=self.customer,
+            rental=self.rental,
+            payment_date=date(2026, 6, 21),
+            amount=Decimal('-200'),
+            method='cash',
+            user=self.user,
+            is_reversal=True,
+        )
+        payment.reversed_by = reversal
+        payment.save(update_fields=['reversed_by', 'updated_at'])
+
+        response = self.client.get(reverse('billing:payment_report'))
+
         self.assertEqual(response.context['total_received'], Decimal('0'))
 
 

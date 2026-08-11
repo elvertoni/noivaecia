@@ -24,7 +24,8 @@
 
     <form method="post" class="mt-6 space-y-4">
       {% csrf_token %}
-      {% for field in form %}
+      {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+      {% for field in form.visible_fields %}
         {% include 'includes/form_field.html' with field=field only %}
       {% endfor %}
       <div class="form-actions">

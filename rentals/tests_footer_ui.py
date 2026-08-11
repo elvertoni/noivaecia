@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ModulePermission
+from billing.models import CashAccount, Payment
 from catalog.models import Category, Product
 from customers.models import Customer
 from rentals.forms import RentalForm
@@ -218,6 +219,7 @@ class RentalItemRowPersistenceTests(TestCase):
             category=category, code=1, description='SAPATO',
             color='PRETO', size='40', value=Decimal('120.00'),
         )
+        CashAccount.objects.create(name='Caixa persistência')
 
     def _post(self, **overrides):
         data = {
@@ -228,6 +230,9 @@ class RentalItemRowPersistenceTests(TestCase):
             'wearer_name': '',
             'notes': '',
             'installment_count': '1',
+            'down_payment_amount': '120,00',
+            'down_payment_method': Payment.Method.CASH,
+            'down_payment_date': '10/08/2026',
             'items-TOTAL_FORMS': '2',
             'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '1',

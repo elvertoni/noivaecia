@@ -37,6 +37,47 @@ def _has_invalid_date_filter(request):
     )
 
 
+def _contractual_debt_pending(rental, receivables):
+    """Return debt that must be settled before pickup without trusting balances.
+
+    ``Receivable.balance`` is zero for written-off titles, so it cannot enforce
+    the pickup rule.  Principal paid is capped at each title's nominal amount,
+    and any part of ``Rental.final_value`` missing from the schedule remains
+    outstanding.
+    """
+    contract_total = max(Decimal(rental.final_value or 0), Decimal('0'))
+    if contract_total == 0:
+        return Decimal('0')
+
+    contract_receivables = [
+        receivable for receivable in receivables
+        if not (receivable.legacy_notes or '').startswith('penalty:')
+    ]
+    scheduled_contract_total = sum(
+        (
+            max(receivable.amount or Decimal('0'), Decimal('0'))
+            for receivable in contract_receivables
+        ),
+        Decimal('0'),
+    )
+    outstanding_scheduled = sum(
+        (
+            max(
+                max(receivable.amount or Decimal('0'), Decimal('0'))
+                - max(receivable.paid_amount or Decimal('0'), Decimal('0')),
+                Decimal('0'),
+            )
+            for receivable in receivables
+        ),
+        Decimal('0'),
+    )
+    unscheduled_principal = max(
+        contract_total - scheduled_contract_total,
+        Decimal('0'),
+    )
+    return outstanding_scheduled + unscheduled_principal
+
+
 class PickupCreateView(MovementsAccessMixin, CreateView):
     """Register the pickup of a rental's items (RF-17)."""
 
@@ -62,6 +103,8 @@ class PickupCreateView(MovementsAccessMixin, CreateView):
         return context
 
     def form_valid(self, form):
+        from billing.models import Receivable
+
         with transaction.atomic():
             rental = Rental.objects.select_for_update().get(pk=self.rental.pk)
             if (
@@ -73,6 +116,32 @@ class PickupCreateView(MovementsAccessMixin, CreateView):
                     'Esta locação não está mais disponível para registrar retirada.',
                 )
                 return redirect('rentals:detail', pk=rental.pk)
+
+            receivables = list(
+                Receivable.objects.select_for_update()
+                .filter(rental=rental)
+                .order_by('pk')
+            )
+            pending_debt = _contractual_debt_pending(rental, receivables)
+            if pending_debt > 0:
+                formatted_pending = _format_brl(pending_debt)
+                if (
+                    rental.financial_policy_version
+                    == Rental.FinancialPolicy.ENFORCED_V1
+                ):
+                    messages.error(
+                        self.request,
+                        'Retirada bloqueada: a locação possui saldo contratual '
+                        f'pendente de R$ {formatted_pending}. Quite o valor antes '
+                        'de registrar a retirada.',
+                    )
+                    return redirect('rentals:detail', pk=rental.pk)
+                messages.warning(
+                    self.request,
+                    'Retirada permitida pela política legada, mas a locação possui '
+                    f'saldo contratual pendente de R$ {formatted_pending}.',
+                )
+
             form.instance.rental = rental
             self.object = form.save()
         self.rental = rental

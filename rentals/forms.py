@@ -134,7 +134,7 @@ class RentalForm(forms.ModelForm):
     # Extra: down payment (R7.06)
     down_payment_amount = BRMoneyField(
         label='Valor da entrada', max_digits=10, decimal_places=2,
-        min_value=0, required=False,
+        min_value=Decimal('0.01'), required=False,
     )
     down_payment_method = forms.ChoiceField(
         label='Forma de recebimento da entrada',

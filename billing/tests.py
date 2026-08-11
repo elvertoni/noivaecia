@@ -17,6 +17,7 @@ def make_rental(number=1):
     return Rental.objects.create(
         number=number, customer=customer,
         pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        financial_policy_version=Rental.FinancialPolicy.LEGACY_ACCESS,
     )
 
 

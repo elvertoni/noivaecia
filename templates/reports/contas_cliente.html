@@ -43,7 +43,7 @@
         <h2 class="section-title">{{ group.customer.name }}</h2>
         <div class="flex gap-4 text-sm">
           <span><span class="text-app-muted">Cobrado:</span> <strong>R$ {{ group.total_amount|brl }}</strong></span>
-          <span><span class="text-app-muted">Recebido:</span> <strong class="text-green-600">R$ {{ group.total_paid|brl }}</strong></span>
+          <span><span class="text-app-muted">Principal amortizado:</span> <strong class="text-green-600">R$ {{ group.total_paid|brl }}</strong></span>
           <span><span class="text-app-muted">Saldo:</span> <strong class="text-red-600">R$ {{ group.total_balance|brl }}</strong></span>
         </div>
       </div>
@@ -55,7 +55,7 @@
               <th scope="col">Locação</th>
               <th scope="col">Vencimento</th>
               <th scope="col" class="text-right">Valor</th>
-              <th scope="col" class="text-right">Recebido</th>
+              <th scope="col" class="text-right">Principal amortizado</th>
               <th scope="col" class="text-right">Saldo</th>
             </tr>
           </thead>

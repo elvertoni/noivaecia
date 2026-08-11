@@ -21,6 +21,10 @@ class Rental(TimeStampedModel):
         RETURNED = 'returned', 'Devolvido'
         CANCELLED = 'cancelled', 'Cancelado'
 
+    class FinancialPolicy(models.IntegerChoices):
+        LEGACY_ACCESS = 0, 'Legado Access'
+        ENFORCED_V1 = 1, 'Política financeira v1'
+
     number = models.PositiveIntegerField('número', unique=True)
     customer = models.ForeignKey(
         'customers.Customer',
@@ -54,6 +58,11 @@ class Rental(TimeStampedModel):
     notes = models.TextField('observações', blank=True)
     status = models.CharField(
         'situação', max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    financial_policy_version = models.PositiveSmallIntegerField(
+        'versão da política financeira',
+        choices=FinancialPolicy.choices,
+        default=FinancialPolicy.ENFORCED_V1,
     )
     # R3.09 — campos de cancelamento
     cancelled_reason = models.TextField('motivo do cancelamento', blank=True)

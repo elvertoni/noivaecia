@@ -842,6 +842,7 @@ class Command(BaseCommand):
                 notes='; '.join(unique_clean_values(rows, 'obs')),
                 legacy_notes='\n'.join(legacy_parts),
                 status=status,
+                financial_policy_version=Rental.FinancialPolicy.LEGACY_ACCESS,
                 created_at=self.now,
                 updated_at=self.now,
             )
@@ -874,6 +875,7 @@ class Command(BaseCommand):
                 notes='Importado de pagar sem itens correspondentes em locado.',
                 legacy_notes='locado_source=pagar_only',
                 status=Rental.Status.PENDING if is_open else Rental.Status.RETURNED,
+                financial_policy_version=Rental.FinancialPolicy.LEGACY_ACCESS,
                 created_at=self.now,
                 updated_at=self.now,
             )

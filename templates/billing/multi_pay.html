@@ -19,10 +19,11 @@
       <div class="panel-spacious">
         <form method="post">
           {% csrf_token %}
+          {% for field in form.hidden_fields %}{{ field }}{% endfor %}
 
           <!-- Payment fields -->
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {% for field in form %}
+            {% for field in form.visible_fields %}
               {% include 'includes/form_field.html' with field=field only %}
             {% endfor %}
           </div>

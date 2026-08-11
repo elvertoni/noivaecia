@@ -1,10 +1,21 @@
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Max, Q, Sum
+from django.db.models import ExpressionWrapper, F, Max, Q, Sum
 
 from core.models import TimeStampedModel
+
+
+def payment_principal_expression(prefix=''):
+    """Return the debt principal settled by a payment, including reversals."""
+    return ExpressionWrapper(
+        F(f'{prefix}amount')
+        - F(f'{prefix}interest_amount')
+        + F(f'{prefix}discount_amount'),
+        output_field=models.DecimalField(max_digits=12, decimal_places=2),
+    )
 
 
 class CashAccount(TimeStampedModel):
@@ -97,9 +108,9 @@ class Receivable(TimeStampedModel):
         return self.balance
 
     def recalculate_from_payments(self, save=True):
-        """Recalculate paid_amount and balance by summing Payment records (R3.06)."""
+        """Recalculate settled principal and balance from Payment records (R3.06)."""
         totals = self.payments.aggregate(
-            total=Sum('amount'),
+            total=Sum(payment_principal_expression()),
             last_date=Max(
                 'payment_date',
                 filter=Q(is_reversal=False, reversed_by__isnull=True),
@@ -286,6 +297,175 @@ class FinancialMovement(TimeStampedModel):
                 name='fmv_source_direction_date_idx',
             ),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=('payment',),
+                condition=Q(payment__isnull=False),
+                name='fmv_unique_payment_nonnull',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.get_direction_display()} R${self.amount} · {self.date}'
+
+
+class Receipt(TimeStampedModel):
+    """One real cash event, independently of its receivable allocations."""
+
+    class Kind(models.TextChoices):
+        INFLOW = 'inflow', 'Entrada'
+        REVERSAL = 'reversal', 'Estorno'
+
+    kind = models.CharField(
+        'tipo',
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.INFLOW,
+    )
+    customer = models.ForeignKey(
+        'customers.Customer',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='receipts',
+        verbose_name='cliente',
+    )
+    received_on = models.DateField('data do recebimento')
+    amount = models.DecimalField('valor recebido', max_digits=10, decimal_places=2)
+    method = models.CharField(
+        'forma de pagamento',
+        max_length=20,
+        choices=Payment.Method.choices,
+        default=Payment.Method.CASH,
+    )
+    notes = models.TextField('observações', blank=True)
+    operator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipts_registered',
+        verbose_name='operador',
+    )
+    idempotency_key = models.UUIDField(
+        'chave de idempotência',
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+    payload_hash = models.CharField('hash do conteúdo', max_length=64)
+    financial_movement = models.OneToOneField(
+        FinancialMovement,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='receipt',
+        verbose_name='movimento financeiro',
+    )
+    reversal_of = models.OneToOneField(
+        'self',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='reversal',
+        verbose_name='estorno de',
+    )
+
+    class Meta:
+        verbose_name = 'recibo'
+        verbose_name_plural = 'recibos'
+        ordering = ('-received_on', '-created_at')
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=0),
+                name='receipt_amount_positive',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(kind='inflow', reversal_of__isnull=True)
+                    | Q(kind='reversal', reversal_of__isnull=False)
+                ),
+                name='receipt_kind_reversal_consistent',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_kind_display()} R${self.amount} · {self.received_on}'
+
+
+class ReceiptAllocation(TimeStampedModel):
+    """Cash, discount and settled debt allocated to one receivable."""
+
+    receipt = models.ForeignKey(
+        Receipt,
+        on_delete=models.PROTECT,
+        related_name='allocations',
+        verbose_name='recibo',
+    )
+    receivable = models.ForeignKey(
+        Receivable,
+        on_delete=models.PROTECT,
+        related_name='receipt_allocations',
+        verbose_name='título',
+    )
+    payment = models.OneToOneField(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name='receipt_allocation',
+        verbose_name='pagamento',
+    )
+    cash_amount = models.DecimalField(
+        'valor em caixa',
+        max_digits=10,
+        decimal_places=2,
+    )
+    principal_amount = models.DecimalField(
+        'valor de principal',
+        max_digits=10,
+        decimal_places=2,
+    )
+    interest_amount = models.DecimalField(
+        'valor de juros',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    discount_amount = models.DecimalField(
+        'valor de desconto',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+
+    class Meta:
+        verbose_name = 'alocação de recibo'
+        verbose_name_plural = 'alocações de recibo'
+        ordering = ('receipt', 'pk')
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(cash_amount__gte=0)
+                    & Q(principal_amount__gte=0)
+                    & Q(interest_amount__gte=0)
+                    & Q(discount_amount__gte=0)
+                ),
+                name='receipt_alloc_amounts_nonnegative',
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    cash_amount=(
+                        F('principal_amount')
+                        + F('interest_amount')
+                        - F('discount_amount')
+                    ),
+                ),
+                name='receipt_alloc_cash_composition',
+            ),
+            models.UniqueConstraint(
+                fields=('receipt', 'receivable'),
+                name='receipt_alloc_unique_receivable',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Recibo #{self.receipt_id} · título #{self.receivable_id}'
