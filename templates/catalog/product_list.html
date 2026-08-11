@@ -33,7 +33,7 @@
           <option value="">Todas</option>
           {% for cat in categories %}
             <option value="{{ cat.prefix }}" {% if cat.prefix == prefix %}selected{% endif %}>
-              {{ cat.prefix }} · {{ cat.name }}{% if cat.is_placeholder %} ⚠{% endif %}
+              {{ cat.prefix }} · {{ cat.name }}{% if cat.is_placeholder %} (cadastro provisório){% endif %}
             </option>
           {% endfor %}
         </select>
@@ -73,7 +73,8 @@
   </form>
 
   <!-- Table (R8.02 badges) -->
-  <div class="table-shell">
+  <p class="text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todos os dados e ações.</p>
+  <div class="table-shell" tabindex="0" role="region" aria-label="Tabela de produtos; deslize para ver mais colunas">
     <table class="data-table">
       <caption class="sr-only">Produtos do acervo</caption>
       <thead>
@@ -106,15 +107,15 @@
             <td>{{ product.size|default:'—' }}</td>
             <td class="text-right whitespace-nowrap">R$ {{ product.value|brl }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'catalog:product_history' product.pk %}" class="text-link">Histórico</a>
-              <a href="{% url 'catalog:product_update' product.pk %}" class="text-link ml-3">Editar</a>
+              <a href="{% url 'catalog:product_history' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Histórico</a>
+              <a href="{% url 'catalog:product_update' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
               {% if request.user|has_action:'catalog.delete' %}
                 {% if product.is_active %}
-                  <a href="{% url 'catalog:product_delete' product.pk %}" class="ml-3 text-danger">Retirar do acervo</a>
+                  <a href="{% url 'catalog:product_delete' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-danger">Retirar do acervo</a>
                 {% else %}
-                  <form method="post" action="{% url 'catalog:product_reactivate' product.pk %}" class="ml-3 inline">
+                  <form method="post" action="{% url 'catalog:product_reactivate' product.pk %}" class="inline" data-reactivate-form>
                     {% csrf_token %}
-                    <button type="submit" class="touch-target inline-flex items-center text-link">Reativar no acervo</button>
+                    <button type="submit" class="inline-flex min-h-11 items-center px-2 text-link" data-idle-text="Reativar no acervo">Reativar no acervo</button>
                   </form>
                 {% endif %}
               {% endif %}
@@ -123,10 +124,10 @@
         {% empty %}
           <tr>
             <td colspan="6" class="table-empty">
-              {% if status == 'inactive' %}
-                Nenhum produto arquivado encontrado.
+              {% if prefix or code or description or color or size or only_placeholder or only_duplicate or status != 'active' %}
+                Nenhum produto corresponde aos filtros. <a href="{% url 'catalog:product_list' %}" class="inline-flex min-h-11 items-center px-2 text-link">Limpar filtros</a>
               {% else %}
-                Nenhum produto encontrado. <a href="{% url 'catalog:product_create' %}" class="text-link">Novo produto</a>
+                Nenhum produto cadastrado. <a href="{% url 'catalog:product_create' %}" class="inline-flex min-h-11 items-center px-2 text-link">Novo produto</a>
               {% endif %}
             </td>
           </tr>
@@ -149,4 +150,15 @@
     </div>
   {% endif %}
 </div>
+<script>
+  document.querySelectorAll('[data-reactivate-form]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      const button = form.querySelector('button[type="submit"]');
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Reativando…';
+    });
+  });
+</script>
 {% endblock %}

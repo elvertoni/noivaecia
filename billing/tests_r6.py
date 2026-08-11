@@ -306,6 +306,17 @@ class PaymentReportViewTests(TestCase):
         response = self.client.get(reverse('billing:payment_report'))
         self.assertEqual(response.context['total_received'], Decimal('200'))
 
+    def test_print_mode_disables_pagination_and_offers_print_action(self):
+        response = self.client.get(
+            reverse('billing:payment_report'),
+            {'print': '1'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['paginator'])
+        self.assertContains(response, 'Imprimir agora')
+        self.assertContains(response, 'window.print()')
+
     def test_filter_by_date_excludes(self):
         response = self.client.get(
             reverse('billing:payment_report'), {'date_from': '2026-07-01'}

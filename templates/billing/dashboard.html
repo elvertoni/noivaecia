@@ -112,7 +112,7 @@
           <tr>
             <td>{{ mv.date|date:'d/m/Y' }}</td>
             <td>{{ mv.account.name }}</td>
-            <td class="max-w-xs truncate">{{ mv.description|default:'—' }}</td>
+            <td class="max-w-xs whitespace-normal break-words">{{ mv.description|default:'—' }}</td>
             <td>{{ mv.customer.name|default:'—' }}</td>
             <td>
               {% if mv.direction == 'inflow' %}

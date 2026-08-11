@@ -4,6 +4,7 @@
 {% block title %}Recebimentos por Período · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
+{% include 'billing/_print_styles.html' %}
 <div class="space-y-6">
 
   <div class="page-header">
@@ -11,7 +12,11 @@
       <h1 class="page-title">Recebimentos por período</h1>
       <p class="page-description">Emitido em {{ today|date:'d/m/Y' }}</p>
     </div>
-    <a href="?{{ request.GET.urlencode }}&print=1" class="btn btn-secondary" onclick="window.print();return false;">Imprimir</a>
+    {% if request.GET.print == '1' %}
+      <button type="button" class="btn btn-secondary print:hidden" onclick="window.print()">Imprimir agora</button>
+    {% else %}
+      <a href="{% querystring print='1' page=None %}" class="btn btn-secondary">Preparar impressão</a>
+    {% endif %}
   </div>
 
   <!-- Filters -->
@@ -83,7 +88,7 @@
                 <span class="badge badge-info">recibo</span>
               {% endif %}
             </td>
-            <td class="max-w-xs truncate text-app-muted text-xs">{{ act.notes|default:'—' }}</td>
+            <td class="max-w-xs whitespace-normal break-words text-app-muted text-xs print-expand">{{ act.notes|default:'—' }}</td>
             <td class="text-right font-medium text-emerald-700">R$ {{ act.amount|brl }}</td>
             <td class="text-right print:hidden">
               {% if request.user|has_action:'billing.reverse' %}
@@ -126,4 +131,7 @@
   {% endif %}
 
 </div>
+{% if request.GET.print == '1' %}
+<script>window.addEventListener('load', function () { window.print(); });</script>
+{% endif %}
 {% endblock %}

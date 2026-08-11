@@ -8,26 +8,24 @@
   <title>{% block title %}Noivas &amp; Cia{% endblock %}</title>
   <link rel="shortcut icon" href="{% static 'assets/favicon.ico' %}">
   <link rel="icon" type="image/png" sizes="32x32" href="{% static 'assets/favicon.png' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
   <script id="noivas-cia-app-js" src="{% static 'js/app.js' %}" data-module="NoivasCiaApp" defer></script>
 </head>
 <body class="min-h-screen bg-app-bg font-sans text-app-ink">
   <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-700 focus:px-4 focus:py-2 focus:text-white focus:outline-none">Pular para o conteúdo</a>
-  <div class="flex min-h-screen">
+  <div class="flex min-h-screen print:block">
     {% block sidebar %}
       {% include 'includes/sidebar.html' %}
     {% endblock %}
 
-    <div class="flex min-w-0 flex-1 flex-col">
-      <main id="main-content" class="flex-1 {% block main_padding %}p-4 pt-20 sm:p-6 sm:pt-20 lg:pt-6{% endblock %}">
+    <div id="page-shell" class="flex min-w-0 flex-1 flex-col">
+      <main id="main-content" class="flex-1 print:p-0 {% block main_padding %}p-4 pt-20 sm:p-6 sm:pt-20 lg:pt-6{% endblock %}">
         {% include 'includes/alerts.html' %}
         {% block content %}{% endblock %}
       </main>
 
       {% block page_footer %}
-        <footer class="flex items-center gap-2 px-6 py-4 text-xs text-app-muted">
+        <footer class="flex items-center gap-2 px-6 py-4 text-xs text-app-muted print:hidden">
           <img src="{% static 'assets/logo-noivas-e-cia.svg' %}" alt="" width="1254" height="858" loading="lazy" decoding="async" class="brand-logo-footer">
           {% block footer %}Noivas &amp; Cia{% endblock %}
         </footer>

@@ -4,6 +4,7 @@
 {% block title %}Relatório de Caixa · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
+{% include 'billing/_print_styles.html' %}
 <div class="space-y-6">
 
   <div class="page-header">
@@ -11,7 +12,7 @@
       <h1 class="page-title">Relatório de movimento de caixa</h1>
       <p class="page-description">Período: {{ date_from }} a {{ date_to }} · Emitido em {{ today|date:'d/m/Y' }}</p>
     </div>
-    <a href="#" class="btn btn-secondary" onclick="window.print();return false;">Imprimir</a>
+    <button type="button" class="btn btn-secondary print:hidden" onclick="window.print()">Imprimir</button>
   </div>
 
   <!-- Filters -->
@@ -109,7 +110,7 @@
             <td>{{ mv.date|date:'d/m/Y' }}</td>
             <td>{{ mv.account.name }}</td>
             <td class="text-xs text-app-muted">{{ mv.get_source_display }}</td>
-            <td class="max-w-xs truncate">{{ mv.description|default:'—' }}</td>
+            <td class="max-w-xs whitespace-normal break-words print-expand">{{ mv.description|default:'—' }}</td>
             <td>
               {% if mv.direction == 'inflow' %}
                 <span class="badge badge-success">Entrada</span>

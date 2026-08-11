@@ -32,7 +32,7 @@
           <div class="mt-5">
             <div class="mb-2 flex items-center justify-between">
               <h3 class="section-title">Selecionar títulos</h3>
-              <label class="flex items-center gap-2 text-sm text-app-muted cursor-pointer" for="select-all">
+              <label class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-app-muted cursor-pointer hover:bg-slate-50" for="select-all">
                 <input type="checkbox" id="select-all" class="rounded border-slate-300">
                 Todos
               </label>
@@ -53,13 +53,16 @@
                 <tbody>
                   {% for row in receivable_rows %}
                     <tr>
-                      <td>
-                        <input
-                          type="checkbox"
-                          name="receivable_ids"
-                          value="{{ row.obj.pk }}"
-                          class="receivable-check"
-                          aria-label="Selecionar título da locação #{{ row.obj.rental.number }}, vencimento {{ row.obj.due_date|date:'d/m/Y' }}, saldo R$ {{ row.obj.balance|brl }}">
+                      <td class="p-0">
+                        <label class="flex min-h-11 min-w-11 cursor-pointer items-center justify-center" title="Selecionar título da locação #{{ row.obj.rental.number }}">
+                          <input
+                            type="checkbox"
+                            name="receivable_ids"
+                            value="{{ row.obj.pk }}"
+                            data-total="{{ row.total_with_interest }}"
+                            class="receivable-check rounded border-slate-300"
+                            aria-label="Selecionar título da locação #{{ row.obj.rental.number }}, vencimento {{ row.obj.due_date|date:'d/m/Y' }}, total com juros R$ {{ row.total_with_interest|brl }}">
+                        </label>
                       </td>
                       <td>{{ row.obj.due_date|date:'d/m/Y' }}</td>
                       <td>#{{ row.obj.rental.number }}</td>
@@ -78,6 +81,7 @@
             <p class="mt-2 text-xs text-app-muted">
               Saldo total em aberto: <strong>R$ {{ total_balance|brl }}</strong>
             </p>
+            <p id="selection-summary" class="mt-2 text-sm font-medium text-app-ink" aria-live="polite">Nenhum título selecionado.</p>
           </div>
 
           <div class="mt-4 form-actions">
@@ -102,11 +106,33 @@
 (function () {
   const selectAll = document.getElementById('select-all');
   if (!selectAll) return;
+  const checks = Array.from(document.querySelectorAll('.receivable-check'));
+  const summary = document.getElementById('selection-summary');
+  const amountInput = document.getElementById('id_total_amount');
+  const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  function numberFrom(value) {
+    return Number(String(value || '0').replace(',', '.')) || 0;
+  }
+  function updateSummary() {
+    const selected = checks.filter(function (cb) { return cb.checked; });
+    selectAll.checked = selected.length === checks.length && checks.length > 0;
+    selectAll.indeterminate = selected.length > 0 && selected.length < checks.length;
+    const total = selected.reduce(function (sum, cb) { return sum + numberFrom(cb.dataset.total); }, 0);
+    const entered = numberFrom(amountInput ? amountInput.value.replace(/\./g, '') : 0);
+    const difference = entered - total;
+    summary.textContent = selected.length
+      ? selected.length + ' título' + (selected.length === 1 ? '' : 's') + ' selecionado' + (selected.length === 1 ? '' : 's') + ' · Total: ' + money.format(total) + ' · Valor informado: ' + money.format(entered) + (difference ? ' · Diferença: ' + money.format(difference) : ' · Valor exato')
+      : 'Nenhum título selecionado.';
+  }
   selectAll.addEventListener('change', function () {
-    document.querySelectorAll('.receivable-check').forEach(function (cb) {
+    checks.forEach(function (cb) {
       cb.checked = selectAll.checked;
     });
+    updateSummary();
   });
+  checks.forEach(function (cb) { cb.addEventListener('change', updateSummary); });
+  if (amountInput) amountInput.addEventListener('input', updateSummary);
+  updateSummary();
 })();
 </script>
 {% endblock %}

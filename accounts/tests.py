@@ -122,7 +122,7 @@ class AuthFlowTests(TestCase):
         self.assertContains(response, 'Esqueci minha senha')
         self.assertContains(response, '/senha/redefinir/')
         self.assertContains(response, 'data-password-toggle')
-        self.assertContains(response, 'Peça para Ana criar seu usuário')
+        self.assertContains(response, 'Solicite seu usuário à administração da loja')
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',

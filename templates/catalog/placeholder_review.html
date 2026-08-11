@@ -25,7 +25,8 @@
       <span class="ml-2 badge badge-warning">{{ placeholder_categories|length }}</span>
     </h2>
     {% if placeholder_categories %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todas as ações.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Categorias provisórias; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Categorias provisórias para revisão</caption>
           <thead>
@@ -44,9 +45,9 @@
                 <td class="text-right">{{ cat.product_count }}</td>
                 <td class="text-right whitespace-nowrap">
                   {% if request.user|has_action:'catalog.delete' %}
-                    <a href="{% url 'catalog:category_merge' %}?source={{ cat.pk }}" class="text-link">Mesclar</a>
+                    <a href="{% url 'catalog:category_merge' %}?source={{ cat.pk }}" class="inline-flex min-h-11 items-center px-2 text-link">Mesclar</a>
                   {% endif %}
-                  <a href="{% url 'catalog:category_update' cat.pk %}" class="text-link ml-3">Editar</a>
+                  <a href="{% url 'catalog:category_update' cat.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
                 </td>
               </tr>
             {% endfor %}
@@ -54,7 +55,7 @@
         </table>
       </div>
     {% else %}
-      <div class="panel-spacious text-center text-app-muted">Nenhuma categoria placeholder.</div>
+      <div class="panel-spacious text-center text-app-muted">Nenhuma categoria provisória precisa de revisão.</div>
     {% endif %}
   </div>
 
@@ -65,7 +66,8 @@
       <span class="ml-2 badge badge-warning">{{ placeholder_products|length }}</span>
     </h2>
     {% if placeholder_products %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todas as ações.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Produtos provisórios; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Produtos provisórios para revisão</caption>
           <thead>
@@ -83,8 +85,8 @@
                 <td>{{ p.description }}</td>
                 <td>{{ p.category.prefix }} · {{ p.category.name }}</td>
                 <td class="text-right whitespace-nowrap">
-                  <a href="{% url 'catalog:product_history' p.pk %}" class="text-link">Histórico</a>
-                  <a href="{% url 'catalog:product_update' p.pk %}" class="text-link ml-3">Editar</a>
+                  <a href="{% url 'catalog:product_history' p.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Histórico</a>
+                  <a href="{% url 'catalog:product_update' p.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
                 </td>
               </tr>
             {% endfor %}
@@ -92,7 +94,7 @@
         </table>
       </div>
     {% else %}
-      <div class="panel-spacious text-center text-app-muted">Nenhum produto placeholder.</div>
+      <div class="panel-spacious text-center text-app-muted">Nenhum produto provisório precisa de revisão.</div>
     {% endif %}
   </div>
 

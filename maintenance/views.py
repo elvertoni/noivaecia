@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db import transaction
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.views.generic import TemplateView, View
 
 from billing.models import Receivable
@@ -39,10 +39,29 @@ class RecalculateRentalTotalsView(MaintenanceAccessMixin, ActionRequiredMixin, V
     action_key = 'maintenance.recalculate'
 
     def post(self, request, *args, **kwargs):
-        count = 0
-        for rental in Rental.objects.prefetch_related('items').all():
-            rental.recalculate_total()
-            count += 1
+        count = Rental.objects.count()
+        if request.POST.get('confirm') != 'yes':
+            return render(
+                request,
+                'maintenance/recalculate_confirm.html',
+                {
+                    'title': 'Recalcular totais das locações',
+                    'description': f'{count} locação(ões) serão recalculadas.',
+                    'action_url': request.path,
+                },
+            )
+
+        with transaction.atomic():
+            for rental in Rental.objects.prefetch_related('items').select_for_update():
+                rental.recalculate_total()
+            AuditLog.objects.create(
+                user=request.user,
+                action='recalculate_rental_totals',
+                model_name='Rental',
+                object_id='all',
+                object_repr=f'{count} locações',
+                reason='Recálculo manual dos totais via manutenção.',
+            )
         messages.success(request, f'Totais recalculados para {count} locação(ões).')
         return redirect('maintenance:index')
 
@@ -66,23 +85,29 @@ class RecalculateBalancesView(MaintenanceAccessMixin, ActionRequiredMixin, View)
         return redirect('maintenance:index')
 
     def post(self, request, *args, **kwargs):
-        from django.db import transaction
-        from core.models import AuditLog
+        count = Receivable.objects.count()
+        if request.POST.get('confirm') != 'yes':
+            return render(
+                request,
+                'maintenance/recalculate_confirm.html',
+                {
+                    'title': 'Recalcular saldos dos recebimentos',
+                    'description': f'{count} recebimento(s) serão recalculados.',
+                    'action_url': request.path,
+                },
+            )
 
         with transaction.atomic():
-            count = 0
-            for receivable in Receivable.objects.prefetch_related('payments').all():
+            for receivable in Receivable.objects.prefetch_related('payments').select_for_update():
                 receivable.recalculate_from_payments(save=True)
-                count += 1
-
-        AuditLog.objects.create(
-            user=request.user,
-            action='recalculate_balances',
-            model_name='Receivable',
-            object_id='all',
-            object_repr=f'{count} recebimentos',
-            reason=f'Recálculo manual de saldos via manutenção.',
-        )
+            AuditLog.objects.create(
+                user=request.user,
+                action='recalculate_balances',
+                model_name='Receivable',
+                object_id='all',
+                object_repr=f'{count} recebimentos',
+                reason='Recálculo manual de saldos via manutenção.',
+            )
         messages.success(request, f'Saldos recalculados para {count} recebimento(s).')
         return redirect('maintenance:index')
 

@@ -34,7 +34,9 @@
     const index = controls.indexOf(current);
     if (index >= 0 && index < controls.length - 1) {
       controls[index + 1].focus();
+      return true;
     }
+    return false;
   }
 
   function handleEnterNavigation(event) {
@@ -42,6 +44,7 @@
     const target = event.target;
     if (!(target instanceof HTMLElement) || isEditableElement(target)) return;
     if (target.closest('a[href]')) return;
+    if (target.matches('select, [role="combobox"], [role="listbox"]')) return;
 
     const form = target.closest('form');
     if (!form) return;
@@ -51,10 +54,9 @@
     if (target.closest('[data-enter-submit]')) return;
 
     const type = (target.getAttribute('type') || '').toLowerCase();
-    if (['button', 'submit', 'reset', 'file', 'image'].includes(type)) return;
+    if (['button', 'submit', 'reset', 'file', 'image', 'checkbox', 'radio'].includes(type)) return;
 
-    event.preventDefault();
-    focusNextControl(form, target);
+    if (focusNextControl(form, target)) event.preventDefault();
   }
 
   function pad2(value) {
@@ -383,6 +385,27 @@
     root.querySelectorAll(DECIMAL_INPUT_SELECTOR).forEach(prepareDecimalInput);
   }
 
+  function updateScrollableTable(shell) {
+    const isScrollable = shell.scrollWidth > shell.clientWidth + 1;
+    if (isScrollable) {
+      shell.tabIndex = 0;
+      shell.setAttribute('role', 'region');
+      if (!shell.hasAttribute('aria-label') && !shell.hasAttribute('aria-labelledby')) {
+        const caption = shell.querySelector('caption');
+        shell.setAttribute('aria-label', caption && caption.textContent.trim()
+          ? caption.textContent.trim()
+          : 'Tabela com rolagem horizontal');
+      }
+    } else {
+      shell.removeAttribute('tabindex');
+      shell.removeAttribute('role');
+    }
+  }
+
+  function initScrollableTables(root) {
+    root.querySelectorAll('.table-shell').forEach(updateScrollableTable);
+  }
+
   window.NoivasCiaApp = Object.assign(window.NoivasCiaApp || {}, APP_TRACE);
   window.NoivasCiaForms = Object.assign(window.NoivasCiaForms || {}, {
     getDateInputIsoValue: function (input) {
@@ -402,5 +425,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     initDateInputs(document);
     initDecimalInputs(document);
+    initScrollableTables(document);
   });
+  window.addEventListener('resize', function () { initScrollableTables(document); });
 }());

@@ -40,7 +40,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Salvar produto</button>
+        <button type="submit" class="btn btn-primary" data-idle-text="Salvar produto">Salvar produto</button>
         <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
       </div>
     </form>
@@ -55,7 +55,11 @@
           }
           form.dataset.submitted = 'true';
           const submitButton = form.querySelector('button[type="submit"]');
-          if (submitButton) submitButton.disabled = true;
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.setAttribute('aria-busy', 'true');
+            submitButton.textContent = 'Salvando…';
+          }
         });
       })();
     </script>
@@ -70,6 +74,15 @@
 
           function clearList() {
             list.replaceChildren();
+          }
+
+          function showRetry() {
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'btn btn-secondary';
+            retry.textContent = 'Tentar novamente';
+            retry.addEventListener('click', loadInactiveCodes);
+            list.appendChild(retry);
           }
 
           async function loadInactiveCodes() {
@@ -104,7 +117,8 @@
                 list.appendChild(button);
               });
             } catch (error) {
-              status.textContent = 'Não foi possível consultar os códigos agora. Tente novamente.';
+              status.textContent = 'Não foi possível consultar os códigos agora.';
+              showRetry();
             }
           }
 

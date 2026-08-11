@@ -11,7 +11,7 @@
       {% if form.instance.pk %}Editar cliente{% else %}Novo cliente{% endif %}
     </h1>
 
-    <form method="post" class="mt-6 space-y-5" novalidate>
+    <form method="post" class="mt-6 space-y-5" id="customer-form" novalidate>
       {% csrf_token %}
 
       {% if form.non_field_errors %}
@@ -130,6 +130,23 @@
   const selectEstado = document.getElementById('{{ form.state.id_for_label }}');
   const inputCidade = document.getElementById('{{ form.city.id_for_label }}');
   const cityOptions = document.getElementById('customer-city-options');
+  const customerForm = document.getElementById('customer-form');
+
+  if (customerForm) {
+    customerForm.addEventListener('submit', function (event) {
+      if (customerForm.dataset.submitted) {
+        event.preventDefault();
+        return;
+      }
+      customerForm.dataset.submitted = 'true';
+      const submitButton = customerForm.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.setAttribute('aria-busy', 'true');
+        submitButton.textContent = 'Salvando…';
+      }
+    });
+  }
 
   function popularCidades(uf, valorAtual) {
     const lista = (typeof CIDADES_BR !== 'undefined' && CIDADES_BR[uf]) || [];

@@ -5,6 +5,7 @@ reminder, and triggers the actual send. All business logic (queue building,
 message rendering, idempotent dispatch) lives in ``notifications.services`` —
 this module only wires it to a view and a template.
 """
+import logging
 import time
 from datetime import timedelta
 
@@ -33,6 +34,7 @@ from .services import (
 # Anti-ban throttle between real sends. A module-level constant so tests can
 # override it (or ``time.sleep`` itself) to avoid slowing the suite down.
 SEND_SPACING_SECONDS = 0.3
+logger = logging.getLogger(__name__)
 
 RECENT_MESSAGES_LIMIT = 20
 _TEMPLATE_DRAFT_SESSION_KEY = 'notifications_message_template_drafts'
@@ -72,8 +74,12 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
                     and self.request.user.has_action('notifications.manage')
                 ):
                     evolution_qrcode = evolution.connect_instance_qrcode()
-            except evolution.EvolutionError as exc:
-                evolution_error = str(exc)
+            except evolution.EvolutionError:
+                logger.exception('Could not load Evolution connection state')
+                evolution_error = (
+                    'Não foi possível consultar o WhatsApp agora. '
+                    'Tente novamente em alguns instantes.'
+                )
         ctx.update({
             'pickup_items': pickup_reminder_queue(today=today),
             'return_items': return_reminder_queue(today=today),
@@ -190,8 +196,13 @@ class WhatsAppConnectionView(NotificationsAccessMixin, ActionRequiredMixin, View
 
         try:
             evolution.logout_instance()
-        except evolution.EvolutionError as exc:
-            messages.error(request, f'Não foi possível desconectar o WhatsApp: {exc}')
+        except evolution.EvolutionError:
+            logger.exception('Could not disconnect Evolution instance')
+            messages.error(
+                request,
+                'Não foi possível desconectar o WhatsApp agora. '
+                'Tente novamente em alguns instantes.',
+            )
             return redirect('notifications:whatsapp_panel')
 
         messages.success(

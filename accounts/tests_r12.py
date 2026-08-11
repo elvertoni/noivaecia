@@ -81,9 +81,59 @@ class UserActionPermissionsViewTests(TestCase):
         ActionPermission.objects.create(user=self.target, action_key='billing.receive', allowed=True)
         url = reverse('user_action_permissions', kwargs={'pk': self.target.pk})
         # Post with only customers.delete — billing.receive should be set to allowed=False
-        self.client.post(url, {'actions': ['customers.delete']})
+        response = self.client.post(url, {'actions': ['customers.delete']})
+        self.assertContains(response, 'Confirme a revogação de ações')
+        token = response.context['revocation_token']
+        self.client.post(url, {
+            'actions': ['customers.delete'],
+            'confirm_revocation': 'yes',
+            'revocation_token': token,
+        })
         perm = ActionPermission.objects.get(user=self.target, action_key='billing.receive')
         self.assertFalse(perm.allowed)
+
+
+class UserModulePermissionsConfirmationTests(TestCase):
+    def setUp(self):
+        self.superuser = _make_superuser()
+        self.client.force_login(self.superuser)
+        self.target = User.objects.create_user(email='modules@test.com', password='pass')
+        ModulePermission.objects.create(
+            user=self.target,
+            module_key='customers',
+            allowed=True,
+        )
+
+    def test_revocation_requires_second_confirmed_submission(self):
+        url = reverse('user_permissions', kwargs={'pk': self.target.pk})
+
+        response = self.client.post(url, {'modules': []})
+
+        self.assertContains(response, 'Confirme a revogação de acesso')
+        self.assertTrue(
+            ModulePermission.objects.get(user=self.target, module_key='customers').allowed
+        )
+
+        self.client.post(url, {
+            'modules': [],
+            'confirm_revocation': 'yes',
+            'revocation_token': response.context['revocation_token'],
+        })
+        self.assertFalse(
+            ModulePermission.objects.get(user=self.target, module_key='customers').allowed
+        )
+
+    def test_direct_confirmation_without_signed_snapshot_is_rejected(self):
+        url = reverse('user_permissions', kwargs={'pk': self.target.pk})
+        response = self.client.post(url, {
+            'modules': [],
+            'confirm_revocation': 'yes',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Confirme a revogação de acesso')
+        self.assertTrue(
+            ModulePermission.objects.get(user=self.target, module_key='customers').allowed
+        )
 
 
 # ── R12.02 Delete permissions ─────────────────────────────────────────────────

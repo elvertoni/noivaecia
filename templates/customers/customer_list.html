@@ -55,7 +55,8 @@
   </div>
 
   {# Tabela #}
-  <div class="table-shell">
+  <p class="text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver contatos e ações.</p>
+  <div class="table-shell" tabindex="0" role="region" aria-label="Tabela de clientes; deslize para ver mais colunas">
     <table class="data-table">
       <caption class="sr-only">Clientes cadastrados</caption>
       <thead>
@@ -73,7 +74,7 @@
         {% for customer in customers %}
           <tr>
             <td class="font-medium text-app-ink">
-              <a href="{% url 'customers:detail' customer.pk %}" class="hover:text-brand-600 hover:underline">
+              <a href="{% url 'customers:detail' customer.pk %}" class="inline-flex min-h-11 items-center hover:text-brand-600 hover:underline">
                 {{ customer.name }}
               </a>
               {% if not customer.is_active %}
@@ -97,19 +98,19 @@
               {% endif %}
             </td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'customers:detail' customer.pk %}" class="text-link">Histórico</a>
-              <a href="{% url 'customers:update' customer.pk %}" class="ml-3 text-link">Editar</a>
+              <a href="{% url 'customers:detail' customer.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Histórico</a>
+              <a href="{% url 'customers:update' customer.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
             </td>
           </tr>
         {% empty %}
           <tr>
             <td colspan="7" class="table-empty">
-              {% if search or cpf_search %}
+              {% if search or cpf_search or active_filter %}
                 Nenhum cliente encontrado para os filtros informados.
-                <a href="{% url 'customers:list' %}" class="text-link">Limpar busca</a>
+                <a href="{% url 'customers:list' %}" class="inline-flex min-h-11 items-center px-2 text-link">Limpar filtros</a>
               {% else %}
                 Nenhum cliente cadastrado.
-                <a href="{% url 'customers:create' %}" class="text-link">Cadastrar cliente</a>
+                <a href="{% url 'customers:create' %}" class="inline-flex min-h-11 items-center px-2 text-link">Cadastrar cliente</a>
               {% endif %}
             </td>
           </tr>

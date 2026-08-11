@@ -8,9 +8,13 @@
   <div class="panel">
     <h1 class="page-title">Configuração da empresa</h1>
     <p class="page-description">Dados da loja, numeração de locação e regras financeiras e de penalidade.</p>
+    {% if not request.user|has_action:'maintenance.recalculate' %}
+      <div class="alert alert-info mt-4" role="status">Você pode consultar esta configuração, mas não tem permissão para alterá-la.</div>
+    {% endif %}
 
     <form method="post" class="mt-6 space-y-4">
       {% csrf_token %}
+      <fieldset{% if not request.user|has_action:'maintenance.recalculate' %} disabled{% endif %} class="space-y-4">
       {% if form.non_field_errors %}
         <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
       {% endif %}
@@ -48,9 +52,12 @@
       </div>
 
       <div class="form-actions">
+        {% if request.user|has_action:'maintenance.recalculate' %}
         <button type="submit" class="btn btn-primary">Salvar dados da empresa</button>
+        {% endif %}
         <a href="{% url 'dashboard' %}" class="btn btn-secondary">Voltar</a>
       </div>
+      </fieldset>
     </form>
 
     {% if request.user|has_action:'notifications.send' %}

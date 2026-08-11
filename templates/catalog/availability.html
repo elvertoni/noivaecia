@@ -118,11 +118,12 @@
               Compromissos ativos a partir de {{ reference_date|date:'d/m/Y' }}.
             </p>
           </div>
-          <a href="{% url 'catalog:product_history' product.pk %}" class="text-link text-sm">Ver histórico completo</a>
+          <a href="{% url 'catalog:product_history' product.pk %}" class="inline-flex min-h-11 items-center text-link text-sm">Ver histórico completo</a>
         </div>
 
         {% if scheduled_rentals %}
-          <div class="mt-4 overflow-x-auto rounded-lg border border-app-border">
+          <p class="mt-4 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todas as datas.</p>
+          <div class="mt-2 overflow-x-auto rounded-lg border border-app-border" tabindex="0" role="region" aria-label="Locações atuais e futuras; deslize para ver mais colunas">
             <table class="data-table">
               <caption class="sr-only">Locações ativas do produto {{ product.category.prefix }}{{ product.code }}</caption>
               <thead>

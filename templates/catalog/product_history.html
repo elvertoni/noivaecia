@@ -55,7 +55,8 @@
   <div>
     <h2 class="section-title mb-3">Histórico de locações <span class="text-xs font-normal text-app-muted">(últimas 50)</span></h2>
     {% if rental_items %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todo o histórico.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Histórico de locações; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Últimas locações do produto {{ product }}</caption>
           <thead>
@@ -72,7 +73,7 @@
             {% for item in rental_items %}
               <tr>
                 <td>
-                  <a href="{% url 'rentals:detail' item.rental.pk %}" class="text-link">#{{ item.rental.number }}</a>
+                  <a href="{% url 'rentals:detail' item.rental.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">#{{ item.rental.number }}</a>
                 </td>
                 <td>{{ item.rental.customer.name }}</td>
                 <td>{{ item.rental.pickup_date|date:'d/m/Y' }}</td>

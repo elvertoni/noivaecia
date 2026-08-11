@@ -54,20 +54,21 @@
             <td>{{ row.obj.last_payment_date|date:'d/m/Y'|default:'—' }}</td>
             <td class="text-right">
               {% if row.obj.is_written_off %}
-                <div class="inline-flex items-center justify-end gap-2">
-                  <span class="badge badge-warning" title="{{ row.obj.written_off_reason }}">Baixado</span>
+                <div class="inline-flex flex-col items-end gap-2">
+                  <span class="badge badge-warning">Baixado</span>
+                  <span class="max-w-xs text-xs text-app-muted">Motivo: {{ row.obj.written_off_reason|default:'Não informado' }}</span>
                   {% if request.user|has_action:'billing.reopen' %}
                     <form method="post" action="{% url 'billing:reopen' row.obj.pk %}" class="inline">
                       {% csrf_token %}
                       <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                      <button type="submit" class="text-link text-xs" onclick="return confirm('Deseja reverter a baixa deste recebimento e reabri-lo para recebimento?');">
+                      <button type="submit" class="inline-flex min-h-11 items-center text-link text-sm" onclick="return confirm('Reabrir o título da locação #{{ rental.number }}, no valor de R$ {{ row.obj.amount|brl }}?');">
                         Reverter baixa
                       </button>
                     </form>
                   {% endif %}
                 </div>
               {% elif not row.obj.is_paid and request.user|has_action:'billing.receive' %}
-                <a href="{% url 'billing:pay' row.obj.pk %}" class="text-link">Receber</a>
+                <a href="{% url 'billing:pay' row.obj.pk %}" class="inline-flex min-h-11 items-center text-link">Receber</a>
               {% else %}
                 <span class="badge badge-success">Quitado</span>
               {% endif %}

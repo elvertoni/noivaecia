@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from accounts.models import ActionPermission, ModulePermission
+from core.models import AuditLog
 
 User = get_user_model()
 
@@ -60,9 +61,10 @@ class MaintenanceAccessTests(TestCase):
             allowed=True,
         )
 
-        response = self.client.post('/manutencao/recalcular-totais/')
+        response = self.client.post('/manutencao/recalcular-totais/', {'confirm': 'yes'})
 
         self.assertEqual(response.status_code, 302)
+        self.assertTrue(AuditLog.objects.filter(action='recalculate_rental_totals').exists())
 
     def test_maintenance_recalculate_balances_requires_action_permission(self):
         user = User.objects.create_user(email='ops2@b.com', password='Senha12345')
@@ -84,6 +86,22 @@ class MaintenanceAccessTests(TestCase):
             allowed=True,
         )
 
-        response = self.client.post('/manutencao/recalcular-saldos/')
+        response = self.client.post('/manutencao/recalcular-saldos/', {'confirm': 'yes'})
 
         self.assertEqual(response.status_code, 302)
+        self.assertTrue(AuditLog.objects.filter(action='recalculate_balances').exists())
+
+    def test_recalculation_requires_explicit_confirmation(self):
+        user = User.objects.create_user(email='confirm@b.com', password='Senha12345')
+        ModulePermission.objects.create(user=user, module_key='maintenance', allowed=True)
+        ActionPermission.objects.create(
+            user=user,
+            action_key='maintenance.recalculate',
+            allowed=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post('/manutencao/recalcular-totais/', follow=True)
+
+        self.assertContains(response, 'Confirme o recálculo')
+        self.assertFalse(AuditLog.objects.filter(action='recalculate_rental_totals').exists())

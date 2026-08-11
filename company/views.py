@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.management import call_command
@@ -12,11 +14,14 @@ from core.mixins import ActionRequiredMixin, ModuleAccessMixin
 from .forms import CompanyForm
 from .models import Company
 
+logger = logging.getLogger(__name__)
 
-class CompanyUpdateView(ModuleAccessMixin, SuccessMessageMixin, UpdateView):
+
+class CompanyUpdateView(ModuleAccessMixin, ActionRequiredMixin, SuccessMessageMixin, UpdateView):
     """Edit the singleton company configuration (RF-14)."""
 
     module_key = 'company'
+    action_key = 'company.manage'
     form_class = CompanyForm
     template_name = 'company/company_form.html'
     success_url = reverse_lazy('company:edit')
@@ -46,8 +51,13 @@ class CompanySendWhatsAppReportNowView(ModuleAccessMixin, ActionRequiredMixin, V
 
         try:
             call_command('send_daily_whatsapp_report', force=True)
-        except CommandError as exc:
-            messages.error(request, f'Falha ao reenviar o relatório: {exc}')
+        except CommandError:
+            logger.exception('Manual WhatsApp report dispatch failed')
+            messages.error(
+                request,
+                'Não foi possível reenviar o relatório agora. Tente novamente; '
+                'se o problema continuar, consulte os registros do servidor.',
+            )
         else:
             messages.success(request, 'Relatório reenviado para os destinatários configurados.')
         return redirect('company:edit')

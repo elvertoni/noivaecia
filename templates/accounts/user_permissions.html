@@ -9,6 +9,15 @@
 
   <form method="post" class="mt-6 space-y-3">
     {% csrf_token %}
+    {% if revocation_token %}<input type="hidden" name="revocation_token" value="{{ revocation_token }}">{% endif %}
+    {% if revoked_permissions %}
+      <div class="alert alert-warning" role="alert">
+        <div>
+          <p class="font-semibold">Confirme a revogação de acesso</p>
+          <p class="mt-1">O usuário perderá acesso a: {{ revoked_permissions|join:', ' }}.</p>
+        </div>
+      </div>
+    {% endif %}
     <fieldset>
       <legend class="sr-only">Módulos disponíveis para {{ target_user.email }}</legend>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -24,8 +33,8 @@
     </fieldset>
 
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary">
-        Salvar
+      <button type="submit" class="btn btn-primary"{% if revoked_permissions %} name="confirm_revocation" value="yes"{% endif %}>
+        {% if revoked_permissions %}Confirmar alterações{% else %}Salvar{% endif %}
       </button>
       <a href="{% url 'user_action_permissions' target_user.pk %}" class="btn btn-secondary">Permissões de ação</a>
       <a href="{% url 'user_list' %}" class="btn btn-secondary">Voltar</a>

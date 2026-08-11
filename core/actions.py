@@ -17,6 +17,7 @@ ACTIONS = [
     ('reports.export', 'Exportar relatórios (CSV)'),
     ('notifications.send', 'Enviar avisos por WhatsApp'),
     ('notifications.manage', 'Conectar/desconectar o WhatsApp'),
+    ('company.manage', 'Alterar configurações da empresa'),
     ('maintenance.recalculate', 'Executar rotinas de recálculo em massa'),
 ]
 

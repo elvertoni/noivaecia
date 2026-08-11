@@ -2,6 +2,7 @@
 {% load core_tags %}
 {% block title %}Contas a Receber por Cliente · Noivas &amp; Cia{% endblock %}
 {% block content %}
+{% include 'reports/_print_styles.html' %}
 <div class="space-y-6">
   <div class="page-header print:hidden">
     <div>
@@ -12,7 +13,7 @@
       {% if request.user|has_action:'reports.export' %}
       <a href="{% querystring format='csv' %}" class="btn btn-secondary">Exportar CSV</a>
       {% endif %}
-      <button onclick="window.print()" class="btn btn-secondary">Imprimir</button>
+      <button type="button" onclick="window.print()" class="btn btn-secondary">Imprimir</button>
       <a href="{% url 'reports:index' %}" class="btn btn-secondary">Voltar</a>
     </div>
   </div>

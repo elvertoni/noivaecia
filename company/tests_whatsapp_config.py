@@ -22,6 +22,23 @@ class WhatsappReportFieldDefaultsTests(TestCase):
         self.assertEqual(company.whatsapp_report_time, time(7, 30))
 
 
+class CompanyUpdatePermissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='company@test.com', password='pass')
+        ModulePermission.objects.create(user=self.user, module_key='company', allowed=True)
+        self.client.force_login(self.user)
+
+    def test_company_module_allows_read_only_access(self):
+        response = self.client.get(reverse('company:edit'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'não tem permissão para alterá-la')
+
+    def test_company_update_requires_privileged_existing_action(self):
+        response = self.client.post(reverse('company:edit'), {})
+        self.assertEqual(response.status_code, 403)
+
+
 class CompanyFormWhatsappNumberValidationTests(TestCase):
     def _base_data(self, **overrides):
         data = {
@@ -289,4 +306,4 @@ class ResendWhatsAppReportViewTests(TestCase):
             f'{CMD}.evolution.send_text', side_effect=evolution.EvolutionError('offline')
         ):
             response = self.client.post(self.url, follow=True)
-        self.assertContains(response, 'Falha ao reenviar')
+        self.assertContains(response, 'Não foi possível reenviar o relatório agora')

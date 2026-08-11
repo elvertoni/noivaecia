@@ -689,6 +689,12 @@ class PaymentReportView(BillingAccessMixin, ListView):
     context_object_name = 'payments'
     paginate_by = 100
 
+    def get_paginate_by(self, queryset):
+        """Print the complete filtered report instead of one ambiguous page."""
+        if self.request.GET.get('print') == '1':
+            return None
+        return super().get_paginate_by(queryset)
+
     def get_queryset(self):
         qs = (
             Payment.objects.filter(is_reversal=False, reversed_by__isnull=True)

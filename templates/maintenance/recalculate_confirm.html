@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirmar recálculo · Noivas &amp; Cia{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl panel-spacious">
+  <div>
+    <h1 class="page-title">{{ title }}</h1>
+    <p class="page-description">{{ description }}</p>
+  </div>
+  <div class="alert alert-warning" role="alert">
+    <p><strong>Confirme o recálculo.</strong> Esta rotina altera dados em massa e registra a execução na auditoria. Aguarde a conclusão sem fechar a página.</p>
+  </div>
+  <form method="post" action="{{ action_url }}" class="form-actions" data-processing-form>
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="yes">
+    <button type="submit" class="btn btn-primary">Confirmar e executar</button>
+    <a href="{% url 'maintenance:index' %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+<script>
+  document.querySelector('[data-processing-form]').addEventListener('submit', function (event) {
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Processando…';
+  });
+</script>
+{% endblock %}

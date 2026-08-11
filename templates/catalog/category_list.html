@@ -35,7 +35,8 @@
     <a href="{% url 'catalog:category_list' %}" class="btn btn-secondary">Limpar</a>
   </form>
 
-  <div class="table-shell">
+  <p class="text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todos os dados e ações.</p>
+  <div class="table-shell" tabindex="0" role="region" aria-label="Tabela de categorias; deslize para ver mais colunas">
     <table class="data-table">
       <caption class="sr-only">Categorias do acervo</caption>
       <thead>
@@ -58,14 +59,20 @@
             <td>{{ category.name }}</td>
             <td class="text-right">{{ category.product_count }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'catalog:category_update' category.pk %}" class="text-link">Editar</a>
+              <a href="{% url 'catalog:category_update' category.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
               {% if request.user|has_action:'catalog.delete' %}
-                <a href="{% url 'catalog:category_delete' category.pk %}" class="ml-3 text-danger">Excluir</a>
+                <a href="{% url 'catalog:category_delete' category.pk %}" class="inline-flex min-h-11 items-center px-2 text-danger">Excluir</a>
               {% endif %}
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="4" class="table-empty">Nenhuma categoria cadastrada. <a href="{% url 'catalog:category_create' %}" class="text-link">Nova categoria</a></td></tr>
+          <tr><td colspan="4" class="table-empty">
+            {% if q or only_placeholders %}
+              Nenhuma categoria corresponde aos filtros. <a href="{% url 'catalog:category_list' %}" class="inline-flex min-h-11 items-center px-2 text-link">Limpar filtros</a>
+            {% else %}
+              Nenhuma categoria cadastrada. <a href="{% url 'catalog:category_create' %}" class="inline-flex min-h-11 items-center px-2 text-link">Nova categoria</a>
+            {% endif %}
+          </td></tr>
         {% endfor %}
       </tbody>
     </table>

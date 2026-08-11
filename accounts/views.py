@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.core import signing
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect
@@ -11,6 +12,37 @@ from core.modules import MODULES
 
 from .forms import EmailUserCreationForm
 from .models import ActionPermission, ModulePermission, User
+
+REVOCATION_SALT = 'accounts.permission-revocation'
+
+
+def _revocation_token(user, selected, revoked, permission_type):
+    return signing.dumps(
+        {
+            'user_id': user.pk,
+            'selected': sorted(selected),
+            'revoked': sorted(revoked),
+            'type': permission_type,
+        },
+        salt=REVOCATION_SALT,
+        compress=True,
+    )
+
+
+def _revocation_is_confirmed(request, user, selected, revoked, permission_type):
+    token = request.POST.get('revocation_token', '')
+    if request.POST.get('confirm_revocation') != 'yes' or not token:
+        return False
+    try:
+        payload = signing.loads(token, salt=REVOCATION_SALT, max_age=900)
+    except signing.BadSignature:
+        return False
+    return payload == {
+        'user_id': user.pk,
+        'selected': sorted(selected),
+        'revoked': sorted(revoked),
+        'type': permission_type,
+    }
 
 
 class UserManagementRequiredMixin(UserPassesTestMixin):
@@ -67,20 +99,41 @@ class UserPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, ListVi
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        allowed = set(
-            self.object.module_permissions.filter(allowed=True)
-            .values_list('module_key', flat=True)
-        )
+        allowed = getattr(self, 'pending_selected', None)
+        if allowed is None:
+            allowed = set(
+                self.object.module_permissions.filter(allowed=True)
+                .values_list('module_key', flat=True)
+            )
         context['target_user'] = self.object
         context['modules'] = [
             {'key': key, 'label': label, 'allowed': key in allowed}
             for key, label in MODULES
         ]
+        context['revoked_permissions'] = getattr(self, 'revoked_permissions', [])
+        context['revocation_token'] = getattr(self, 'revocation_token', '')
         return context
 
     def post(self, request, *args, **kwargs):
         user = get_object_or_404(User, pk=kwargs['pk'])
         selected = set(request.POST.getlist('modules'))
+        current = set(
+            user.module_permissions.filter(allowed=True)
+            .values_list('module_key', flat=True)
+        )
+        revoked = current - selected
+        if revoked and not _revocation_is_confirmed(
+            request, user, selected, revoked, 'modules'
+        ):
+            labels = dict(MODULES)
+            self.object = user
+            self.object_list = self.get_queryset()
+            self.pending_selected = selected
+            self.revoked_permissions = [labels[key] for key in sorted(revoked)]
+            self.revocation_token = _revocation_token(
+                user, selected, revoked, 'modules'
+            )
+            return self.render_to_response(self.get_context_data())
         with transaction.atomic():
             for key, _ in MODULES:
                 ModulePermission.objects.update_or_create(
@@ -107,21 +160,41 @@ class UserActionPermissionsView(UserManagementRequiredMixin, SingleObjectMixin, 
     def get_context_data(self, **kwargs):
         from core.actions import ACTIONS
         context = super().get_context_data(**kwargs)
-        allowed = set(
-            self.object.action_permissions.filter(allowed=True)
-            .values_list('action_key', flat=True)
-        )
+        allowed = getattr(self, 'pending_selected', None)
+        if allowed is None:
+            allowed = set(
+                self.object.action_permissions.filter(allowed=True)
+                .values_list('action_key', flat=True)
+            )
         context['target_user'] = self.object
         context['actions'] = [
             {'key': key, 'label': label, 'allowed': key in allowed}
             for key, label in ACTIONS
         ]
+        context['revoked_permissions'] = getattr(self, 'revoked_permissions', [])
+        context['revocation_token'] = getattr(self, 'revocation_token', '')
         return context
 
     def post(self, request, *args, **kwargs):
-        from core.actions import ACTION_KEYS
+        from core.actions import ACTION_KEYS, ACTION_LABELS
         user = get_object_or_404(User, pk=kwargs['pk'])
         selected = set(request.POST.getlist('actions'))
+        current = set(
+            user.action_permissions.filter(allowed=True)
+            .values_list('action_key', flat=True)
+        )
+        revoked = current - selected
+        if revoked and not _revocation_is_confirmed(
+            request, user, selected, revoked, 'actions'
+        ):
+            self.object = user
+            self.object_list = self.get_queryset()
+            self.pending_selected = selected
+            self.revoked_permissions = [ACTION_LABELS[key] for key in sorted(revoked)]
+            self.revocation_token = _revocation_token(
+                user, selected, revoked, 'actions'
+            )
+            return self.render_to_response(self.get_context_data())
         with transaction.atomic():
             for key in ACTION_KEYS:
                 ActionPermission.objects.update_or_create(

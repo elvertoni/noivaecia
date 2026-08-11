@@ -26,10 +26,10 @@
         {% endif %}
       </p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <a href="{% url 'customers:update' customer.pk %}" class="btn btn-secondary">Editar</a>
       {% if request.user|has_action:'customers.deactivate' %}
-      <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline">
+      <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline" data-customer-status-form data-customer-name="{{ customer.name|escape }}" data-action="{% if customer.is_active %}inativar{% else %}ativar{% endif %}">
         {% csrf_token %}
         <input type="hidden" name="is_active" value="{% if customer.is_active %}0{% else %}1{% endif %}">
         <button type="submit" class="btn btn-secondary">
@@ -54,11 +54,15 @@
     <div class="panel-spacious text-center">
       <p class="stat-label">Total recebido</p>
       <p class="stat-value text-green-600">R$ {{ total_paid|brl }}</p>
+      <p class="mt-1 text-xs font-medium text-app-muted">Valor recebido</p>
     </div>
     <div class="panel-spacious text-center">
       <p class="stat-label">Saldo em aberto</p>
       <p class="stat-value {% if total_balance > 0 %}text-red-600{% else %}text-green-600{% endif %}">
         R$ {{ total_balance|brl }}
+      </p>
+      <p class="mt-1 text-xs font-medium {% if total_balance > 0 %}text-red-700{% else %}text-emerald-700{% endif %}">
+        {% if total_balance > 0 %}Pagamento pendente{% else %}Sem saldo pendente{% endif %}
       </p>
     </div>
   </div>
@@ -99,8 +103,9 @@
         </select>
       </div>
       <div class="field-group">
-        <label class="field-label" for="customer-detail-product">Produto</label>
+        <label class="field-label" for="customer-detail-product">Produto na locação</label>
         <input type="text" name="product" id="customer-detail-product" value="{{ product_q }}" placeholder="Prefixo ou descrição" class="field-input">
+        <p class="field-help">Busque pelo prefixo, código ou parte da descrição.</p>
       </div>
       <div class="flex items-end gap-2 md:col-span-5">
         <button type="submit" class="btn btn-secondary">Filtrar</button>
@@ -120,7 +125,8 @@
       {% endif %}
     </div>
     {% if rentals %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todos os dados e ações.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Locações do cliente; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Locações de {{ customer.name }}</caption>
           <thead>
@@ -138,7 +144,7 @@
             {% for rental in rentals %}
               <tr>
                 <td class="font-medium">
-                  <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">#{{ rental.number }}</a>
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">#{{ rental.number }}</a>
                 </td>
                 <td>{{ rental.pickup_date|date:'d/m/Y' }}</td>
                 <td>{{ rental.return_date|date:'d/m/Y' }}</td>
@@ -156,7 +162,7 @@
                 </td>
                 <td class="text-right font-medium">R$ {{ rental.total_value|brl }}</td>
                 <td class="text-right">
-                  <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Ver locação</a>
                 </td>
               </tr>
             {% endfor %}
@@ -177,7 +183,10 @@
         </div>
       {% endif %}
     {% else %}
-      <div class="panel-spacious text-center text-app-muted">Nenhuma locação encontrada com os filtros aplicados.</div>
+      <div class="panel-spacious text-center text-app-muted">
+        <p>Nenhuma locação encontrada com os filtros aplicados.</p>
+        <a href="{% url 'customers:detail' customer.pk %}" class="mt-2 inline-flex min-h-11 items-center px-2 text-link">Limpar filtros</a>
+      </div>
     {% endif %}
   </div>
 
@@ -185,7 +194,8 @@
   <div>
     <h2 class="section-title mb-3">Recebimentos <span class="text-xs font-normal text-app-muted">({{ receivables|length }})</span></h2>
     {% if receivables %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todos os valores.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Recebimentos do cliente; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Recebimentos de {{ customer.name }}</caption>
           <thead>
@@ -202,11 +212,12 @@
             {% for rec in receivables %}
               <tr>
                 <td>{{ rec.due_date|date:'d/m/Y' }}</td>
-                <td><a href="{% url 'rentals:detail' rec.rental.pk %}" class="text-link">#{{ rec.rental.number }}</a></td>
+                <td><a href="{% url 'rentals:detail' rec.rental.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">#{{ rec.rental.number }}</a></td>
                 <td class="text-right">R$ {{ rec.amount|brl }}</td>
                 <td class="text-right">R$ {{ rec.paid_amount|brl }}</td>
                 <td class="text-right {% if rec.balance > 0 %}text-red-600{% else %}text-green-600{% endif %}">
                   R$ {{ rec.balance|brl }}
+                  <span class="sr-only">{% if rec.balance > 0 %}, saldo pendente{% else %}, sem saldo pendente{% endif %}</span>
                 </td>
                 <td>
                   {% if rec.is_paid %}
@@ -221,7 +232,7 @@
         </table>
       </div>
     {% else %}
-      <div class="panel-spacious text-center text-app-muted">Nenhum recebimento encontrado.</div>
+      <div class="panel-spacious text-center text-app-muted">Nenhum título financeiro corresponde às locações exibidas.</div>
     {% endif %}
   </div>
 
@@ -229,7 +240,8 @@
   <div>
     <h2 class="section-title mb-3">Recebimentos recentes <span class="text-xs font-normal text-app-muted">(últimos 50)</span></h2>
     {% if payments %}
-      <div class="table-shell">
+      <p class="mb-2 text-sm text-app-muted sm:hidden">Deslize a tabela para o lado para ver todos os valores.</p>
+      <div class="table-shell" tabindex="0" role="region" aria-label="Recebimentos recentes; deslize para ver mais colunas">
         <table class="data-table">
           <caption class="sr-only">Recebimentos recentes de {{ customer.name }}</caption>
           <thead>
@@ -271,4 +283,22 @@
   {% endif %}
 
 </div>
+<script>
+  document.querySelectorAll('[data-customer-status-form]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      const action = form.dataset.action;
+      const customerName = form.dataset.customerName;
+      if (action === 'inativar' && !window.confirm('Inativar ' + customerName + '? O cliente deixará de aparecer nas buscas de clientes ativos, mas o histórico será preservado.')) {
+        event.preventDefault();
+        return;
+      }
+      const button = form.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.textContent = action === 'inativar' ? 'Inativando…' : 'Ativando…';
+      }
+    });
+  });
+</script>
 {% endblock %}

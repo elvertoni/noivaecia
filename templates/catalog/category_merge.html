@@ -17,7 +17,7 @@
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
       <strong>Atenção:</strong> Esta operação não pode ser desfeita automaticamente.
     </div>
-    <div class="grid grid-cols-2 gap-4 text-sm">
+    <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
       <div class="panel p-3">
         <p class="text-app-muted text-xs">Origem (será esvaziada)</p>
         <p class="font-semibold text-app-ink mt-1">{{ preview.source.prefix }} · {{ preview.source.name }}</p>
@@ -27,7 +27,7 @@
         <p class="font-semibold text-app-ink mt-1">{{ preview.target.prefix }} · {{ preview.target.name }}</p>
       </div>
     </div>
-    <div class="grid grid-cols-2 gap-4 text-sm">
+    <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
       <div class="panel-spacious text-center">
         <p class="stat-label">Produtos afetados</p>
         <p class="stat-value text-brand-700">{{ preview.product_count }}</p>
@@ -37,7 +37,7 @@
         <p class="stat-value text-brand-700">{{ preview.item_count }}</p>
       </div>
     </div>
-    <form method="post" class="flex gap-3">
+    <form method="post" class="flex flex-col gap-3 sm:flex-row">
       {% csrf_token %}
       <input type="hidden" name="source" value="{{ preview.source.pk }}">
       <input type="hidden" name="target" value="{{ preview.target.pk }}">

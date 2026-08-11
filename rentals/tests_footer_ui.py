@@ -89,7 +89,7 @@ class RentalFooterUITests(TestCase):
             'sm:w-auto',
         }.issubset(button_group_classes))
         self.assertTrue({
-            'h-28',
+            'h-60',
             'sm:h-20',
         }.issubset(self.classes_for('rental-action-bar-spacer')))
 

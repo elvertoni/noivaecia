@@ -24,6 +24,9 @@
         <div class="panel-spacious text-center">
           <p class="stat-label">Total de divergências</p>
           <p class="stat-value {% if total_divergences > 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ total_divergences }}</p>
+          <p class="mt-1 text-sm font-medium {% if total_divergences > 0 %}text-red-700{% else %}text-green-700{% endif %}">
+            {% if total_divergences > 0 %}Com divergências{% else %}Conferência sem divergências{% endif %}
+          </p>
         </div>
       {% endif %}
       {% if total_receivables is not None %}
@@ -51,7 +54,7 @@
     <div class="table-shell">
       <h2 class="section-title p-4">Divergências encontradas</h2>
       <table class="data-table">
-        <thead><tr><th>Tipo</th><th>Referência</th><th>Detalhe</th></tr></thead>
+        <thead><tr><th scope="col">Tipo</th><th scope="col">Referência</th><th scope="col">Detalhe</th></tr></thead>
         <tbody>
           {% for d in divergences %}
             <tr>
@@ -62,6 +65,10 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  {% elif total_divergences == 0 %}
+    <div class="alert alert-success" role="status">
+      Nenhuma divergência foi encontrada na conferência de recebíveis, recebimentos, saldos e movimentos de caixa.
     </div>
   {% endif %}
 
