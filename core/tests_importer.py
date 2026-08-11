@@ -362,12 +362,11 @@ class DryRunTests(TestCase):
                      export_dir=self.export_dir,
                      reset=True, confirm_reset=True,
                      dry_run=True, verbosity=0)
+        # Introspection instead of sqlite_master: local runs use SQLite but CI
+        # and production run Postgres, where that system table does not exist.
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type='table' AND name='legacy_clientes'"
-            )
-            self.assertIsNone(cursor.fetchone())
+            tables = connection.introspection.table_names(cursor)
+        self.assertNotIn('legacy_clientes', tables)
 
 
 class RawIdempotencyTests(TestCase):
@@ -644,12 +643,10 @@ class RawTablesPreservedTests(TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _table_exists(self, table_name):
+        # Introspection instead of sqlite_master: local runs use SQLite but CI
+        # and production run Postgres, where that system table does not exist.
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=%s",
-                [table_name],
-            )
-            return cursor.fetchone() is not None
+            return table_name in connection.introspection.table_names(cursor)
 
     def test_legacy_clientes_exists(self):
         self.assertTrue(self._table_exists('legacy_clientes'))
