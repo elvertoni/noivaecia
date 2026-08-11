@@ -98,6 +98,23 @@ class RentalModelTests(TestCase):
         self.assertEqual(rental.final_value, Decimal('330.00'))
         self.assertEqual(rental.discount_amount, Decimal('120.00'))
 
+    def test_effective_damage_penalty_amount_falls_back_to_company_default(self):
+        Company.load()  # default damage_penalty_amount = 50
+        rental = Rental.objects.create(
+            number=105, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        )
+        self.assertEqual(rental.effective_damage_penalty_amount, Decimal('50.00'))
+
+    def test_effective_damage_penalty_amount_uses_rental_override(self):
+        Company.load()
+        rental = Rental.objects.create(
+            number=106, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+            damage_penalty_amount=Decimal('120'),
+        )
+        self.assertEqual(rental.effective_damage_penalty_amount, Decimal('120'))
+
     def test_cash_discount_amount_never_exceeds_total(self):
         rental = Rental.objects.create(
             number=104, customer=self.customer,
@@ -1304,8 +1321,8 @@ class ClientCorrectionsTests(TestCase):
 
         # Cláusula 1 com data de devolução
         self.assertIn('data de devolução estipulada acima (15/08/2026)', content)
-        # Cláusula 3 usa o percentual atual de dano por item.
-        self.assertIn('será cobrado 50% correspondente ao valor de locação de cada peça danificada.', content)
+        # Cláusula 3 usa o valor fixo atual de dano da locação.
+        self.assertIn('será cobrado o valor de R$ 50,00.', content)
         # Cláusula 5 com multa de 100% por desistência/rescisão — sem centavos
         self.assertIn('será cobrado o percentual de 100% correspondente ao valor total da locação', content)
         # Cláusula 6 com perda em 7 dias
@@ -1343,9 +1360,9 @@ class ClientCorrectionsTests(TestCase):
     def test_printed_contract_percentages_follow_configured_rates(self):
         self.company.cancellation_penalty_rate = Decimal('0')
         self.company.loss_penalty_rate = Decimal('12.50')
-        self.company.damage_penalty_rate = Decimal('200')
+        self.company.damage_penalty_amount = Decimal('200')
         self.company.save(update_fields=[
-            'cancellation_penalty_rate', 'loss_penalty_rate', 'damage_penalty_rate',
+            'cancellation_penalty_rate', 'loss_penalty_rate', 'damage_penalty_amount',
         ])
 
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
@@ -1354,7 +1371,7 @@ class ClientCorrectionsTests(TestCase):
         # A 0% rate must print as 0%, not fall back to the old hardcoded 50%.
         self.assertIn('será cobrado o percentual de 0% correspondente', content)
         self.assertIn('implica cobrança de 12,5% correspondente', content)
-        self.assertIn('será cobrado 200% correspondente ao valor de locação de cada peça danificada.', content)
+        self.assertIn('será cobrado o valor de R$ 200,00.', content)
 
     def test_printed_contract_keeps_damage_rule_when_return_recorded(self):
         Pickup.objects.create(rental=self.rental, pickup_date=date(2026, 8, 10))
@@ -1367,7 +1384,7 @@ class ClientCorrectionsTests(TestCase):
         response = self.client.get(reverse('rentals:contract', args=[self.rental.pk]))
         content = response.content.decode('utf-8')
 
-        self.assertIn('será cobrado 50% correspondente ao valor de locação de cada peça danificada.', content)
+        self.assertIn('será cobrado o valor de R$ 50,00.', content)
         self.assertNotIn('R$ 80,00.', content)
 
     def test_printed_contract_does_not_show_a_blank_fixed_damage_amount(self):

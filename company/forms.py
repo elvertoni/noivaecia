@@ -19,10 +19,12 @@ NON_NEGATIVE_RATE_FIELDS = (
     'daily_interest_rate',
     'late_fee_rate',
     'monthly_interest_rate',
-    'damage_penalty_rate',
     'loss_penalty_rate',
     'cancellation_penalty_rate',
     'late_return_daily_rate',
+)
+NON_NEGATIVE_MONEY_FIELDS = (
+    'damage_penalty_amount',
 )
 
 
@@ -54,7 +56,7 @@ class CompanyForm(forms.ModelForm):
             'name', 'address', 'city', 'cnpj', 'phones',
             'last_rental_number', 'daily_interest_rate',
             'late_fee_rate', 'monthly_interest_rate',
-            'damage_penalty_rate', 'loss_penalty_rate',
+            'damage_penalty_amount', 'loss_penalty_rate',
             'cancellation_penalty_rate', 'late_return_daily_rate',
             'late_return_max_days',
             'footer_message',
@@ -72,8 +74,12 @@ class CompanyForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
             if isinstance(field, forms.DecimalField):
-                configure_br_decimal_field(field, percent=name in NON_NEGATIVE_RATE_FIELDS)
-                if name in NON_NEGATIVE_RATE_FIELDS:
+                configure_br_decimal_field(
+                    field,
+                    percent=name in NON_NEGATIVE_RATE_FIELDS,
+                    currency=name in NON_NEGATIVE_MONEY_FIELDS,
+                )
+                if name in NON_NEGATIVE_RATE_FIELDS or name in NON_NEGATIVE_MONEY_FIELDS:
                     field.min_value = Decimal('0')
                     field.validators.append(MinValueValidator(Decimal('0')))
                     field.widget.attrs['min'] = '0'

@@ -1,4 +1,5 @@
 from datetime import date, time
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -51,7 +52,7 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             'daily_interest_rate': '0.00',
             'late_fee_rate': '2.00',
             'monthly_interest_rate': '1.00',
-            'damage_penalty_rate': '50.00',
+            'damage_penalty_amount': '50.00',
             'loss_penalty_rate': '100.00',
             'cancellation_penalty_rate': '50.00',
             'late_return_daily_rate': '10.00',
@@ -181,7 +182,7 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
             'daily_interest_rate',
             'late_fee_rate',
             'monthly_interest_rate',
-            'damage_penalty_rate',
+            'damage_penalty_amount',
             'loss_penalty_rate',
             'cancellation_penalty_rate',
             'late_return_daily_rate',
@@ -193,14 +194,14 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
 
     def test_accepts_penalty_rates_above_one_hundred_percent(self):
         form = CompanyForm(data=self._base_data(
-            damage_penalty_rate='200',
+            damage_penalty_amount='999.99',
             loss_penalty_rate='200',
             cancellation_penalty_rate='200',
             late_return_daily_rate='200',
         ))
 
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['damage_penalty_rate'], 200)
+        self.assertEqual(form.cleaned_data['damage_penalty_amount'], Decimal('999.99'))
         self.assertEqual(form.cleaned_data['loss_penalty_rate'], 200)
         self.assertEqual(form.cleaned_data['cancellation_penalty_rate'], 200)
         self.assertEqual(form.cleaned_data['late_return_daily_rate'], 200)
@@ -209,7 +210,7 @@ class CompanyFormWhatsappNumberValidationTests(TestCase):
         form = CompanyForm(data=self._base_data(late_return_max_days=10))
 
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertIn('damage_penalty_rate', form.fields)
+        self.assertIn('damage_penalty_amount', form.fields)
         self.assertIn('loss_penalty_rate', form.fields)
         self.assertIn('cancellation_penalty_rate', form.fields)
         self.assertIn('late_return_daily_rate', form.fields)

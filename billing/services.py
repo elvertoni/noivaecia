@@ -1805,10 +1805,20 @@ def compute_monthly_interest(receivable, on_date=None, company=None):
     return compute_interest(receivable, on_date=on_date, company=company)
 
 
-def compute_damage_penalty(item_value, company=None):
-    """Damage penalty: Company.damage_penalty_rate % of item value (R6.09)."""
-    company = company or Company.load()
-    return _percentage_amount(item_value, company.damage_penalty_rate)
+def compute_damage_penalty(company=None, amount=None):
+    """Damage penalty: a flat R$ ``amount`` charged once per rental (R6.09).
+
+    Falls back to ``Company.damage_penalty_amount`` when no ``amount`` is
+    given. Rentals may stipulate their own amount
+    (``Rental.effective_damage_penalty_amount``) instead of the company
+    default — the fine is a value fixed per contract, not a percentage of
+    the item's rental value, and not multiplied by how many items are
+    marked damaged (most rentals are single-item anyway).
+    """
+    if amount is None:
+        company = company or Company.load()
+        amount = company.damage_penalty_amount
+    return _quantize_money(Decimal(str(amount)))
 
 
 def compute_loss_penalty(item_value, company=None):

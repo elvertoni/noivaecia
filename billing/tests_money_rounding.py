@@ -28,14 +28,14 @@ class MoneyRoundingPolicyTests(TestCase):
         self.company.daily_interest_rate = Decimal('0.50')
         self.company.monthly_interest_rate = Decimal('0')
         self.company.late_fee_rate = Decimal('0.50')
-        self.company.damage_penalty_rate = Decimal('0.50')
+        self.company.damage_penalty_amount = Decimal('0.50')
         self.company.loss_penalty_rate = Decimal('0.50')
         self.company.cancellation_penalty_rate = Decimal('0.50')
         self.company.save(update_fields=[
             'daily_interest_rate',
             'monthly_interest_rate',
             'late_fee_rate',
-            'damage_penalty_rate',
+            'damage_penalty_amount',
             'loss_penalty_rate',
             'cancellation_penalty_rate',
             'updated_at',
@@ -82,15 +82,20 @@ class MoneyRoundingPolicyTests(TestCase):
 
     def test_percentage_penalties_use_half_up_for_half_cent(self):
         self.assertEqual(
-            compute_damage_penalty(Decimal('1.00'), company=self.company),
-            Decimal('0.01'),
-        )
-        self.assertEqual(
             compute_loss_penalty(Decimal('1.00'), company=self.company),
             Decimal('0.01'),
         )
         self.assertEqual(
             compute_cancellation_penalty(self.rental, company=self.company),
+            Decimal('0.01'),
+        )
+
+    def test_damage_penalty_flat_amount_uses_half_up_for_half_cent(self):
+        # Damage penalty is a flat R$ amount stipulated per rental/company, not
+        # a percentage of item value — still subject to the same rounding
+        # policy when the configured amount itself has sub-cent precision.
+        self.assertEqual(
+            compute_damage_penalty(amount=Decimal('0.005')),
             Decimal('0.01'),
         )
 

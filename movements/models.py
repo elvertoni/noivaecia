@@ -43,12 +43,19 @@ class Return(TimeStampedModel):
         null=True,
         blank=True,
     )
-    damage_rate = models.DecimalField(
-        'percentual aplicado por dano',
+    # Named ``_legacy`` because the damage penalty used to be a percentage of
+    # each item's value; kept exclusively as audit evidence for returns
+    # recorded before the switch to a single flat R$ amount per rental.
+    # ``damage_amount`` alone captures the new model (the multa is charged
+    # once per rental when damage occurs, regardless of how many items are
+    # marked as damaged — most rentals are single-item anyway).
+    damage_rate_legacy = models.DecimalField(
+        'percentual aplicado por dano (legado)',
         max_digits=5,
         decimal_places=2,
         null=True,
         blank=True,
+        help_text='Auditoria: percentual usado antes da multa virar valor fixo em R$.',
     )
     damaged_items = models.ManyToManyField(
         'rentals.RentalItem',

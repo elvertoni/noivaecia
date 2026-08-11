@@ -63,6 +63,12 @@
           <p class="field-help mt-0.5">Preencha quando quem vai usar a peça não é o(a) locatário(a).</p>
           {% if form.wearer_name.errors %}<p class="field-error" role="alert">{{ form.wearer_name.errors|striptags }}</p>{% endif %}
         </div>
+        <div class="field-group">
+          <label class="field-label" for="{{ form.damage_penalty_amount.id_for_label }}">{{ form.damage_penalty_amount.label }} <span class="font-normal text-app-muted">(opcional)</span></label>
+          <div class="w-32">{{ form.damage_penalty_amount|render_field }}</div>
+          <p class="field-help mt-0.5">{{ form.damage_penalty_amount.help_text }}</p>
+          {% if form.damage_penalty_amount.errors %}<p class="field-error" role="alert">{{ form.damage_penalty_amount.errors|striptags }}</p>{% endif %}
+        </div>
       </div>
 
       <!-- Prévia dos itens locados -->

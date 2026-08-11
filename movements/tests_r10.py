@@ -414,7 +414,7 @@ class ReturnDamageTrackingTests(TestCase):
             value=Decimal('200'),
         )
 
-    def test_return_calculates_damage_from_selected_item_and_company_rate(self):
+    def test_return_calculates_damage_from_selected_item_and_company_default(self):
         url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})
         response = self.client.post(url, {
             'return_date': TODAY.isoformat(),
@@ -423,8 +423,8 @@ class ReturnDamageTrackingTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         record = Return.objects.get(rental=self.rental)
-        self.assertEqual(record.damage_amount, Decimal('100.00'))
-        self.assertEqual(record.damage_rate, Decimal('50.00'))
+        # Flat R$ 50,00 (company default), regardless of the item's own value.
+        self.assertEqual(record.damage_amount, Decimal('50.00'))
         self.assertEqual(list(record.damaged_items.all()), [self.item])
         self.assertEqual(record.damage_notes, 'Mancha na barra do vestido.')
         self.assertEqual(
@@ -432,13 +432,34 @@ class ReturnDamageTrackingTests(TestCase):
                 rental=self.rental,
                 legacy_notes__startswith='penalty:damage',
             ).amount,
-            Decimal('100.00'),
+            Decimal('50.00'),
         )
 
-    def test_return_uses_current_damage_rate_above_one_hundred_percent(self):
-        company = Company.load()
-        company.damage_penalty_rate = Decimal('200')
-        company.save(update_fields=['damage_penalty_rate', 'updated_at'])
+    def test_return_charges_flat_amount_once_regardless_of_damaged_item_count(self):
+        second_item = RentalItem.objects.create(
+            rental=self.rental,
+            product=self.product,
+            value=Decimal('80'),
+        )
+
+        response = self.client.post(
+            reverse('movements:return', kwargs={'rental_pk': self.rental.pk}),
+            {
+                'return_date': TODAY.isoformat(),
+                'damaged_items': [self.item.pk, second_item.pk],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        record = Return.objects.get(rental=self.rental)
+        # R$ 50,00 once, not x2 — the multa is per rental, not per piece
+        # (most rentals are single-item; a multi-item damage still charges
+        # the one value stipulated for the contract).
+        self.assertEqual(record.damage_amount, Decimal('50.00'))
+
+    def test_return_uses_rental_specific_amount_over_company_default(self):
+        self.rental.damage_penalty_amount = Decimal('120')
+        self.rental.save(update_fields=['damage_penalty_amount', 'updated_at'])
 
         response = self.client.post(
             reverse('movements:return', kwargs={'rental_pk': self.rental.pk}),
@@ -450,8 +471,8 @@ class ReturnDamageTrackingTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         record = Return.objects.get(rental=self.rental)
-        self.assertEqual(record.damage_amount, Decimal('400.00'))
-        self.assertEqual(record.damage_rate, Decimal('200.00'))
+        # R$ 120 (rental override), not the R$ 50 company default.
+        self.assertEqual(record.damage_amount, Decimal('120.00'))
 
     def test_return_without_damage_stays_backward_compatible(self):
         url = reverse('movements:return', kwargs={'rental_pk': self.rental.pk})

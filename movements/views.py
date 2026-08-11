@@ -252,12 +252,13 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
                 for item in form.cleaned_data['damaged_items']
                 if item.pk in rental_items
             ]
-            damage_amount = sum(
-                (
-                    compute_damage_penalty(item.value, company=company)
-                    for item in damaged_items
-                ),
-                Decimal('0'),
+            # Multa por dano é um valor único por locação (não por peça): a
+            # maioria dos contratos aluga uma peça só, e o valor já é
+            # estipulado pensando nela. Cobra uma vez se houver ao menos uma
+            # peça danificada, independente de quantas forem marcadas.
+            damage_amount = (
+                compute_damage_penalty(amount=rental.effective_damage_penalty_amount)
+                if damaged_items else Decimal('0')
             )
             days_late = compute_days_late(rental.return_date, return_date)
             lost_items = []
@@ -299,7 +300,6 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
             return_obj.days_late = days_late
             return_obj.penalty_applied = penalty_applied
             return_obj.damage_amount = damage_amount if damaged_items else None
-            return_obj.damage_rate = company.damage_penalty_rate if damaged_items else None
             return_obj.loss_amount = loss_amount
             return_obj.loss_rate = company.loss_penalty_rate if lost_items else None
             return_obj.save()
@@ -332,7 +332,7 @@ class ReturnCreateView(MovementsAccessMixin, CreateView):
                     kind='damage',
                     user=self.request.user,
                     details=(
-                        f'{company.damage_penalty_rate}% sobre: '
+                        f'R$ {_format_brl(damage_amount)} sobre: '
                         + ', '.join(item.product_reference for item in damaged_items)
                     ),
                 )

@@ -42,6 +42,15 @@ class Rental(TimeStampedModel):
         'valor de reposição legado', max_digits=10, decimal_places=2, default=0,
         help_text='Valor importado do contrato antigo, preservado apenas para auditoria.',
     )
+    damage_penalty_amount = models.DecimalField(
+        'multa por dano (R$)', max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text=(
+            'Valor fixo, em reais, cobrado uma vez nesta locação em caso de dano, '
+            'definido na hora do contrato (a exemplo do valor de cada peça, que '
+            'também é definido na hora do contrato, não fixo no acervo). Em '
+            'branco, usa o padrão da empresa.'
+        ),
+    )
     wearer_name = models.CharField(
         'quem vai usar', max_length=150, blank=True,
         help_text='Preencha quando quem vai usar a peça não é o(a) locatário(a) (ex.: esposa loca o terno para o marido usar).',
@@ -149,6 +158,18 @@ class Rental(TimeStampedModel):
             rate = (percent if percent is not None else CASH_DISCOUNT_RATE * 100) / Decimal('100')
             discount = (total * rate).quantize(Decimal('0.01'))
         return (total - discount).quantize(Decimal('0.01')), discount
+
+    @property
+    def effective_damage_penalty_amount(self):
+        """This rental's damage-penalty amount (R$), falling back to the Company default.
+
+        Damage penalty is stipulated per contract, not fixed in the catalog —
+        the same way item prices are set per rental rather than on ``Product``.
+        """
+        if self.damage_penalty_amount is not None:
+            return self.damage_penalty_amount
+        from company.models import Company
+        return Company.load().damage_penalty_amount
 
     @property
     def final_value(self):

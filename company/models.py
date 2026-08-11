@@ -30,9 +30,9 @@ class Company(TimeStampedModel):
         'juros ao mês (%)', max_digits=5, decimal_places=2, default=1,
         help_text='Juros de mora mensais; dividido por 30 para cálculo diário.',
     )
-    damage_penalty_rate = models.DecimalField(
-        'penalidade por dano (%)', max_digits=5, decimal_places=2, default=50,
-        help_text='Percentual do valor do item cobrado em caso de dano.',
+    damage_penalty_amount = models.DecimalField(
+        'penalidade por dano (R$)', max_digits=10, decimal_places=2, default=50,
+        help_text='Valor fixo, em reais, cobrado uma vez por locação em caso de dano.',
     )
     loss_penalty_rate = models.DecimalField(
         'penalidade por perda/não devolução (%)', max_digits=5, decimal_places=2, default=100,
@@ -82,8 +82,8 @@ class Company(TimeStampedModel):
                 name='company_monthly_interest_rate_gte_0',
             ),
             models.CheckConstraint(
-                condition=models.Q(damage_penalty_rate__gte=0),
-                name='company_damage_penalty_rate_gte_0',
+                condition=models.Q(damage_penalty_amount__gte=0),
+                name='company_damage_penalty_amount_gte_0',
             ),
             models.CheckConstraint(
                 condition=models.Q(late_return_daily_rate__gte=0),

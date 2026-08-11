@@ -34,7 +34,7 @@ def _make_scenario():
         daily_interest_rate=Decimal('1.00'),
         late_fee_rate=Decimal('2.00'),
         monthly_interest_rate=Decimal('3.00'),
-        damage_penalty_rate=Decimal('50.00'),
+        damage_penalty_amount=Decimal('50.00'),
         loss_penalty_rate=Decimal('100.00'),
     )
     customer = Customer.objects.create(name='Maria Silva', city='Recife')
@@ -107,9 +107,13 @@ class ComputePenaltyTests(TestCase):
         _make_scenario()
 
     def test_damage_penalty(self):
-        result = compute_damage_penalty(Decimal('200'))
-        # 50% of 200 = 100
-        self.assertEqual(result, Decimal('100.00'))
+        result = compute_damage_penalty()
+        # Flat R$ 50 from the company default, regardless of item value.
+        self.assertEqual(result, Decimal('50.00'))
+
+    def test_damage_penalty_with_explicit_amount(self):
+        result = compute_damage_penalty(amount=Decimal('120'))
+        self.assertEqual(result, Decimal('120.00'))
 
     def test_loss_penalty(self):
         result = compute_loss_penalty(Decimal('150'))

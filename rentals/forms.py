@@ -11,6 +11,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from billing.models import Payment
 from catalog.models import Product
+from company.models import Company
 from core.ui import (
     BRMoneyField,
     DATE_INPUT_ATTRS,
@@ -47,6 +48,7 @@ def _style(form):
                 field,
                 currency=field_name in {
                     'down_payment_amount', 'value', 'cash_discount_amount',
+                    'damage_penalty_amount',
                 },
                 percent=field_name == 'cash_discount_percent',
             )
@@ -151,6 +153,7 @@ class RentalForm(forms.ModelForm):
         model = Rental
         fields = (
             'customer', 'pickup_date', 'return_date', 'wearer_name',
+            'damage_penalty_amount',
             'cash_discount', 'cash_discount_percent', 'cash_discount_amount', 'notes',
         )
         widgets = {
@@ -168,6 +171,13 @@ class RentalForm(forms.ModelForm):
         self.fields['cash_discount_percent'].min_value = Decimal('0')
         self.fields['cash_discount_percent'].validators.append(MinValueValidator(Decimal('0')))
         self.fields['cash_discount_percent'].validators.append(MaxValueValidator(Decimal('100')))
+        self.fields['damage_penalty_amount'].required = False
+        self.fields['damage_penalty_amount'].min_value = Decimal('0')
+        self.fields['damage_penalty_amount'].validators.append(MinValueValidator(Decimal('0')))
+        self.fields['damage_penalty_amount'].help_text = (
+            'Valor cobrado uma vez nesta locação em caso de dano. Em branco, '
+            f'usa o padrão da empresa (R$ {Company.load().damage_penalty_amount}).'
+        )
         self.fields['cash_discount_amount'].required = False
         self.fields['cash_discount_amount'].min_value = Decimal('0')
         self.fields['cash_discount_amount'].validators.append(MinValueValidator(Decimal('0')))
