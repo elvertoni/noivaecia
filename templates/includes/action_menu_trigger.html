@@ -2,7 +2,7 @@
 Kebab trigger for a row action menu. Use inside a `[data-action-menu]` wrapper:
 
   <div class="action-menu" data-action-menu>
-    {% include 'includes/action_menu_trigger.html' with menu_scope='produto' menu_key=product.pk menu_label='Ações do produto' menu_context=product %}
+    {% include 'includes/action_menu_trigger.html' with menu_scope='produto' menu_key=product.pk menu_label='Mais ações do produto' menu_context=product %}
     <div class="action-menu-panel" role="menu" hidden
          aria-labelledby="acoes-produto-{{ product.pk }}-trigger">
       <a href="…" class="action-menu-item" role="menuitem" tabindex="-1">Editar</a>

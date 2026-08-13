@@ -13,6 +13,7 @@ from accounts.models import ActionPermission, ModulePermission
 from billing.models import CashAccount, Payment, Receivable
 from catalog.models import Category, Product
 from company.models import Company
+from core.models import AuditLog
 from customers.models import Customer
 from movements.models import Pickup, Return
 from rentals.forms import RentalForm, RentalItemForm
@@ -989,7 +990,7 @@ class RentalItemEditingTests(TestCase):
         self.assertContains(response, 'name="items-0-product"')
         self.assertNotContains(response, 'name="items-1-product"')
 
-    def test_paid_rental_allows_notes_only_and_ignores_forged_contract_changes(self):
+    def test_paid_rental_allows_date_edits_and_preserves_customer(self):
         rental, _ = self._rental_with_items([self.p1], number=140)
         rental.penalty_value = Decimal('50')
         rental.save()
@@ -998,7 +999,7 @@ class RentalItemEditingTests(TestCase):
             due_date=date(2026, 6, 15),
             amount=Decimal('300'),
         )
-        Payment.objects.create(
+        payment = Payment.objects.create(
             receivable=receivable,
             customer=self.customer,
             rental=rental,
@@ -1010,9 +1011,11 @@ class RentalItemEditingTests(TestCase):
         other_customer = Customer.objects.create(name='Joana')
 
         response = self.client.get(reverse('rentals:update', args=[rental.pk]))
-        self.assertTrue(response.context['form'].fields['pickup_date'].disabled)
+        self.assertFalse(response.context['form'].fields['pickup_date'].disabled)
+        self.assertFalse(response.context['form'].fields['return_date'].disabled)
         self.assertTrue(response.context['form'].fields['customer'].disabled)
         self.assertContains(response, 'Itens da locação')
+        self.assertContains(response, 'alterar datas não atualiza os vencimentos já gerados')
 
         response = self.client.post(reverse('rentals:update', args=[rental.pk]), {
             'customer': other_customer.pk,
@@ -1034,10 +1037,70 @@ class RentalItemEditingTests(TestCase):
         self.assertRedirects(response, rental.get_absolute_url())
         rental.refresh_from_db()
         self.assertEqual(rental.customer, self.customer)
-        self.assertEqual(rental.pickup_date, date(2026, 6, 10))
-        self.assertEqual(rental.return_date, date(2026, 6, 15))
+        self.assertEqual(rental.pickup_date, date(2026, 7, 1))
+        self.assertEqual(rental.return_date, date(2026, 7, 5))
         self.assertEqual(rental.penalty_value, Decimal('50'))
         self.assertEqual(rental.notes, 'Pagamento confirmado no balcão.')
+        receivable.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(receivable.due_date, date(2026, 6, 15))
+        self.assertEqual(payment.payment_date, date(2026, 6, 10))
+        audit = AuditLog.objects.get(
+            action='rental_paid_dates_update',
+            object_id=str(rental.pk),
+        )
+        self.assertEqual(audit.metadata['previous_pickup_date'], '2026-06-10')
+        self.assertEqual(audit.metadata['new_pickup_date'], '2026-07-01')
+        self.assertEqual(audit.metadata['previous_return_date'], '2026-06-15')
+        self.assertEqual(audit.metadata['new_return_date'], '2026-07-05')
+        self.assertTrue(audit.metadata['receivable_due_dates_preserved'])
+
+    def test_paid_rental_date_edit_checks_availability_conflicts(self):
+        rental1 = Rental.objects.create(
+            number=145, customer=self.customer,
+            pickup_date=date(2026, 6, 10), return_date=date(2026, 6, 15),
+        )
+        RentalItem.objects.create(rental=rental1, product=self.p1, value=self.p1.value)
+        receivable = Receivable.objects.create(
+            rental=rental1, due_date=date(2026, 6, 15), amount=Decimal('300')
+        )
+        Payment.objects.create(
+            receivable=receivable,
+            customer=self.customer,
+            rental=rental1,
+            payment_date=date(2026, 6, 10),
+            amount=Decimal('100'),
+            method=Payment.Method.PIX,
+            user=self.user,
+        )
+
+        # Rental 2 is active in July
+        rental2 = Rental.objects.create(
+            number=146, customer=self.customer,
+            pickup_date=date(2026, 7, 1), return_date=date(2026, 7, 10),
+        )
+        RentalItem.objects.create(rental=rental2, product=self.p1, value=self.p1.value)
+
+        response = self.client.post(reverse('rentals:update', args=[rental1.pk]), {
+            'customer': self.customer.pk,
+            'pickup_date': '2026-07-01',
+            'return_date': '2026-07-05',
+            'notes': '',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '1',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-id': rental1.items.get().pk,
+            'items-0-product': self.p1.pk,
+            'items-0-description': '',
+            'items-0-value': '300',
+            'items-0-DELETE': '',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'já está alocada')
+        rental1.refresh_from_db()
+        self.assertEqual(rental1.pickup_date, date(2026, 6, 10))
 
     def test_returned_rental_can_be_edited(self):
         rental, items = self._rental_with_items([self.p1], number=141)
@@ -1652,14 +1715,22 @@ class SaveAndPrintFlowTests(TestCase):
 
     def setUp(self):
         Company.objects.create(name='Noivas & Cia', last_rental_number=0)
+        from billing.models import CashAccount
+        CashAccount.objects.create(name='Caixa Balcão')
+        user = User.objects.create_user(email='save-print@noivasecia.test', password='Senha12345')
+        ModulePermission.objects.create(user=user, module_key='rentals', allowed=True)
+        self.client.force_login(user)
         self.customer = Customer.objects.create(name='Cliente Teste')
-        self.product = Product.objects.create(code='D-10', description='Vestido de Noiva', value=Decimal('500.00'))
+        category = Category.objects.create(prefix='D', name='Vestidos')
+        self.product = Product.objects.create(
+            category=category, code=10, description='Vestido de Noiva', value=Decimal('500.00')
+        )
 
     def _payload(self, **extra):
         data = {
             'customer': self.customer.pk,
-            'pickup_date': '10/06/2026',
-            'return_date': '15/06/2026',
+            'pickup_date': '2026-06-15',
+            'return_date': '2026-06-20',
             'notes': 'Teste',
             'items-TOTAL_FORMS': '1',
             'items-INITIAL_FORMS': '0',
@@ -1670,7 +1741,8 @@ class SaveAndPrintFlowTests(TestCase):
             'items-0-value': '500,00',
             'down_payment_amount': '100,00',
             'down_payment_method': 'pix',
-            'down_payment_date': '10/06/2026',
+            'down_payment_date': '2026-06-01',
+            'first_due_date': '2026-06-10',
             'installment_count': '1',
         }
         data.update(extra)

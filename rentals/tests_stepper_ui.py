@@ -166,6 +166,22 @@ class RentalStepperTests(TestCase):
         self.assertIn("e.key.toLowerCase() === 's'", self.html)
         self.assertIn('id="item-count-badge"', self.html)
 
+    def test_product_search_announces_results_and_selection(self):
+        self.assertIn('id="items-0-product-search-status"', self.html)
+        self.assertIn('id="items-__prefix__-product-search-status"', self.html)
+        self.assertIn('class="product-search-status sr-only"', self.html)
+        self.assertIn('aria-live="polite"', self.html)
+
+    def test_item_scroll_and_picker_chips_respect_accessibility_preferences(self):
+        self.assertGreaterEqual(
+            self.html.count("behavior: prefersReducedMotion ? 'auto' : 'smooth'"),
+            3,
+        )
+        self.assertIn(
+            "'inline-flex min-h-11 items-center rounded-full px-3 py-2 text-sm'",
+            self.html,
+        )
+
     def test_enter_on_the_last_field_of_a_step_advances_instead_of_saving(self):
         """Otherwise Enter falls into implicit submission mid-form (RF-17).
 

@@ -101,7 +101,7 @@ class RowActionMenuTests(TestCase):
         """Otherwise a screen reader announces a page of identical "Ações"."""
         html = self.client.get(reverse('catalog:product_list')).content.decode()
 
-        self.assertIn('Ações do produto: VF38', html)
+        self.assertIn('Mais ações do produto: VF38 · VESTIDO LONGO', html)
 
 
 class DashboardComponentTests(TestCase):

@@ -9,7 +9,7 @@
     <h1 class="page-title">{% if form.instance.pk %}Editar locação #{{ form.instance.number }}{% else %}Nova locação{% endif %}</h1>
     {% if header_locked %}
       <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Esta locação possui recebimentos registrados. Cliente, datas e valor de reposição não podem ser alterados, mas os itens podem ser ajustados.
+        Esta locação possui recebimentos registrados. O cliente não pode ser alterado, mas as datas e os itens podem ser ajustados. Alterar itens ou desconto pode mudar o total; alterar datas não atualiza os vencimentos já gerados. Depois de salvar, confira as parcelas futuras em Recebimentos.
       </div>
     {% endif %}
 
@@ -210,10 +210,12 @@
                                aria-expanded="false"
                                aria-required="true"
                                aria-label="Produto"
+                               aria-describedby="{{ item_form.prefix }}-product-search-status{% if item_form.product.errors %} {{ item_form.product.auto_id }}_error{% endif %}"
                                {% comment %}`_error` (sublinhado) é o id que o próprio Django
                                aponta no select oculto; um id único serve aos dois.{% endcomment %}
-                               {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.auto_id }}_error"{% endif %}>
+                               {% if item_form.product.errors %}aria-invalid="true"{% endif %}>
                         <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+                        <p id="{{ item_form.prefix }}-product-search-status" class="product-search-status sr-only" aria-live="polite" aria-atomic="true"></p>
                       </div>
                       <div class="mt-1 flex items-center justify-between gap-2">
                         <button type="button" class="open-browse inline-flex min-h-11 items-center text-xs font-medium text-brand-700 hover:underline">Filtros avançados</button>
@@ -454,8 +456,10 @@
                  aria-autocomplete="list"
                  aria-expanded="false"
                  aria-required="true"
-                 aria-label="Produto">
+                 aria-label="Produto"
+                 aria-describedby="{{ f.prefix }}-product-search-status">
           <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
+          <p id="{{ f.prefix }}-product-search-status" class="product-search-status sr-only" aria-live="polite" aria-atomic="true"></p>
         </div>
         <div class="mt-1 flex items-center justify-between gap-2">
           <button type="button" class="open-browse inline-flex min-h-11 items-center text-xs font-medium text-brand-700 hover:underline">Filtros avançados</button>
@@ -1006,7 +1010,10 @@
       input.focus();
       setTimeout(function () { input.classList.remove('border-rose-400'); }, 1200);
     }
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
   }
 
   function addItemRow(focus) {
@@ -1028,7 +1035,10 @@
     if (focus) {
       const input = row.querySelector('.product-search-input');
       if (input) input.focus();
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'center',
+      });
     }
     return row;
   }
@@ -1286,9 +1296,10 @@
     function chip(label, count, active, onClick) {
       const btn = document.createElement('button');
       btn.type = 'button';
+      const baseClasses = 'inline-flex min-h-11 items-center rounded-full px-3 py-2 text-sm';
       btn.className = active
-        ? 'rounded-full bg-brand-700 px-3 py-1 text-sm font-medium text-white'
-        : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-app-ink hover:border-rose-400';
+        ? `${baseClasses} bg-brand-700 font-medium text-white`
+        : `${baseClasses} border border-slate-300 bg-white text-app-ink hover:border-rose-400`;
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       btn.textContent = count != null ? `${label} (${count})` : label;
       btn.addEventListener('click', onClick);

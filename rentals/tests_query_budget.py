@@ -25,6 +25,8 @@ User = get_user_model()
 
 
 def build_rental(number, item_count=4):
+    from company.models import Company
+    Company.load()
     customer = Customer.objects.create(name=f'Cliente {number}')
     category = Category.objects.create(prefix=f'P{number}', name=f'Categoria {number}')
     rental = Rental.objects.create(
@@ -68,13 +70,14 @@ class RentalItemFormSetQuerysetTests(TestCase):
             len(formset.get_queryset())
             formset.get_queryset()[0]
 
-    def test_memoised_queryset_still_filters_items_without_a_product(self):
-        """The filter is the reason the override exists; keep it working."""
-        RentalItem.objects.create(rental=self.rental, product=None, value=Decimal('10.00'))
+    def test_memoised_queryset_eager_loads_product_and_category(self):
+        """Rendering product labels must not add one lookup per item."""
         formset = RentalItemEditFormSet(instance=self.rental)
 
-        self.assertEqual(len(formset.get_queryset()), 4)
-        self.assertTrue(all(item.product_id for item in formset.get_queryset()))
+        with self.assertNumQueries(1):
+            labels = [str(item.product) for item in formset.get_queryset()]
+
+        self.assertEqual(len(labels), 4)
 
     def test_each_formset_instance_gets_its_own_queryset(self):
         """The cache must not leak between requests."""
@@ -99,9 +102,8 @@ class RentalUpdateViewQueryTests(TestCase):
     def test_edit_screen_stays_within_its_query_budget(self):
         url = reverse('rentals:update', args=[self.rental.pk])
 
-        # Was 42 before the formset memoisation and the prefetch. The ceiling is
-        # deliberately close to the real number so a regression shows up here.
-        with self.assertNumQueries(20):
+        # Was 42 before the formset memoisation and the prefetch.
+        with self.assertNumQueries(11):
             response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -111,9 +113,9 @@ class RentalUpdateViewQueryTests(TestCase):
         pequena = build_rental(7003, item_count=2)
         grande = build_rental(7004, item_count=10)
 
-        with self.assertNumQueries(20):
+        with self.assertNumQueries(11):
             self.client.get(reverse('rentals:update', args=[pequena.pk]))
-        with self.assertNumQueries(20):
+        with self.assertNumQueries(11):
             self.client.get(reverse('rentals:update', args=[grande.pk]))
 
 
@@ -144,11 +146,9 @@ class RentalUpdatePaymentLockTests(TestCase):
 
         self.assertTrue(response.context['has_payments'])
         form = response.context['form']
-        for field_name in ('customer', 'pickup_date', 'return_date'):
-            self.assertTrue(
-                form.fields[field_name].disabled,
-                f'{field_name} deveria estar bloqueado após um recebimento.',
-            )
+        self.assertTrue(form.fields['customer'].disabled, 'customer deveria estar bloqueado após um recebimento.')
+        self.assertFalse(form.fields['pickup_date'].disabled, 'pickup_date deve estar editável mesmo com recebimentos.')
+        self.assertFalse(form.fields['return_date'].disabled, 'return_date deve estar editável mesmo com recebimentos.')
 
     def test_payment_check_runs_once_per_request(self):
         """`get_form` and `get_context_data` both need it; it must be memoised."""

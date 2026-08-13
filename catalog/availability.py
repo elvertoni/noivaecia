@@ -76,8 +76,13 @@ def find_overlapping_rentals(
     qs = (
         RentalItem.objects.filter(
             product_id__in=product_ids,
-            rental__pickup_date__lte=return_date,
-            rental__return_date__gte=pickup_date,
+        )
+        .filter(
+            Q(
+                rental__pickup_date__lte=return_date,
+                rental__return_date__gte=pickup_date,
+            )
+            | Q(rental__status=Rental.Status.PICKED_UP)
         )
         .exclude(rental__status__in=INACTIVE_RENTAL_STATUSES)
         .select_related('rental', 'rental__customer')

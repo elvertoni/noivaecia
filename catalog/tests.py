@@ -137,6 +137,12 @@ class AvailabilityTests(TestCase):
             self.rental,
         )
 
+    def test_overlap_keeps_overdue_picked_up_product_unavailable(self):
+        self.assertEqual(
+            find_overlapping_rental(self.product, date(2026, 6, 25), date(2026, 6, 30)),
+            self.rental,
+        )
+
 
 class ProductDeleteViewTests(TestCase):
     def setUp(self):

@@ -321,8 +321,6 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
 
     protected_field_names = (
         'customer',
-        'pickup_date',
-        'return_date',
     )
 
     def get_queryset(self):
@@ -418,6 +416,8 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             has_payments = locked_rental.receivables.filter(
                 payments__isnull=False,
             ).exists()
+            previous_pickup_date = locked_rental.pickup_date
+            previous_return_date = locked_rental.return_date
             rental = form.save(commit=False)
             if has_payments:
                 for field_name in self.protected_field_names:
@@ -428,6 +428,25 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             items.instance = rental
             items.save()
             rental.recalculate_total()
+
+            dates_changed = (
+                rental.pickup_date != previous_pickup_date
+                or rental.return_date != previous_return_date
+            )
+            if has_payments and dates_changed:
+                AuditLog.record(
+                    user=self.request.user,
+                    action='rental_paid_dates_update',
+                    obj=rental,
+                    reason='Datas ajustadas após o registro de recebimentos.',
+                    metadata={
+                        'previous_pickup_date': previous_pickup_date.isoformat(),
+                        'new_pickup_date': rental.pickup_date.isoformat(),
+                        'previous_return_date': previous_return_date.isoformat(),
+                        'new_return_date': rental.return_date.isoformat(),
+                        'receivable_due_dates_preserved': True,
+                    },
+                )
 
         if has_payments and rental.total_value != old_total:
             messages.warning(

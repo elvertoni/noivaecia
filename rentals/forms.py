@@ -315,6 +315,15 @@ class RentalItemForm(forms.ModelForm):
             if not selected_product_is_current:
                 products = products.filter(is_active=True)
             self.fields['product'].queryset = products.select_related('category')
+            # On GET the formset queryset already loaded the current product and
+            # category. Reuse that object while rendering the hidden select;
+            # otherwise ModelChoiceIterator performs one identical lookup per
+            # item row and the edit screen's query count grows linearly.
+            if not self.is_bound and selected_product_is_current:
+                selected_product = self.instance.product
+                self.fields['product'].choices = [
+                    (selected_product.pk, str(selected_product)),
+                ]
         else:
             self.fields['product'].queryset = Product.objects.none()
 
