@@ -95,7 +95,12 @@ class CompanyForm(forms.ModelForm):
             'placeholder': 'Ex.: 12.345.678/0001-95',
             'inputmode': 'numeric',
             'autocomplete': 'off',
+            'maxlength': '18',
+            'data-mask': 'cnpj',
         })
+        # `phones` and `whatsapp_report_number` deliberately stay unmasked: both
+        # accept several numbers in one field (separated by punctuation or line
+        # breaks), so a single-number mask would corrupt the stored value.
         self.fields['phones'].widget.attrs.update({
             'placeholder': 'Ex.: (43) 3542-1234',
             'inputmode': 'tel',

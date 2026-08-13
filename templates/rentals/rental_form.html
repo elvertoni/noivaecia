@@ -15,10 +15,55 @@
 
     <form id="rental-form" method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
       {% csrf_token %}
+      {% comment %}
+      Botão de submit padrão. Os botões visíveis vivem na barra fixa, fora do
+      <form>, e o primeiro deles é "Salvar e Imprimir" — sem este, um Enter no
+      último campo dispararia a impressão em vez de apenas salvar.
+      {% endcomment %}
+      <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Salvar locação</button>
       {% if form.non_field_errors %}
         <div class="alert alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>
       {% endif %}
 
+      {% comment %}
+      Passo a passo sobre um único <form>: nenhum campo sai do DOM ao trocar de
+      etapa, então o POST, o formset de itens e os atributos `name` continuam
+      exatamente os mesmos. A etapa é só disclosure progressivo — a grade densa
+      de itens e os atalhos de teclado (Enter, F2, Ctrl+S) seguem intactos.
+      {% endcomment %}
+      <nav id="rental-stepper" class="stepper" aria-label="Etapas da locação">
+        <button type="button" id="step-tab-1" class="stepper-step" data-step-target="1"
+                aria-controls="step-panel-1" aria-current="step">
+          <span class="stepper-index" aria-hidden="true">1</span>
+          <span class="min-w-0">
+            <span class="stepper-label">Cliente &amp; período</span>
+            <span class="stepper-hint">Quem aluga e para quando</span>
+          </span>
+        </button>
+        <span class="stepper-connector" aria-hidden="true"></span>
+        <button type="button" id="step-tab-2" class="stepper-step" data-step-target="2"
+                aria-controls="step-panel-2">
+          <span class="stepper-index" aria-hidden="true">2</span>
+          <span class="min-w-0">
+            <span class="stepper-label">Trajes &amp; itens</span>
+            <span class="stepper-hint">Peças, valores e disponibilidade</span>
+          </span>
+        </button>
+        <span class="stepper-connector" aria-hidden="true"></span>
+        <button type="button" id="step-tab-3" class="stepper-step" data-step-target="3"
+                aria-controls="step-panel-3">
+          <span class="stepper-index" aria-hidden="true">3</span>
+          <span class="min-w-0">
+            <span class="stepper-label">Recebimento &amp; contrato</span>
+            {# Na edição o plano de recebimento não é reaberto: só as observações. #}
+            <span class="stepper-hint">{% if form.instance.pk %}Observações da locação{% else %}Entrada, parcelas e observações{% endif %}</span>
+          </span>
+        </button>
+      </nav>
+      <p id="step-announcer" class="sr-only" aria-live="polite"></p>
+
+      <section id="step-panel-1" class="step-panel space-y-6" data-step-panel="1"
+               role="group" aria-labelledby="step-tab-1">
       <!-- Customer search (R7.02) -->
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="field-group md:col-span-2">
@@ -39,38 +84,41 @@
                    aria-required="true"
                    {% if header_locked %}disabled aria-disabled="true"{% endif %}
                    {% if form.customer.errors %}aria-invalid="true"{% endif %}
-                   aria-describedby="customer-search-status{% if form.customer.errors %} customer-search-error{% endif %}">
+                   aria-describedby="customer-search-status{% if form.customer.errors %} {{ form.customer.auto_id }}_error{% endif %}">
             <div id="customer-search-results" class="autocomplete-results hidden" role="listbox"></div>
           </div>
           <p id="customer-search-status" class="sr-only" aria-live="polite"></p>
-          {% if form.customer.errors %}<p id="customer-search-error" class="field-error" role="alert">{{ form.customer.errors|striptags }}</p>{% endif %}
+          {% if form.customer.errors %}<p id="{{ form.customer.auto_id }}_error" class="field-error" role="alert">{{ form.customer.errors|striptags }}</p>{% endif %}
         </div>
 
         <!-- Dates -->
         <div class="field-group">
           <label class="field-label" for="{{ form.pickup_date.id_for_label }}">{{ form.pickup_date.label }}</label>
           {{ form.pickup_date|render_field }}
-          {% if form.pickup_date.errors %}<p class="field-error" role="alert">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
+          {% if form.pickup_date.errors %}<p id="{{ form.pickup_date.auto_id }}-error" class="field-error" role="alert">{{ form.pickup_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.return_date.id_for_label }}">{{ form.return_date.label }}</label>
           {{ form.return_date|render_field }}
-          {% if form.return_date.errors %}<p class="field-error" role="alert">{{ form.return_date.errors|striptags }}</p>{% endif %}
+          {% if form.return_date.errors %}<p id="{{ form.return_date.auto_id }}-error" class="field-error" role="alert">{{ form.return_date.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.wearer_name.id_for_label }}">{{ form.wearer_name.label }} <span class="font-normal text-app-muted">(opcional)</span></label>
           {{ form.wearer_name|render_field }}
-          <p class="field-help mt-0.5">Preencha quando quem vai usar a peça não é o(a) locatário(a).</p>
-          {% if form.wearer_name.errors %}<p class="field-error" role="alert">{{ form.wearer_name.errors|striptags }}</p>{% endif %}
+          <p id="{{ form.wearer_name.auto_id }}-help" class="field-help mt-0.5">Preencha quando quem vai usar a peça não é o(a) locatário(a).</p>
+          {% if form.wearer_name.errors %}<p id="{{ form.wearer_name.auto_id }}-error" class="field-error" role="alert">{{ form.wearer_name.errors|striptags }}</p>{% endif %}
         </div>
         <div class="field-group">
           <label class="field-label" for="{{ form.damage_penalty_amount.id_for_label }}">{{ form.damage_penalty_amount.label }} <span class="font-normal text-app-muted">(opcional)</span></label>
           <div class="w-32">{{ form.damage_penalty_amount|render_field }}</div>
-          <p class="field-help mt-0.5">{{ form.damage_penalty_amount.help_text }}</p>
-          {% if form.damage_penalty_amount.errors %}<p class="field-error" role="alert">{{ form.damage_penalty_amount.errors|striptags }}</p>{% endif %}
+          <p id="{{ form.damage_penalty_amount.auto_id }}-help" class="field-help mt-0.5">{{ form.damage_penalty_amount.help_text }}</p>
+          {% if form.damage_penalty_amount.errors %}<p id="{{ form.damage_penalty_amount.auto_id }}-error" class="field-error" role="alert">{{ form.damage_penalty_amount.errors|striptags }}</p>{% endif %}
         </div>
       </div>
+      </section>
 
+      <section id="step-panel-2" class="step-panel space-y-6" data-step-panel="2"
+               role="group" aria-labelledby="step-tab-2" hidden>
       <!-- Prévia dos itens locados -->
       {% if form.instance.pk and form.instance.items.exists %}
       <div id="items-preview" class="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
@@ -102,8 +150,11 @@
       <div id="itens">
         <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">
-            <h2 class="section-title">Itens da locação</h2>
-            <p class="field-help mt-0.5">Busque cada peça pelo código ou descrição. A disponibilidade na data de retirada é verificada automaticamente.</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="section-title">Itens da locação</h2>
+              <span id="item-count-badge" class="badge badge-info" role="status" aria-live="polite">0 itens</span>
+            </div>
+            <p class="field-help mt-0.5">Busque cada peça pelo código ou descrição. A disponibilidade na data de retirada é verificada automaticamente. <kbd class="rounded border border-slate-300 bg-slate-50 px-1 font-sans text-[0.7rem]">F2</kbd> adiciona uma linha.</p>
           </div>
         </div>
 
@@ -123,12 +174,13 @@
         -->
         <div class="mt-4 rounded-xl border border-slate-200 bg-white shadow-sm">
           <table class="data-table w-full text-left border-collapse">
+            <caption class="sr-only">Itens desta locação: produto, valor e ações por linha</caption>
             <thead class="hidden sm:table-header-group">
               <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                <th class="w-10 px-3 py-2.5 text-center">#</th>
-                <th class="px-3 py-2.5">Produto / Código</th>
-                <th class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
-                <th class="w-20 px-3 py-2.5 text-center">Ações</th>
+                <th scope="col" class="w-10 px-3 py-2.5 text-center">#</th>
+                <th scope="col" class="px-3 py-2.5">Produto / Código</th>
+                <th scope="col" class="w-36 px-3 py-2.5 text-right">Valor (R$)</th>
+                <th scope="col" class="w-20 px-3 py-2.5 text-center">Ações</th>
               </tr>
             </thead>
             <tbody id="item-forms" class="divide-y divide-slate-100 text-sm">
@@ -158,20 +210,22 @@
                                aria-expanded="false"
                                aria-required="true"
                                aria-label="Produto"
-                               {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.id_for_label }}-error"{% endif %}>
+                               {% comment %}`_error` (sublinhado) é o id que o próprio Django
+                               aponta no select oculto; um id único serve aos dois.{% endcomment %}
+                               {% if item_form.product.errors %}aria-invalid="true" aria-describedby="{{ item_form.product.auto_id }}_error"{% endif %}>
                         <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
                       </div>
                       <div class="mt-1 flex items-center justify-between gap-2">
-                        <button type="button" class="open-browse text-xs font-medium text-rose-600 hover:underline">Filtros avançados</button>
+                        <button type="button" class="open-browse inline-flex min-h-11 items-center text-xs font-medium text-brand-700 hover:underline">Filtros avançados</button>
                       </div>
                       <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
-                      {% if item_form.product.errors %}<p id="{{ item_form.product.id_for_label }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
+                      {% if item_form.product.errors %}<p id="{{ item_form.product.auto_id }}_error" class="field-error text-xs mt-1" role="alert">{{ item_form.product.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
                   <td class="block sm:table-cell sm:px-3 sm:py-2 sm:align-top" data-label="Valor">
                     <div class="field-group mb-0">
                       {{ item_form.value|render_field }}
-                      {% if item_form.value.errors %}<p class="field-error text-xs mt-1" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
+                      {% if item_form.value.errors %}<p id="{{ item_form.value.auto_id }}-error" class="field-error text-xs mt-1" role="alert">{{ item_form.value.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
                   <td class="flex items-center gap-2 sm:table-cell sm:px-3 sm:py-2 sm:text-center sm:align-top" data-label="Ações">
@@ -180,7 +234,7 @@
                       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                       </svg>
-                      <span class="text-xs text-rose-600 sm:hidden">Remover</span>
+                      <span class="text-xs text-red-700 sm:hidden">Remover</span>
                     </label>
                     <button type="button"
                             class="btn-photo-toggle inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md px-2 text-sky-700 transition-colors hover:bg-sky-50 hover:text-sky-800"
@@ -201,8 +255,8 @@
                     <div class="field-group mb-0">
                       <label class="field-label text-xs" for="{{ item_form.proof_photo_upload.id_for_label }}">{{ item_form.proof_photo_upload.label }}</label>
                       {{ item_form.proof_photo_upload|render_field }}
-                      {% if item_form.proof_photo_upload.help_text %}<p class="field-help text-xs">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
-                      {% if item_form.proof_photo_upload.errors %}<p class="field-error text-xs" role="alert">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
+                      {% if item_form.proof_photo_upload.help_text %}<p id="{{ item_form.proof_photo_upload.auto_id }}-help" class="field-help text-xs">{{ item_form.proof_photo_upload.help_text }}</p>{% endif %}
+                      {% if item_form.proof_photo_upload.errors %}<p id="{{ item_form.proof_photo_upload.auto_id }}-error" class="field-error text-xs" role="alert">{{ item_form.proof_photo_upload.errors|striptags }}</p>{% endif %}
                     </div>
                   </td>
                 </tr>
@@ -230,6 +284,9 @@
               {% endcomment %}
               <div class="mt-1.5 flex items-center gap-1">
                 {{ form.cash_discount_percent.as_hidden }}
+                {% comment %} O rótulo visível é o do checkbox ao lado; sem este,
+                o campo de valor chegava ao leitor de tela sem nome nenhum. {% endcomment %}
+                <label class="sr-only" for="{{ form.cash_discount_amount.id_for_label }}">Valor do desconto à vista, em reais</label>
                 <div class="w-24">{{ form.cash_discount_amount|render_field }}</div>
               </div>
               {% if form.cash_discount.errors or form.cash_discount_percent.errors or form.cash_discount_amount.errors %}
@@ -240,7 +297,7 @@
                 </p>
               {% endif %}
               <p id="discount-display" class="text-lg font-semibold text-emerald-600 mt-0.5">R$ 0,00</p>
-              <p class="text-[10px] text-app-muted mt-0.5">Em branco aplica o desconto padrão da empresa.</p>
+              <p id="{{ form.cash_discount_amount.auto_id }}-help" class="text-[10px] text-app-muted mt-0.5">Em branco aplica o desconto padrão da empresa.</p>
             </div>
             <div class="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-right sm:text-left">
               <p class="text-xs font-semibold text-rose-900">Total final da locação</p>
@@ -250,7 +307,10 @@
         </div>
 
       </div>
+      </section>
 
+      <section id="step-panel-3" class="step-panel space-y-6" data-step-panel="3"
+               role="group" aria-labelledby="step-tab-3" hidden>
       {% if not form.instance.pk %}
       <!-- Payment plan (R7.05/R7.06) -->
       <fieldset class="rounded-xl border border-slate-200 p-4 space-y-5" aria-describedby="payment-plan-help">
@@ -286,13 +346,13 @@
           <div class="field-group">
             <label class="field-label" for="{{ form.installment_count.id_for_label }}">{{ form.installment_count.label }}</label>
             {{ form.installment_count|render_field }}
-            {% if form.installment_count.help_text %}<p class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
+            {% if form.installment_count.help_text %}<p id="{{ form.installment_count.auto_id }}-help" class="field-help">{{ form.installment_count.help_text }}</p>{% endif %}
             {% if form.installment_count.errors %}<p id="{{ form.installment_count.auto_id }}-error" class="field-error" role="alert">{{ form.installment_count.errors|striptags }}</p>{% endif %}
           </div>
           <div class="field-group">
             <label class="field-label" for="{{ form.first_due_date.id_for_label }}">{{ form.first_due_date.label }}</label>
             {{ form.first_due_date|render_field }}
-            {% if form.first_due_date.help_text %}<p class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
+            {% if form.first_due_date.help_text %}<p id="{{ form.first_due_date.auto_id }}-help" class="field-help">{{ form.first_due_date.help_text }}</p>{% endif %}
             {% if form.first_due_date.errors %}<p id="{{ form.first_due_date.auto_id }}-error" class="field-error" role="alert">{{ form.first_due_date.errors|striptags }}</p>{% endif %}
           </div>
           </div>
@@ -304,8 +364,9 @@
       <div class="field-group">
         <label class="field-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
         {{ form.notes|render_field }}
-        {% if form.notes.errors %}<p class="field-error" role="alert">{{ form.notes.errors|striptags }}</p>{% endif %}
+        {% if form.notes.errors %}<p id="{{ form.notes.auto_id }}-error" class="field-error" role="alert">{{ form.notes.errors|striptags }}</p>{% endif %}
       </div>
+      </section>
 
       <!-- Espaço reservado para o footer fixo não sobrepor o conteúdo -->
       <div id="rental-action-bar-spacer" aria-hidden="true" class="h-60 sm:h-20"></div>
@@ -316,36 +377,55 @@
 <!-- ===== Barra de ações fixa (sticky footer) ===== -->
 <div id="rental-action-bar"
      role="region"
-     aria-label="Ações do formulário"
-     class="fixed bottom-0 left-0 right-0 z-20 flex min-w-0 items-center justify-end gap-3 border-t border-slate-200 bg-white pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] lg:left-64">
-  {% if not has_payments %}
-    <p class="mr-auto hidden text-xs text-slate-500 sm:block">Preencha todos os campos obrigatórios antes de salvar.</p>
-  {% endif %}
-  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+     aria-label="Resumo e ações do formulário"
+     class="fixed bottom-0 left-0 right-0 z-20 flex min-w-0 flex-col gap-3 border-t border-slate-200 bg-white pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:flex-row sm:items-center sm:justify-end sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] lg:left-64">
+  {% comment %} Resumo em tempo real: espelha os totais da etapa 2, para que o valor final
+     continue visível enquanto o operador está na etapa 1 ou 3. {% endcomment %}
+  <div class="mr-auto flex min-w-0 items-center gap-x-4 gap-y-1 sm:flex-wrap">
+    <p class="text-xs text-app-muted">
+      <span class="block font-medium text-slate-600">Itens</span>
+      <span id="bar-items-count" class="text-sm font-semibold text-app-ink tabular-nums">0</span>
+    </p>
+    <p class="text-xs text-app-muted">
+      <span class="block font-medium text-slate-600">Total da locação</span>
+      <span id="bar-total-display" class="text-base font-bold text-brand-700 tabular-nums">R$ 0,00</span>
+    </p>
+    {% if not has_payments %}
+      <p class="hidden text-xs text-slate-500 lg:block">Preencha os campos obrigatórios antes de salvar.</p>
+    {% endif %}
+  </div>
+  <div id="rental-action-buttons" class="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+    <button type="button" id="step-prev" class="btn btn-secondary min-w-0 px-2 sm:px-4" hidden>
+      <span aria-hidden="true">←</span> Voltar
+    </button>
+    <button type="button" id="step-next" class="btn btn-secondary min-w-0 px-2 sm:px-4">
+      Avançar <span aria-hidden="true">→</span>
+    </button>
     <button type="button"
             id="add-item-footer"
-            class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4"
-            aria-controls="item-forms">
+            class="btn btn-secondary min-w-0 px-2 sm:px-4"
+            aria-controls="item-forms"
+            hidden>
       <span aria-hidden="true">+</span> Adicionar item
     </button>
     {% if form.instance.pk %}
-      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">Cancelar</a>
+      <a href="{% url 'rentals:detail' form.instance.pk %}" class="btn btn-secondary min-w-0 px-2 sm:px-4">Cancelar</a>
     {% else %}
-      <a href="{% url 'rentals:list' %}" class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">Cancelar</a>
+      <a href="{% url 'rentals:list' %}" class="btn btn-secondary min-w-0 px-2 sm:px-4">Cancelar</a>
     {% endif %}
     <button type="submit"
             form="rental-form"
             name="save_and_print"
             value="1"
-            class="btn btn-secondary min-w-0 w-full px-2 sm:w-auto sm:px-4">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            class="btn btn-secondary col-span-2 min-w-0 px-2 sm:px-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h14z" />
       </svg>
       Salvar e Imprimir
     </button>
     <button type="submit"
             form="rental-form"
-            class="btn btn-primary min-w-0 w-full px-2 sm:w-auto sm:px-4">
+            class="btn btn-primary col-span-2 min-w-0 px-2 sm:px-4">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"/>
       </svg>
@@ -378,7 +458,7 @@
           <div class="product-search-results autocomplete-results hidden" role="listbox"></div>
         </div>
         <div class="mt-1 flex items-center justify-between gap-2">
-          <button type="button" class="open-browse text-xs font-medium text-rose-600 hover:underline">Filtros avançados</button>
+          <button type="button" class="open-browse inline-flex min-h-11 items-center text-xs font-medium text-brand-700 hover:underline">Filtros avançados</button>
         </div>
         <div class="availability-badge hidden mt-1 rounded-md border px-2 py-1 text-xs" role="status" aria-live="polite"></div>
       </div>
@@ -394,7 +474,7 @@
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
         </svg>
-        <span class="text-xs text-rose-600 sm:hidden">Remover</span>
+        <span class="text-xs text-red-700 sm:hidden">Remover</span>
       </label>
       <button type="button"
               class="btn-photo-toggle inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md px-2 text-sky-700 transition-colors hover:bg-sky-50 hover:text-sky-800"
@@ -415,7 +495,7 @@
       <div class="field-group mb-0">
         <label class="field-label text-xs" for="{{ f.proof_photo_upload.id_for_label }}">{{ f.proof_photo_upload.label }}</label>
         {{ f.proof_photo_upload|render_field }}
-        {% if f.proof_photo_upload.help_text %}<p class="field-help text-xs">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
+        {% if f.proof_photo_upload.help_text %}<p id="{{ f.proof_photo_upload.auto_id }}-help" class="field-help text-xs">{{ f.proof_photo_upload.help_text }}</p>{% endif %}
       </div>
     </td>
   </tr>
@@ -429,7 +509,7 @@
        role="dialog" aria-modal="true" aria-labelledby="browse-title">
     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
       <h2 id="browse-title" class="text-lg font-semibold text-app-ink">Buscar peça</h2>
-      <button type="button" class="btn btn-secondary min-h-9 px-3 py-1.5" data-browse-close aria-label="Fechar">Fechar</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-browse-close aria-label="Fechar">Fechar</button>
     </div>
     <div class="space-y-3 border-b border-slate-200 px-5 py-4">
       <input type="text" id="browse-q" class="field-input" placeholder="Buscar por código ou descrição…"
@@ -460,9 +540,9 @@
     <div class="flex items-center justify-between border-t border-slate-200 px-5 py-3">
       <p id="browse-summary" class="text-sm text-app-muted" aria-live="polite"></p>
       <div class="flex items-center gap-2">
-        <button type="button" id="browse-prev" class="btn btn-secondary min-h-9 px-3 py-1.5">Anterior</button>
+        <button type="button" id="browse-prev" class="btn btn-secondary btn-sm">Anterior</button>
         <span id="browse-page" class="text-sm text-app-muted"></span>
-        <button type="button" id="browse-next" class="btn btn-secondary min-h-9 px-3 py-1.5">Próxima</button>
+        <button type="button" id="browse-next" class="btn btn-secondary btn-sm">Próxima</button>
       </div>
     </div>
   </div>
@@ -712,6 +792,142 @@
   markRentalDateInputs(document);
   markRentalDecimalInputs(document);
 
+  // ── Stepper ────────────────────────────────────────────────────────────────
+  // Disclosure over one <form>: panels are hidden, never detached, so the POST
+  // payload, the formset management form and every `name` stay untouched.
+  const rentalForm = document.getElementById('rental-form');
+  const stepper = document.getElementById('rental-stepper');
+  const stepTabs = stepper ? Array.from(stepper.querySelectorAll('[data-step-target]')) : [];
+  const stepPanels = Array.from(document.querySelectorAll('[data-step-panel]'));
+  const stepPrevBtn = document.getElementById('step-prev');
+  const stepNextBtn = document.getElementById('step-next');
+  const addItemFooter = document.getElementById('add-item-footer');
+  const stepAnnouncer = document.getElementById('step-announcer');
+  const prefersReducedMotion = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let currentStep = 1;
+
+  function panelHasErrors(panel) {
+    return !!panel.querySelector('.field-error, [aria-invalid="true"]');
+  }
+
+  function refreshStepStates() {
+    stepTabs.forEach(function (tab) {
+      const index = Number(tab.dataset.stepTarget);
+      const panel = stepPanels[index - 1];
+      if (panel && panelHasErrors(panel)) {
+        tab.dataset.stepState = 'invalid';
+      } else if (index < currentStep) {
+        tab.dataset.stepState = 'done';
+      } else {
+        delete tab.dataset.stepState;
+      }
+    });
+  }
+
+  function firstFocusableIn(panel) {
+    const candidates = panel.querySelectorAll(
+      'input:not([type="hidden"]):not(.hidden), select:not(.hidden), textarea, button'
+    );
+    for (let i = 0; i < candidates.length; i += 1) {
+      const el = candidates[i];
+      if (!el.disabled && el.offsetParent !== null) return el;
+    }
+    return null;
+  }
+
+  function goToStep(step, options) {
+    if (!stepPanels.length) return;
+    const settings = options || {};
+    const target = Math.min(Math.max(1, step), stepPanels.length);
+    currentStep = target;
+
+    stepPanels.forEach(function (panel) {
+      panel.hidden = panel.dataset.stepPanel !== String(target);
+    });
+    stepTabs.forEach(function (tab) {
+      if (Number(tab.dataset.stepTarget) === target) tab.setAttribute('aria-current', 'step');
+      else tab.removeAttribute('aria-current');
+    });
+    refreshStepStates();
+
+    if (stepPrevBtn) stepPrevBtn.hidden = target === 1;
+    if (stepNextBtn) stepNextBtn.hidden = target === stepPanels.length;
+    if (addItemFooter) addItemFooter.hidden = target !== 2;
+
+    // `announce !== false`: na carga da página a etapa 1 já está visível, e
+    // anunciá-la só repetiria no leitor de tela o que o stepper mostra.
+    const activeTab = stepTabs[target - 1];
+    if (stepAnnouncer && activeTab && settings.announce !== false) {
+      const label = activeTab.querySelector('.stepper-label');
+      stepAnnouncer.textContent =
+        `Etapa ${target} de ${stepPanels.length}: ${label ? label.textContent.trim() : ''}`;
+    }
+    if (settings.scroll !== false) {
+      window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    }
+    if (settings.focus) {
+      const field = firstFocusableIn(stepPanels[target - 1]);
+      if (field) field.focus({ preventScroll: true });
+    }
+  }
+
+  stepTabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      goToStep(Number(tab.dataset.stepTarget), { focus: false });
+    });
+  });
+  if (stepPrevBtn) {
+    stepPrevBtn.addEventListener('click', function () {
+      goToStep(currentStep - 1, { focus: true });
+    });
+  }
+  if (stepNextBtn) {
+    stepNextBtn.addEventListener('click', function () {
+      goToStep(currentStep + 1, { focus: true });
+    });
+  }
+
+  if (rentalForm) {
+    // app.js unhides every panel while it sweeps the form, so a required field
+    // two steps ahead is still validated instead of skipped as "invisible".
+    let stepSnapshot = null;
+    rentalForm.addEventListener('app:validate-scope-open', function () {
+      stepSnapshot = stepPanels.map(function (panel) { return panel.hidden; });
+      stepPanels.forEach(function (panel) { panel.hidden = false; });
+    });
+    rentalForm.addEventListener('app:validate-scope-close', function () {
+      if (stepSnapshot) {
+        stepPanels.forEach(function (panel, index) { panel.hidden = stepSnapshot[index]; });
+      }
+      stepSnapshot = null;
+      refreshStepStates();
+    });
+  }
+
+  // Lets app.js bring a rejected field back on screen before focusing it.
+  //
+  // app.js is loaded with `defer`, so it only runs after the document is
+  // parsed — this inline script runs *during* parsing, when `NoivasCiaUI` does
+  // not exist yet. Registering directly here silently did nothing, leaving an
+  // invalid field on a closed step invisible: the form refused to submit and
+  // showed the operator no reason why. Deferred scripts still run before
+  // `DOMContentLoaded`, so that is the safe moment to register.
+  function revealStepOf(element) {
+    const panel = element.closest ? element.closest('[data-step-panel]') : null;
+    if (panel) goToStep(Number(panel.dataset.stepPanel), { focus: false, scroll: false });
+  }
+
+  function registerStepRevealer() {
+    if (!window.NoivasCiaUI || !window.NoivasCiaUI.registerRevealer) return false;
+    window.NoivasCiaUI.registerRevealer(revealStepOf);
+    return true;
+  }
+
+  if (!registerStepRevealer()) {
+    document.addEventListener('DOMContentLoaded', registerStepRevealer);
+  }
+
   // Item formset clone
   const totalForms = document.getElementById('id_{{ items.prefix }}-TOTAL_FORMS');
   const container = document.getElementById('item-forms');
@@ -730,10 +946,16 @@
     }
   };
 
-  // Number visible (non-removed) item rows as "#1", "#2"…
+  // Number visible (non-removed) item rows as "#1", "#2"… and publish the live
+  // count to the step header badge and the sticky summary bar.
   function renumberItems() {
     if (!container) return;
+    const countBadge = document.getElementById('item-count-badge');
+    const barCount = document.getElementById('bar-items-count');
     let n = 0;
+    // Linhas em branco existem só como slot de digitação; contá-las diria
+    // "2 itens" numa locação recém-aberta, que ainda não tem nenhum.
+    let chosen = 0;
     container.querySelectorAll('.item-form').forEach(function (row) {
       const del = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
       const label = row.querySelector('.item-index');
@@ -752,7 +974,12 @@
       row.classList.remove('opacity-40');
       n += 1;
       if (label) label.textContent = `#${n}`;
+      const productSelect = row.querySelector('select[name$="-product"]');
+      if (productSelect && productSelect.value) chosen += 1;
     });
+
+    if (countBadge) countBadge.textContent = `${chosen} ${chosen === 1 ? 'item' : 'itens'}`;
+    if (barCount) barCount.textContent = String(chosen);
   }
 
   // An unsaved row with no product chosen yet — the single "empty" slot.
@@ -806,16 +1033,21 @@
     return row;
   }
 
-  if (tpl && totalForms && container) {
-    function handleAddItem() {
-      // Reuse the existing empty slot instead of stacking blank forms.
-      const empty = findEmptyUnsavedRow();
-      if (empty) {
-        focusEmptyRow(empty);
-        return;
-      }
-      addItemRow(true);
+  function handleAddItem() {
+    if (!tpl || !totalForms || !container) return;
+    // Adding an item only makes sense on the items step; jump there first so
+    // F2 works from any step without the new row landing off screen.
+    goToStep(2, { focus: false, scroll: false });
+    // Reuse the existing empty slot instead of stacking blank forms.
+    const empty = findEmptyUnsavedRow();
+    if (empty) {
+      focusEmptyRow(empty);
+      return;
     }
+    addItemRow(true);
+  }
+
+  if (tpl && totalForms && container) {
     ['add-item', 'add-item-bottom', 'add-item-footer'].forEach(function (id) {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener('click', handleAddItem);
@@ -934,6 +1166,9 @@
     const concluirBtn = row.querySelector('.btn-concluir-item');
     if (concluirBtn) concluirBtn.classList.remove('hidden');
     updateSummaryPreview(row);
+    // A linha deixou de ser um slot em branco: atualiza contador e totais.
+    renumberItems();
+    updateFinancialTotals();
   }
 
   // Alert-box state classes for the availability badge.
@@ -1052,7 +1287,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = active
-        ? 'rounded-full bg-rose-600 px-3 py-1 text-sm font-medium text-white'
+        ? 'rounded-full bg-brand-700 px-3 py-1 text-sm font-medium text-white'
         : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-app-ink hover:border-rose-400';
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       btn.textContent = count != null ? `${label} (${count})` : label;
@@ -1131,7 +1366,7 @@
 
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'btn btn-primary min-h-9 shrink-0 px-3 py-1.5 text-sm';
+        addBtn.className = 'btn btn-primary btn-sm shrink-0';
         addBtn.textContent = 'Adicionar';
         addBtn.addEventListener('click', function () {
           if (activeRow) applyProductToRow(activeRow, p);
@@ -1328,9 +1563,13 @@
     const subtotalEl = document.getElementById('subtotal-display');
     const discountEl = document.getElementById('discount-display');
     const totalFinalEl = document.getElementById('total-final-display');
+    // Mirrored into the sticky bar so the final amount stays visible from any
+    // step, including the ones that do not render the totals panel.
+    const barTotalEl = document.getElementById('bar-total-display');
     if (subtotalEl) subtotalEl.textContent = `R$ ${formatMoneyBR(subtotal)}`;
     if (discountEl) discountEl.textContent = isCashDiscount ? `- R$ ${formatMoneyBR(discount)}` : `R$ 0,00`;
     if (totalFinalEl) totalFinalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
+    if (barTotalEl) barTotalEl.textContent = `R$ ${formatMoneyBR(totalFinal)}`;
   }
 
   if (container) {
@@ -1377,6 +1616,16 @@
     window.addEventListener('resize', syncActionBarSpacer);
   }
 
+  // Etapa inicial: quando o servidor devolve erros, abre direto a etapa que os
+  // contém em vez de deixar o operador procurar em qual delas está o problema.
+  const firstErrorPanel = stepPanels.filter(panelHasErrors)[0];
+  goToStep(firstErrorPanel ? Number(firstErrorPanel.dataset.stepPanel) : 1, {
+    focus: false,
+    scroll: false,
+    // Só anuncia se o servidor devolveu erro e a etapa mudou por causa disso.
+    announce: !!firstErrorPanel,
+  });
+
   // On an invalid response, take the operator directly to the first problem.
   const firstInvalid = document.querySelector(
     '#rental-form [aria-invalid="true"]:not([aria-hidden="true"]), ' +
@@ -1401,10 +1650,52 @@
     // Ctrl+S / Cmd+S: Salvar locação
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      const form = document.getElementById('rental-form');
-      if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+      submitRental();
     }
   });
+
+  // `form.submit()` NÃO dispara o evento de submit: pularia a validação inline
+  // e a normalização de datas/decimais, podendo postar "1.234,56" cru. Clicar
+  // num submitter real percorre o fluxo inteiro em qualquer navegador.
+  function submitRental() {
+    const form = document.getElementById('rental-form');
+    if (!form) return;
+    if (form.requestSubmit) {
+      form.requestSubmit();
+      return;
+    }
+    const submitter = form.querySelector('button[type="submit"]');
+    if (submitter) submitter.click();
+  }
+
+  // Enter no último campo de uma etapa avança para a próxima em vez de tentar
+  // salvar. Sem isto o Enter cai na submissão implícita e o operador leva um
+  // formulário coberto de erros no meio do preenchimento — num fluxo que o
+  // AGENTS.md define como teclado-primeiro.
+  if (rentalForm) {
+    rentalForm.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing) return;
+      if (currentStep >= stepPanels.length) return;   // última etapa: deixa salvar
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (target.tagName === 'BUTTON' || target.tagName === 'A') return;
+      // O autocomplete de cliente/produto usa Enter para escolher a sugestão.
+      if (target.matches('[role="combobox"]')) return;
+      const type = (target.getAttribute('type') || '').toLowerCase();
+      if (['button', 'submit', 'reset', 'file', 'image', 'checkbox', 'radio'].includes(type)) return;
+
+      const controls = Array.from(
+        rentalForm.querySelectorAll('input:not([type="hidden"]), select, textarea')
+      ).filter(function (el) {
+        return !el.disabled && el.tabIndex !== -1 && el.offsetParent !== null;
+      });
+      if (controls[controls.length - 1] !== target) return;   // ainda há campo à frente
+
+      event.preventDefault();
+      goToStep(currentStep + 1, { focus: true, scroll: false });
+    });
+  }
 
   // Enter na coluna de valor foca/cria a próxima linha
   if (container) {
@@ -1427,15 +1718,10 @@
     });
   }
 
-  // Deep-link from "Adicionar item à locação nº" (?add=1): expand the items
-  // section, add a fresh row, and drop the cursor in its product search.
+  // Deep-link from "Adicionar item à locação nº" (?add=1): open the items step,
+  // add a fresh row, and drop the cursor in its product search.
   if (new URLSearchParams(window.location.search).get('add') === '1') {
-    const section = document.getElementById('itens');
-    if (section) {
-      const empty = findEmptyUnsavedRow();
-      if (empty) focusEmptyRow(empty);
-      else addItemRow(true);
-    }
+    handleAddItem();
   }
 })();
 

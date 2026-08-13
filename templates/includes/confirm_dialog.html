@@ -1,0 +1,24 @@
+{% comment %}
+Single confirmation dialog shared by every destructive trigger on the page.
+
+A trigger opts in with `data-confirm="<pergunta>"` plus the optional
+`data-confirm-title`, `data-confirm-action` (button label) and
+`data-confirm-tone="default"` (non-destructive styling). The controller lives in
+`static/js/app.js`; without JavaScript the trigger keeps its native behaviour,
+which always lands on a server-rendered confirmation page.
+{% endcomment %}
+
+<div id="confirm-dialog" class="modal-overlay print:hidden" hidden>
+  <div class="modal-panel" role="alertdialog" aria-modal="true"
+       aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message">
+    {% comment %} <p>, não <h2>: este bloco é incluído em todas as páginas e um heading
+       aqui entraria no sumário de cabeçalhos de cada tela. O nome acessível do
+       diálogo vem do `aria-labelledby`, independente da tag. {% endcomment %}
+    <p id="confirm-dialog-title" class="modal-title" data-confirm-title>Confirmar ação</p>
+    <p id="confirm-dialog-message" class="modal-message" data-confirm-message></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-confirm-dismiss>Cancelar</button>
+      <button type="button" class="btn btn-danger" data-confirm-accept>Confirmar</button>
+    </div>
+  </div>
+</div>

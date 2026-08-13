@@ -75,14 +75,23 @@
             </td>
             <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|brl }}</td>
             <td class="text-right whitespace-nowrap">
-              <div class="flex items-center justify-end gap-2">
-                {# One-click pickup: inherits today's date, no intermediate form. #}
+              <div class="flex items-center justify-end gap-1">
+                {% comment %} One-click pickup: inherits today's date, no intermediate form.
+                   Stays a visible button — it is the counter's main task and
+                   must not be buried one click deep inside the menu. {% endcomment %}
                 <form method="post" action="{% url 'movements:pickup' rental.pk %}" class="inline-flex">
                   {% csrf_token %}
                   <input type="hidden" name="pickup_date" value="{{ today|date:'Y-m-d' }}">
                   <button type="submit" class="btn btn-primary btn-sm">Registrar retirada</button>
                 </form>
-                <a href="{% url 'movements:pickup' rental.pk %}" class="text-xs text-app-muted hover:text-app-ink">Outra data</a>
+                <div class="action-menu" data-action-menu>
+                  {% include 'includes/action_menu_trigger.html' with menu_scope='retirada' menu_key=rental.pk menu_label='Mais ações da locação' menu_context=rental.number %}
+                  <div class="action-menu-panel" role="menu" hidden
+                       aria-labelledby="acoes-retirada-{{ rental.pk }}-trigger">
+                    <a href="{% url 'movements:pickup' rental.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Retirar em outra data</a>
+                    <a href="{% url 'rentals:detail' rental.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Ver locação</a>
+                  </div>
+                </div>
               </div>
             </td>
           </tr>

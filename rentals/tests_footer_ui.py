@@ -79,15 +79,19 @@ class RentalFooterUITests(TestCase):
             'pr-[max(1rem,env(safe-area-inset-right))]',
         }.issubset(action_classes))
 
+        # Duas colunas no celular: a barra passou a carregar também navegação de
+        # etapas, e uma coluna única empilhava seis botões fora da tela.
         button_group_classes = self.classes_for('rental-action-buttons')
         self.assertTrue({
             'grid',
             'w-full',
             'min-w-0',
-            'grid-cols-1',
+            'grid-cols-2',
             'sm:flex',
             'sm:w-auto',
         }.issubset(button_group_classes))
+        # `issubset` alone would accept both column counts at once.
+        self.assertNotIn('grid-cols-1', button_group_classes)
         self.assertTrue({
             'h-60',
             'sm:h-20',
@@ -98,7 +102,7 @@ class RentalFooterUITests(TestCase):
         self.assertEqual(action_bar.get('role'), 'region')
         self.assertEqual(
             action_bar.get('aria-label'),
-            'Ações do formulário',
+            'Resumo e ações do formulário',
         )
         self.assertContains(self.response, '>Cancelar</a>', html=False)
         self.assertContains(self.response, 'form="rental-form"')

@@ -61,7 +61,10 @@
                     <form method="post" action="{% url 'billing:reopen' row.obj.pk %}" class="inline">
                       {% csrf_token %}
                       <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                      <button type="submit" class="inline-flex min-h-11 items-center text-link text-sm" onclick="return confirm('Reabrir o título da locação #{{ rental.number }}, no valor de R$ {{ row.obj.amount|brl }}?');">
+                      <button type="submit" class="inline-flex min-h-11 items-center text-link text-sm"
+                              data-confirm="Reabrir o título da locação #{{ rental.number }}, no valor de R$ {{ row.obj.amount|brl }}? A baixa registrada será revertida."
+                              data-confirm-title="Reverter baixa do título"
+                              data-confirm-action="Reverter baixa">
                         Reverter baixa
                       </button>
                     </form>

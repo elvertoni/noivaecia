@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_tags %}
 
 {% block title %}Dashboard · Noivas &amp; Cia{% endblock %}
 
@@ -27,7 +28,14 @@
     <h2 class="section-title">Módulos</h2>
     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {% for module in modules %}
-        <a href="{{ module.url }}" class="module-tile">{{ module.label }}</a>
+        <a href="{{ module.url }}" class="module-card">
+          <span class="module-card-icon">
+            {% include 'includes/module_icon.html' with module_key=module.key only %}
+          </span>
+          <span class="min-w-0">
+            <span class="module-card-label">{{ module.label }}</span>
+          </span>
+        </a>
       {% empty %}
         <div class="panel-spacious sm:col-span-2 lg:col-span-4">
           <p class="text-sm text-app-muted">Nenhum módulo foi liberado para este usuário. Solicite acesso à administração da loja.</p>
@@ -35,5 +43,92 @@
       {% endfor %}
     </div>
   </div>
+
+  {% comment %} Resumo de hoje: só existe para quem tem o módulo de movimentação, que é
+     quem de fato registra retirada e devolução no balcão. {% endcomment %}
+  {% if request.user|has_module:'movements' %}
+    <div>
+      <h2 class="section-title">Resumo de hoje</h2>
+      <p class="page-description">Retiradas e devoluções previstas para {{ today|date:'d/m/Y' }}.</p>
+
+      <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section class="panel" aria-labelledby="today-pickups-title">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="today-pickups-title" class="text-sm font-semibold text-app-ink">
+              Retiradas de hoje
+              <span class="badge badge-info ml-1">{{ today_pickups_total }}</span>
+            </h3>
+            <a href="{% url 'movements:pickup_list' %}" class="text-link text-sm">Ver todas</a>
+          </div>
+
+          {% if today_pickups %}
+            <ul class="today-list mt-3">
+              {% for rental in today_pickups %}
+                <li>
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="today-row">
+                    <span class="min-w-0 flex-1">
+                      <span class="today-row-title">#{{ rental.number }} · {{ rental.customer.name }}</span>
+                      <span class="today-row-meta">Devolução prevista em {{ rental.return_date|date:'d/m/Y' }}</span>
+                    </span>
+                    <span class="shrink-0 text-sm font-semibold text-app-ink tabular-nums">R$ {{ rental.total_value|brl }}</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+            {% if today_pickups_total > today_summary_limit %}
+              <p class="mt-3 text-xs text-app-muted">
+                Mostrando {{ today_summary_limit }} de {{ today_pickups_total }}.
+                <a href="{% url 'movements:pickup_list' %}" class="text-link">Abrir a lista completa</a>.
+              </p>
+            {% endif %}
+          {% else %}
+            <div class="today-empty mt-3">
+              <p class="today-empty-title">Nenhuma retirada marcada para hoje</p>
+              <p class="today-empty-hint">Locações pendentes de outras datas continuam na lista “A retirar”.</p>
+              <a href="{% url 'movements:pickup_list' %}" class="btn btn-secondary btn-sm mt-2">Ver locações a retirar</a>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="panel" aria-labelledby="today-returns-title">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="today-returns-title" class="text-sm font-semibold text-app-ink">
+              Devoluções de hoje
+              <span class="badge badge-info ml-1">{{ today_returns_total }}</span>
+            </h3>
+            <a href="{% url 'movements:return_list' %}" class="text-link text-sm">Ver todas</a>
+          </div>
+
+          {% if today_returns %}
+            <ul class="today-list mt-3">
+              {% for rental in today_returns %}
+                <li>
+                  <a href="{% url 'rentals:detail' rental.pk %}" class="today-row">
+                    <span class="min-w-0 flex-1">
+                      <span class="today-row-title">#{{ rental.number }} · {{ rental.customer.name }}</span>
+                      <span class="today-row-meta">Retirada em {{ rental.pickup_date|date:'d/m/Y' }}</span>
+                    </span>
+                    <span class="shrink-0 text-sm font-semibold text-app-ink tabular-nums">R$ {{ rental.total_value|brl }}</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+            {% if today_returns_total > today_summary_limit %}
+              <p class="mt-3 text-xs text-app-muted">
+                Mostrando {{ today_summary_limit }} de {{ today_returns_total }}.
+                <a href="{% url 'movements:return_list' %}" class="text-link">Abrir a lista completa</a>.
+              </p>
+            {% endif %}
+          {% else %}
+            <div class="today-empty mt-3">
+              <p class="today-empty-title">Nenhuma devolução marcada para hoje</p>
+              <p class="today-empty-hint">Peças em atraso aparecem na lista “Atrasados”.</p>
+              <a href="{% url 'movements:overdue_list' %}" class="btn btn-secondary btn-sm mt-2">Ver atrasados</a>
+            </div>
+          {% endif %}
+        </section>
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

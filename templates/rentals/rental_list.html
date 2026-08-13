@@ -69,7 +69,24 @@
               {% include 'includes/rental_status_badge.html' %}
             </td>
             <td class="text-right">
-              <a href="{% url 'rentals:detail' rental.pk %}" class="text-link">Ver</a>
+              <div class="flex items-center justify-end gap-1">
+                {% comment %} Abrir a locação é a ação mais repetida da lista: continua
+                como link direto. O menu guarda contrato, recebimentos e edição. {% endcomment %}
+                <a href="{% url 'rentals:detail' rental.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Ver</a>
+                <div class="action-menu" data-action-menu>
+                  {% include 'includes/action_menu_trigger.html' with menu_scope='locacao' menu_key=rental.pk menu_label='Mais ações da locação' menu_context=rental.number %}
+                  <div class="action-menu-panel" role="menu" hidden
+                       aria-labelledby="acoes-locacao-{{ rental.pk }}-trigger">
+                    <a href="{% url 'rentals:contract' rental.pk %}" target="_blank" rel="noopener" class="action-menu-item" role="menuitem" tabindex="-1">Contrato</a>
+                    {% if request.user|has_module:'billing' %}
+                      <a href="{% url 'billing:list' rental.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Recebimentos</a>
+                    {% endif %}
+                    {% if rental.status != 'cancelled' %}
+                      <a href="{% url 'rentals:update' rental.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Editar</a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
             </td>
           </tr>
         {% empty %}

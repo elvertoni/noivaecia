@@ -168,6 +168,11 @@ class RentalForm(forms.ModelForm):
             'rounded border-slate-300 text-rose-600 focus:ring-rose-500'
         )
         self.fields['cash_discount_percent'].required = False
+        # The percentage only survives in the POST as a hidden field, for
+        # legacy rentals that still use it. Its model help_text would make
+        # Django emit `aria-describedby="…_helptext"` pointing at an element
+        # this screen never renders.
+        self.fields['cash_discount_percent'].help_text = ''
         self.fields['cash_discount_percent'].min_value = Decimal('0')
         self.fields['cash_discount_percent'].validators.append(MinValueValidator(Decimal('0')))
         self.fields['cash_discount_percent'].validators.append(MaxValueValidator(Decimal('100')))
@@ -185,6 +190,9 @@ class RentalForm(forms.ModelForm):
             self.fields[field_name].input_formats = DATE_INPUT_FORMATS
         # Hide select — JS search widget handles display; this avoids loading 18k+ options
         self.fields['customer'].widget.attrs['class'] = 'hidden'
+        # Named in the markup, not only by the JS that sets `aria-hidden` at
+        # runtime, so the control is never an anonymous combobox.
+        self.fields['customer'].widget.attrs['aria-label'] = 'Cliente selecionado'
         # ...but never let it render the HTML `required` attribute. The element is
         # display:none, and a browser cannot focus a hidden control to report a
         # constraint violation, so Chrome aborts the submit with no visible
@@ -274,6 +282,10 @@ class RentalItemForm(forms.ModelForm):
         _style(self)
         self.fields['value'].min_value = Decimal('0')
         self.fields['value'].validators.append(MinValueValidator(Decimal('0')))
+        # The items grid has no per-cell <label>: the column header is the only
+        # visible name, and a header is not an accessible name. Without this the
+        # value box reaches a screen reader as an unnamed text field.
+        self.fields['value'].widget.attrs['aria-label'] = 'Valor do item, em reais'
         # A new line must not silently become a R$ 0,00 item.  Leaving this
         # blank lets the picker copy the product's suggested price, while
         # non-JavaScript users still receive the normal required-field error.
@@ -282,6 +294,7 @@ class RentalItemForm(forms.ModelForm):
         # Hidden select populated by the AJAX product search; keep only the selected
         # product in the queryset to avoid rendering thousands of options per row.
         self.fields['product'].widget.attrs['class'] = 'hidden'
+        self.fields['product'].widget.attrs['aria-label'] = 'Produto selecionado'
         self.fields['description'].widget = forms.HiddenInput()
         product_id = None
         if self.is_bound:
@@ -394,8 +407,19 @@ class BaseRentalItemFormSet(forms.BaseInlineFormSet):
     }
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(product__isnull=False).select_related('product__category')
+        # Memoised on purpose. Django caches its own queryset *object* in
+        # `_queryset` and relies on the object identity so the result cache is
+        # reused; `.filter()` clones it, so returning a fresh clone per call
+        # made every internal `len(self.get_queryset())` and
+        # `self.get_queryset()[i]` hit the database again — 25 queries to render
+        # a four-item rental, growing with the item count.
+        if not hasattr(self, '_item_queryset'):
+            self._item_queryset = (
+                super().get_queryset()
+                .filter(product__isnull=False)
+                .select_related('product__category')
+            )
+        return self._item_queryset
 
     @property
     def visible_forms(self):

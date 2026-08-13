@@ -9,6 +9,19 @@
   <link rel="shortcut icon" href="{% static 'assets/favicon.ico' %}">
   <link rel="icon" type="image/png" sizes="32x32" href="{% static 'assets/favicon.png' %}">
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
+  {% comment %}
+  Sem JavaScript, os contêineres de disclosure progressivo (menus de ação de
+  linha e etapas do formulário de locação) ficariam presos fechados e as ações
+  seriam inalcançáveis. Aqui eles voltam a ser listas e seções comuns.
+  {% endcomment %}
+  <noscript>
+    <style>
+      .action-menu-trigger { display: none !important; }
+      .action-menu-panel[hidden] { display: block !important; position: static !important; box-shadow: none; border: 0; }
+      .step-panel[hidden] { display: block !important; }
+      #rental-stepper, #step-prev, #step-next { display: none !important; }
+    </style>
+  </noscript>
   <script id="noivas-cia-app-js" src="{% static 'js/app.js' %}" data-module="NoivasCiaApp" defer></script>
 </head>
 <body class="min-h-screen bg-app-bg font-sans text-app-ink">
@@ -32,5 +45,7 @@
       {% endblock %}
     </div>
   </div>
+
+  {% include 'includes/confirm_dialog.html' %}
 </body>
 </html>

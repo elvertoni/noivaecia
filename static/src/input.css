@@ -49,10 +49,6 @@
 }
 
 @layer components {
-  .page-stack {
-    @apply space-y-5;
-  }
-
   .page-header {
     @apply flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between;
   }
@@ -105,10 +101,6 @@
     @apply font-medium text-brand-700 underline-offset-4 hover:text-brand-800 hover:underline;
   }
 
-  .text-danger {
-    @apply font-medium text-red-700 hover:underline hover:text-red-800;
-  }
-
   .section-title {
     @apply text-lg font-semibold text-app-ink;
   }
@@ -129,8 +121,11 @@
     @apply min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 transition-colors duration-150 placeholder:text-slate-500 focus:border-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-200;
   }
 
+  /* Applies to inputs, selects and textareas alike — every widget carries
+     `field-input`, so a rejected <select> now reads as invalid instead of
+     relying on a native bubble that disappears on the next click. */
   .field-input[aria-invalid='true'] {
-    @apply border-red-600 focus:border-red-700 focus:ring-red-200;
+    @apply border-red-600 ring-1 ring-inset ring-red-200 focus:border-red-700 focus:ring-2 focus:ring-red-200;
   }
 
   .currency-field {
@@ -255,6 +250,7 @@
   .data-table td.text-right,
   .data-table th.text-right {
     @apply whitespace-nowrap tabular-nums;
+    text-align: right;
   }
 
   .data-table tbody tr {
@@ -279,11 +275,177 @@
   }
 
   .module-tile {
-    @apply block rounded-lg border border-app-border bg-app-surface px-4 py-4 text-center text-sm font-semibold text-slate-700 transition-colors duration-150 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800;
+    @apply block rounded-lg border border-app-border bg-app-surface px-4 py-4 text-center text-sm font-semibold text-slate-700 transition duration-150 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 hover:shadow-sm;
   }
 
   .module-tile-label {
     @apply block text-sm font-semibold;
+  }
+
+  /* Dashboard module card: icon + label. Hover lifts the card a hair and warms
+     the border toward the brand, so the whole grid reads as one control set
+     instead of eight independent links. */
+  .module-card {
+    @apply flex min-h-11 items-center gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-4 text-left transition duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2;
+  }
+
+  .module-card-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 transition-colors duration-150;
+  }
+
+  .module-card:hover .module-card-icon {
+    @apply bg-brand-100 text-brand-800;
+  }
+
+  .module-card-label {
+    @apply block text-sm font-semibold text-slate-700;
+  }
+
+  .module-card:hover .module-card-label {
+    @apply text-brand-800;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .module-card:hover {
+      @apply translate-y-0;
+    }
+  }
+
+  /* ── Row action menu (kebab) ─────────────────────────────────────────────
+     The panel is positioned with `position: fixed` from JavaScript because row
+     menus live inside `.table-shell`, whose horizontal scroll would otherwise
+     clip an absolutely positioned dropdown. */
+  .action-menu {
+    @apply relative inline-block text-left;
+  }
+
+  .action-menu-trigger {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 aria-expanded:bg-slate-100 aria-expanded:text-slate-900;
+  }
+
+  .action-menu-panel {
+    @apply z-40 min-w-52 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-app-border bg-app-surface py-1 shadow-lg;
+  }
+
+  .action-menu-item {
+    @apply flex min-h-11 w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-100 hover:text-app-ink focus-visible:bg-slate-100 focus-visible:text-app-ink focus-visible:outline-none;
+  }
+
+  .action-menu-item-danger {
+    @apply text-red-700 hover:bg-red-50 hover:text-red-800 focus-visible:bg-red-50 focus-visible:text-red-800;
+  }
+
+  .action-menu-separator {
+    @apply my-1 border-t border-slate-100;
+  }
+
+    /* ── Modal / confirmation dialog ─────────────────────────────────────────── */
+  .is-dialog-open {
+    @apply overflow-hidden;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center;
+  }
+
+  .modal-panel {
+    @apply w-full max-w-md rounded-2xl border border-app-border bg-app-surface p-6 shadow-2xl;
+  }
+
+  .modal-title {
+    @apply text-lg font-semibold text-app-ink;
+  }
+
+  .modal-message {
+    @apply mt-2 text-sm leading-6 text-app-muted;
+  }
+
+  .modal-actions {
+    @apply mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end;
+  }
+
+  /* ── Stepper ──────────────────────────────────────────────────────────────
+     Progressive disclosure over a single <form>: every step stays in the DOM so
+     the POST payload and the item formset are untouched by the navigation. */
+  .stepper {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-0;
+  }
+
+  .stepper-step {
+    @apply flex min-h-11 flex-1 items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2;
+  }
+
+  .stepper-index {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-600 transition-colors duration-150;
+  }
+
+  .stepper-label {
+    @apply block text-sm font-semibold text-slate-600;
+  }
+
+  .stepper-hint {
+    @apply mt-0.5 block text-xs leading-4 text-app-muted;
+  }
+
+  .stepper-step[aria-current='step'] {
+    @apply border-brand-200 bg-brand-50;
+  }
+
+  .stepper-step[aria-current='step'] .stepper-index {
+    @apply border-brand-700 bg-brand-700 text-white;
+  }
+
+  .stepper-step[aria-current='step'] .stepper-label {
+    @apply text-brand-800;
+  }
+
+  .stepper-step[data-step-state='done'] .stepper-index {
+    @apply border-emerald-600 bg-emerald-50 text-emerald-700;
+  }
+
+  .stepper-step[data-step-state='invalid'] .stepper-index {
+    @apply border-red-600 bg-red-50 text-red-700;
+  }
+
+  .stepper-step[data-step-state='invalid'] .stepper-label {
+    @apply text-red-700;
+  }
+
+  .stepper-connector {
+    @apply hidden self-center border-t border-slate-200 sm:block sm:w-6;
+  }
+
+  .step-panel[hidden] {
+    display: none;
+  }
+
+  /* ── Dashboard "Resumo de hoje" feed ─────────────────────────────────────── */
+  .today-list {
+    @apply divide-y divide-slate-100;
+  }
+
+  .today-row {
+    @apply flex min-h-11 items-center justify-between gap-3 py-2.5 text-sm transition-colors duration-150 hover:bg-slate-50;
+  }
+
+  .today-row-title {
+    @apply block truncate font-medium text-app-ink;
+  }
+
+  .today-row-meta {
+    @apply mt-0.5 block truncate text-xs text-app-muted;
+  }
+
+  .today-empty {
+    @apply flex flex-col items-center gap-1 rounded-lg border border-dashed border-app-border px-4 py-8 text-center;
+  }
+
+  .today-empty-title {
+    @apply text-sm font-medium text-slate-700;
+  }
+
+  .today-empty-hint {
+    @apply text-xs text-app-muted;
   }
 
   .panel-spacious {
@@ -350,10 +512,6 @@
     @apply h-20 w-auto;
   }
 
-  .brand-logo-signup {
-    @apply h-24 w-auto;
-  }
-
   .brand-logo-home {
     @apply h-36 w-auto sm:h-44;
   }
@@ -388,6 +546,15 @@
 
   .nav-action {
     @apply min-h-11 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
+  }
+
+  /* MUST stay the last rule of this layer. Preflight's `[hidden]` sits in the
+     base layer, so any component that declares a `display` (`.btn` is
+     inline-flex, `.modal-overlay` is flex) silently beat it at equal
+     specificity and rendered while carrying the attribute — the confirmation
+     dialog showed up on every page load. */
+  [hidden] {
+    display: none;
   }
 }
 

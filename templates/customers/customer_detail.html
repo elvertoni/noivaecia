@@ -29,7 +29,15 @@
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'customers:update' customer.pk %}" class="btn btn-secondary">Editar</a>
       {% if request.user|has_action:'customers.deactivate' %}
-      <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline" data-customer-status-form data-customer-name="{{ customer.name|escape }}" data-action="{% if customer.is_active %}inativar{% else %}ativar{% endif %}">
+      <form method="post" action="{% url 'customers:deactivate' customer.pk %}" class="inline"
+            data-customer-status-form
+            data-customer-name="{{ customer.name|escape }}"
+            data-action="{% if customer.is_active %}inativar{% else %}ativar{% endif %}"
+            {% if customer.is_active %}
+              data-confirm="Inativar {{ customer.name }}? O cliente deixará de aparecer nas buscas de clientes ativos, mas o histórico será preservado."
+              data-confirm-title="Inativar cliente"
+              data-confirm-action="Inativar"
+            {% endif %}>
         {% csrf_token %}
         <input type="hidden" name="is_active" value="{% if customer.is_active %}0{% else %}1{% endif %}">
         <button type="submit" class="btn btn-secondary">
@@ -284,14 +292,12 @@
 
 </div>
 <script>
+  // A confirmação de inativação vem do diálogo compartilhado (`data-confirm`
+  // no formulário); aqui só resta o estado ocupado do botão, que roda depois
+  // que o diálogo libera o envio.
   document.querySelectorAll('[data-customer-status-form]').forEach(function (form) {
-    form.addEventListener('submit', function (event) {
+    form.addEventListener('submit', function () {
       const action = form.dataset.action;
-      const customerName = form.dataset.customerName;
-      if (action === 'inativar' && !window.confirm('Inativar ' + customerName + '? O cliente deixará de aparecer nas buscas de clientes ativos, mas o histórico será preservado.')) {
-        event.preventDefault();
-        return;
-      }
       const button = form.querySelector('button[type="submit"]');
       if (button) {
         button.disabled = true;

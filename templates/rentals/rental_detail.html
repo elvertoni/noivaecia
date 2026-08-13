@@ -170,4 +170,10 @@
     <p class="text-xs text-app-muted">Contrato {{ rental.contract_version }} impresso em {{ rental.contract_printed_at|date:'d/m/Y H:i' }}</p>
   {% endif %}
 </div>
+
+{% if request.GET.print == '1' %}
+<script>
+  window.location.href = "{% url 'rentals:contract' rental.pk %}?print=1";
+</script>
+{% endif %}
 {% endblock %}

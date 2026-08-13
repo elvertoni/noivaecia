@@ -424,5 +424,12 @@
 {% endfor %}
 </div>
 
+{% if request.GET.print == '1' %}
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    window.print();
+  });
+</script>
+{% endif %}
 </body>
 </html>

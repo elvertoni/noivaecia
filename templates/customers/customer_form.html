@@ -11,7 +11,10 @@
       {% if form.instance.pk %}Editar cliente{% else %}Novo cliente{% endif %}
     </h1>
 
-    <form method="post" class="mt-6 space-y-5" id="customer-form" novalidate>
+    {% comment %} Sem `novalidate` fixo: app.js desliga a validação nativa só quando
+       assume a validação inline, preservando o bloqueio do navegador se o
+       JavaScript não carregar. {% endcomment %}
+    <form method="post" class="mt-6 space-y-5" id="customer-form">
       {% csrf_token %}
 
       {% if form.non_field_errors %}
@@ -169,84 +172,10 @@
     });
   }
 
-  /* ── Máscaras ── */
-  function onlyDigits(v) { return v.replace(/\D/g, ''); }
-
-  function maskCPF(v) {
-    const d = onlyDigits(v).slice(0, 11);
-    if (d.length <= 3) return d;
-    if (d.length <= 6) return d.slice(0,3) + '.' + d.slice(3);
-    if (d.length <= 9) return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6);
-    return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
-  }
-
-  function maskCNPJ(v) {
-    const d = onlyDigits(v).slice(0, 14);
-    if (d.length <= 2) return d;
-    if (d.length <= 5) return d.slice(0,2) + '.' + d.slice(2);
-    if (d.length <= 8) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5);
-    if (d.length <= 12) return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '/' + d.slice(8);
-    return d.slice(0,2) + '.' + d.slice(2,5) + '.' + d.slice(5,8) + '/' + d.slice(8,12) + '-' + d.slice(12);
-  }
-
-  function maskPhone(v) {
-    let d = onlyDigits(v);
-    if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
-    d = d.slice(0, 11);
-    if (d.length <= 2) return d.length ? '(' + d : '';
-    if (d.length <= 6) return '(' + d.slice(0,2) + ') ' + d.slice(2);
-    if (d.length <= 10) return '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);
-    return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);
-  }
-
-  function formatNumericRG(v) {
-    const value = v.trim();
-    if (!/^\d+$/.test(value)) return v;
-    if (value.length === 8) {
-      return value.slice(0,1) + '.' + value.slice(1,4) + '.' + value.slice(4,7) + '-' + value.slice(7);
-    }
-    if (value.length === 9) {
-      return value.slice(0,2) + '.' + value.slice(2,5) + '.' + value.slice(5,8) + '-' + value.slice(8);
-    }
-    return v;
-  }
-
-  const MASKS = { cpf: maskCPF, cnpj: maskCNPJ, phone: maskPhone };
-
-  const rgInput = document.querySelector('[data-rg-format="true"]');
-  if (rgInput) {
-    rgInput.addEventListener('blur', function () {
-      this.value = formatNumericRG(this.value);
-    });
-  }
-
-  /* Após aplicar máscara, calcula a nova posição do cursor contando
-     quantos dígitos havia antes do cursor e localizando esse mesmo
-     dígito na string formatada. Evita cursor pulando para trás. */
-  function cursorAposDigitos(maskedValue, nDigitosAntes) {
-    let conta = 0;
-    for (let i = 0; i < maskedValue.length; i++) {
-      if (/\d/.test(maskedValue[i])) {
-        conta++;
-        if (conta === nDigitosAntes) return i + 1;
-      }
-    }
-    return maskedValue.length;
-  }
-
-  document.querySelectorAll('[data-mask]').forEach(function (el) {
-    const fn = MASKS[el.dataset.mask];
-    if (!fn) return;
-
-    el.addEventListener('input', function () {
-      const digitosAntes = this.value
-        .substring(0, this.selectionStart)
-        .replace(/\D/g, '').length;
-      this.value = fn(this.value);
-      const novaPosicao = cursorAposDigitos(this.value, digitosAntes);
-      try { this.setSelectionRange(novaPosicao, novaPosicao); } catch (_) {}
-    });
-  });
+  /* Máscaras de CPF, CNPJ, telefone e RG vivem em `static/js/app.js` e são
+     aplicadas por `data-mask` / `data-rg-format`, declarados nos widgets do
+     formulário. Toda tela que renderiza esses campos herda o mesmo
+     comportamento, incluindo o bloqueio de caracteres não numéricos. */
 }());
 </script>
 {% endblock %}

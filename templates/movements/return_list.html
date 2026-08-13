@@ -78,7 +78,17 @@
             </td>
             <td class="text-right font-medium whitespace-nowrap">R$ {{ rental.total_value|brl }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary btn-sm">Registrar devolução</a>
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'movements:return' rental.pk %}" class="btn btn-primary btn-sm">Registrar devolução</a>
+                <div class="action-menu" data-action-menu>
+                  {% include 'includes/action_menu_trigger.html' with menu_scope='devolucao' menu_key=rental.pk menu_label='Mais ações da locação' menu_context=rental.number %}
+                  <div class="action-menu-panel" role="menu" hidden
+                       aria-labelledby="acoes-devolucao-{{ rental.pk }}-trigger">
+                    <a href="{% url 'rentals:detail' rental.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Ver locação</a>
+                    <a href="{% url 'rentals:contract' rental.pk %}" target="_blank" rel="noopener" class="action-menu-item" role="menuitem" tabindex="-1">Contrato</a>
+                  </div>
+                </div>
+              </div>
             </td>
           </tr>
         {% empty %}

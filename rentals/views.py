@@ -306,7 +306,7 @@ class RentalCreateView(RentalAccessMixin, CreateView):
         self.object = rental
         messages.success(self.request, f'Locação #{rental.number} criada com sucesso.')
         if self.request.POST.get('save_and_print') == '1':
-            return HttpResponseRedirect(f"{reverse('rentals:detail', args=[rental.pk])}?print=1")
+            return HttpResponseRedirect(f"{reverse('rentals:contract', args=[rental.pk])}?print=1")
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -325,6 +325,16 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         'return_date',
     )
 
+    def get_queryset(self):
+        # The template previews every item with its product code, description,
+        # colour and size; without the prefetch each row costs one extra query.
+        # Only on GET: a successful POST redirects without rendering that
+        # preview, so the prefetch would be paid for and thrown away.
+        queryset = super().get_queryset().select_related('customer')
+        if self.request.method == 'GET':
+            queryset = queryset.prefetch_related('items__product__category')
+        return queryset
+
     def get_object(self, queryset=None):
         rental = super().get_object(queryset)
         if rental.status == Rental.Status.CANCELLED:
@@ -332,19 +342,31 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
             raise Http404
         return rental
 
+    def has_payments(self):
+        """Whether any receivable of this rental was already paid.
+
+        Memoised: `get_form` and `get_context_data` both need it on every
+        request, and it was being asked of the database twice.
+        """
+        if not hasattr(self, '_has_payments'):
+            self._has_payments = self.object.receivables.filter(
+                payments__isnull=False,
+            ).exists()
+        return self._has_payments
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         # Once any payment exists, altering the commercial terms makes the
         # contract, receivables and payment history disagree.  Disabled Django
         # fields also ignore forged POST values, keeping this rule server-side.
-        if self.object.receivables.filter(payments__isnull=False).exists():
+        if self.has_payments():
             for field_name in self.protected_field_names:
                 form.fields[field_name].disabled = True
         return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        has_payments = self.object.receivables.filter(payments__isnull=False).exists()
+        has_payments = self.has_payments()
         context['has_payments'] = has_payments
         context['header_locked'] = has_payments
         if 'items' not in context:
@@ -416,7 +438,7 @@ class RentalUpdateView(RentalAccessMixin, UpdateView):
         else:
             messages.success(self.request, f'Locação #{rental.number} atualizada.')
         if self.request.POST.get('save_and_print') == '1':
-            return HttpResponseRedirect(f"{reverse('rentals:detail', args=[rental.pk])}?print=1")
+            return HttpResponseRedirect(f"{reverse('rentals:contract', args=[rental.pk])}?print=1")
         return HttpResponseRedirect(rental.get_absolute_url())
 
 

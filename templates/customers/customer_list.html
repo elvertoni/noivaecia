@@ -98,8 +98,16 @@
               {% endif %}
             </td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'customers:detail' customer.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Histórico</a>
-              <a href="{% url 'customers:update' customer.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'customers:update' customer.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
+                <div class="action-menu" data-action-menu>
+                  {% include 'includes/action_menu_trigger.html' with menu_scope='cliente' menu_key=customer.pk menu_label='Mais ações do cliente' menu_context=customer.name %}
+                  <div class="action-menu-panel" role="menu" hidden
+                       aria-labelledby="acoes-cliente-{{ customer.pk }}-trigger">
+                    <a href="{% url 'customers:detail' customer.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Histórico</a>
+                  </div>
+                </div>
+              </div>
             </td>
           </tr>
         {% empty %}

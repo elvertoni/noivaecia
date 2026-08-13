@@ -31,7 +31,10 @@
           {% endif %}
         {% endif %}
         {% if evolution_configured and evolution_connection_state == 'open' and request.user|has_action:'notifications.manage' %}
-          <form method="post" action="{% url 'notifications:connection' %}" onsubmit="return confirm('Desconectar este WhatsApp para conectar outro número?');">
+          <form method="post" action="{% url 'notifications:connection' %}"
+                data-confirm="Desconectar este WhatsApp para conectar outro número? Os avisos automáticos param até um novo número ser pareado."
+                data-confirm-title="Desconectar WhatsApp"
+                data-confirm-action="Desconectar">
             {% csrf_token %}
             <input type="hidden" name="action" value="logout">
             <button type="submit" class="btn btn-danger">Desconectar</button>
@@ -138,7 +141,11 @@
         <div class="form-actions">
           {% if request.user|has_action:'notifications.send' %}
             <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-            <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+            <button type="submit" name="send_all" value="1" class="btn btn-secondary"
+                    data-confirm="Enviar este aviso para todos os destinatários listados? Cada envio é registrado e não pode ser desfeito."
+                    data-confirm-title="Enviar para todos"
+                    data-confirm-action="Enviar todos"
+                    data-confirm-tone="default">Enviar todos</button>
           {% endif %}
         </div>
       </form>
@@ -210,7 +217,11 @@
         <div class="form-actions">
           {% if request.user|has_action:'notifications.send' %}
             <button type="submit" class="btn btn-primary">Enviar selecionados</button>
-            <button type="submit" name="send_all" value="1" class="btn btn-secondary" onclick="return confirm('Enviar este aviso para todos os destinatários listados?');">Enviar todos</button>
+            <button type="submit" name="send_all" value="1" class="btn btn-secondary"
+                    data-confirm="Enviar este aviso para todos os destinatários listados? Cada envio é registrado e não pode ser desfeito."
+                    data-confirm-title="Enviar para todos"
+                    data-confirm-action="Enviar todos"
+                    data-confirm-tone="default">Enviar todos</button>
           {% endif %}
         </div>
       </form>

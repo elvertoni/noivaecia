@@ -12,9 +12,24 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import importlib.util as _importlib_util
 import os
+import warnings
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+
+# `pydantic_settings` (pulled in by django-mcp-server -> mcp) warns about its own
+# `lifespan` field on every import. Nothing here can fix it, and two lines of
+# noise on every command bury the warnings that *are* ours, including in CI.
+#
+# It lives in settings, not in manage.py: the parallel test runner spawns
+# workers that call `django.setup()` directly and never go through manage.py, so
+# a filter installed there leaked four warnings per run. Scoped to that module
+# so it can never swallow a warning raised by this project.
+warnings.filterwarnings(
+    'ignore',
+    message=r"Field 'lifespan' has an incomplete definition",
+    module=r'pydantic_settings\.sources\.utils',
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

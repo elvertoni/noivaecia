@@ -107,18 +107,34 @@
             <td>{{ product.size|default:'—' }}</td>
             <td class="text-right whitespace-nowrap">R$ {{ product.value|brl }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'catalog:product_history' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Histórico</a>
-              <a href="{% url 'catalog:product_update' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
-              {% if request.user|has_action:'catalog.delete' %}
-                {% if product.is_active %}
-                  <a href="{% url 'catalog:product_delete' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-danger">Retirar do acervo</a>
-                {% else %}
-                  <form method="post" action="{% url 'catalog:product_reactivate' product.pk %}" class="inline" data-reactivate-form>
-                    {% csrf_token %}
-                    <button type="submit" class="inline-flex min-h-11 items-center px-2 text-link" data-idle-text="Reativar no acervo">Reativar no acervo</button>
-                  </form>
-                {% endif %}
-              {% endif %}
+              <div class="flex items-center justify-end gap-1">
+                {% comment %} Editar é a ação de uso diário: fica como link direto, para
+                não custar um clique a mais no acervo. O menu guarda o resto. {% endcomment %}
+                <a href="{% url 'catalog:product_update' product.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
+                <div class="action-menu" data-action-menu>
+                  {% include 'includes/action_menu_trigger.html' with menu_scope='produto' menu_key=product.pk menu_label='Mais ações do produto' menu_context=product %}
+                  <div class="action-menu-panel" role="menu" hidden
+                       aria-labelledby="acoes-produto-{{ product.pk }}-trigger">
+                    <a href="{% url 'catalog:product_history' product.pk %}" class="action-menu-item" role="menuitem" tabindex="-1">Histórico</a>
+                    {% if request.user|has_action:'catalog.delete' %}
+                      <div class="action-menu-separator" role="separator"></div>
+                      {% if product.is_active %}
+                        {% comment %} Rota para a página de confirmação, que mostra o vínculo
+                        com locações antes de retirar a peça do acervo. {% endcomment %}
+                        <a href="{% url 'catalog:product_delete' product.pk %}" class="action-menu-item action-menu-item-danger" role="menuitem" tabindex="-1">Retirar do acervo</a>
+                      {% else %}
+                        {% comment %} role="none": um <form> como filho direto de role="menu"
+                        é estrutura ARIA inválida; assim ele fica transparente e o
+                        botão continua sendo o menuitem. {% endcomment %}
+                        <form method="post" action="{% url 'catalog:product_reactivate' product.pk %}" role="none" data-reactivate-form>
+                          {% csrf_token %}
+                          <button type="submit" class="action-menu-item" role="menuitem" tabindex="-1" data-idle-text="Reativar no acervo">Reativar no acervo</button>
+                        </form>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
             </td>
           </tr>
         {% empty %}

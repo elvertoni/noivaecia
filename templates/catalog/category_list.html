@@ -59,10 +59,18 @@
             <td>{{ category.name }}</td>
             <td class="text-right">{{ category.product_count }}</td>
             <td class="text-right whitespace-nowrap">
-              <a href="{% url 'catalog:category_update' category.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
-              {% if request.user|has_action:'catalog.delete' %}
-                <a href="{% url 'catalog:category_delete' category.pk %}" class="inline-flex min-h-11 items-center px-2 text-danger">Excluir</a>
-              {% endif %}
+              <div class="flex items-center justify-end gap-1">
+                <a href="{% url 'catalog:category_update' category.pk %}" class="inline-flex min-h-11 items-center px-2 text-link">Editar</a>
+                {% if request.user|has_action:'catalog.delete' %}
+                  <div class="action-menu" data-action-menu>
+                    {% include 'includes/action_menu_trigger.html' with menu_scope='categoria' menu_key=category.pk menu_label='Mais ações da categoria' menu_context=category %}
+                    <div class="action-menu-panel" role="menu" hidden
+                         aria-labelledby="acoes-categoria-{{ category.pk }}-trigger">
+                      <a href="{% url 'catalog:category_delete' category.pk %}" class="action-menu-item action-menu-item-danger" role="menuitem" tabindex="-1">Excluir</a>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
             </td>
           </tr>
         {% empty %}

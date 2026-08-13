@@ -1645,3 +1645,80 @@ class InstallmentCountLimitTests(TestCase):
 
     def test_nine_installments_is_rejected(self):
         self.assertIn('installment_count', self._form(9).errors)
+
+
+class SaveAndPrintFlowTests(TestCase):
+    """Verifies that 'Salvar e Imprimir' redirects directly to contract print view and triggers window.print()."""
+
+    def setUp(self):
+        Company.objects.create(name='Noivas & Cia', last_rental_number=0)
+        self.customer = Customer.objects.create(name='Cliente Teste')
+        self.product = Product.objects.create(code='D-10', description='Vestido de Noiva', value=Decimal('500.00'))
+
+    def _payload(self, **extra):
+        data = {
+            'customer': self.customer.pk,
+            'pickup_date': '10/06/2026',
+            'return_date': '15/06/2026',
+            'notes': 'Teste',
+            'items-TOTAL_FORMS': '1',
+            'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0',
+            'items-MAX_NUM_FORMS': '1000',
+            'items-0-product': self.product.pk,
+            'items-0-description': self.product.description,
+            'items-0-value': '500,00',
+            'down_payment_amount': '100,00',
+            'down_payment_method': 'pix',
+            'down_payment_date': '10/06/2026',
+            'installment_count': '1',
+        }
+        data.update(extra)
+        return data
+
+    def test_create_view_with_save_and_print_redirects_to_contract_print_view(self):
+        response = self.client.post('/locacoes/nova/', self._payload(save_and_print='1'))
+        rental = Rental.objects.latest('pk')
+        self.assertRedirects(response, f'/locacoes/{rental.pk}/contrato/?print=1')
+
+    def test_update_view_with_save_and_print_redirects_to_contract_print_view(self):
+        rental = Rental.objects.create(
+            customer=self.customer,
+            number=101,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+        )
+        RentalItem.objects.create(
+            rental=rental,
+            product=self.product,
+            description=self.product.description,
+            value=Decimal('500.00'),
+        )
+        payload = self._payload(save_and_print='1')
+        payload['items-INITIAL_FORMS'] = '1'
+        payload['items-0-id'] = rental.items.first().pk
+        response = self.client.post(f'/locacoes/{rental.pk}/editar/', payload)
+        self.assertRedirects(response, f'/locacoes/{rental.pk}/contrato/?print=1')
+
+    def test_contract_view_with_print_param_renders_auto_print_script(self):
+        rental = Rental.objects.create(
+            customer=self.customer,
+            number=102,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+        )
+        response = self.client.get(f'/locacoes/{rental.pk}/contrato/?print=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'window.print()')
+
+    def test_detail_view_with_print_param_contains_forward_script(self):
+        rental = Rental.objects.create(
+            customer=self.customer,
+            number=103,
+            pickup_date=date(2026, 6, 10),
+            return_date=date(2026, 6, 15),
+        )
+        response = self.client.get(f'/locacoes/{rental.pk}/?print=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'/locacoes/{rental.pk}/contrato/?print=1')
+

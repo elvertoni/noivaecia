@@ -37,6 +37,11 @@ Shared templates are in `templates/`, with reusable fragments in `templates/incl
 - `python manage.py check` runs Django system checks.
 - `python manage.py runserver` starts the local server.
 - `python manage.py test` runs the full Django suite.
+- `python manage.py test --parallel 4` runs it ~2.5x faster (about 80s instead of 200s).
+  On Windows the parallel runner dies with `TypeError: cannot pickle 'traceback' object`
+  **as soon as any test fails** — spawn-based workers cannot serialise the failure back.
+  That is a limitation of the runner, not of this repository: re-run serially to read the
+  failure, then go back to `--parallel` once the suite is green.
 - `python manage.py test catalog.tests.AvailabilityTests` runs a focused test class.
 - `python manage.py test rentals.tests_footer_ui.RentalItemRowPersistenceTests` covers recent rental-grid behavior.
 - `npm run watch:css` rebuilds Tailwind during development.
@@ -152,7 +157,50 @@ Do not treat a successful raw import as a completed migration. The post-processi
 - Keep “Salvar e Imprimir” posting `save_and_print=1` so the print view opens after a successful save.
 - Keep item proof-photo upload through `proof_photo_upload` and the expandable `tr.item-photo-row`.
 - Avoid nested vertical scrolling inside the item grid; the page owns vertical scrolling.
+- The three-step wizard is progressive disclosure over a **single** `<form>`: panels
+  (`[data-step-panel]`) are hidden, never detached, so the POST payload, the item
+  formset and every `name` stay identical regardless of the open step. Never move a
+  step into its own form or request.
+- The fixed bar is a summary bar: it mirrors the live item count and final total
+  (`#bar-items-count`, `#bar-total-display`) so the amount stays visible from any step.
+- Keep the sr-only default submit button as the first submit control inside the form.
+  The visible buttons live outside it and the first of them posts `save_and_print=1`,
+  so without it `Enter` on the last field would open the print view instead of saving.
 - Rationale/history: `tela-cliente.md` and ai-memory page `decisions/refactor-tela-locacao-grid-antigravity.md`.
+
+## Shared UI Components
+
+The source of truth is `static/src/input.css` plus the working templates listed
+below — never a copy of them. `templates/includes/` once held three snippets
+(`buttons.html`, `input.html`, `table.html`) that documented the design system by
+duplicating it; nothing ever included them, they drifted away from the real
+markup, and copying `input.html` shipped a field with no error state and no
+`aria-describedby`. They were deleted; this section replaces them.
+
+| Component | Use | Reference |
+|---|---|---|
+| Button | `.btn` + one of `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-ghost`, optionally `.btn-sm`. Secondary is the one and only style for Cancel/Close, in forms and modals alike. | `input.css` |
+| Form field | `{% include 'includes/form_field.html' with field=form.x %}` — renders label, widget, help text and error with the ids `aria-describedby` expects | `templates/includes/form_field.html` |
+| Hand-rolled field | Only when the layout demands it. Then the help paragraph MUST carry `id="{{ form.x.auto_id }}-help"`, because `render_field` already points `aria-describedby` at it | `core/templatetags/core_tags.py` |
+| Listing table | `.table-shell` > `.data-table` with a `<caption class="sr-only">` and `scope="col"` on every `<th>`; right-align money columns with `.text-right` | `templates/customers/customer_list.html` |
+| Row actions | Kebab menu (below) | `templates/catalog/product_list.html` |
+
+- Row actions collapse into one kebab menu: a `[data-action-menu]` wrapper with
+  `includes/action_menu_trigger.html` plus an `.action-menu-panel` of `.action-menu-item`s.
+  Behaviour, fixed-position placement (needed to escape `.table-shell`'s `overflow-x`)
+  and roving focus live in `static/js/app.js`. Never re-implement per screen.
+- Destructive actions that execute immediately opt into the shared dialog with
+  `data-confirm` (plus `data-confirm-title` / `-action` / `-tone`). Never call
+  `window.confirm`. Actions that already route to a server confirmation page keep it
+  instead of stacking a second confirmation.
+- Client-side validation is centralized: `app.js` disables native constraint bubbles on
+  POST forms it prepares and renders `.field-error` inline with `aria-invalid`. Do not
+  hardcode `novalidate` in templates — that would also disable validation without JS.
+- Document masks come from widget attrs (`data-mask="cpf|cnpj|phone"`,
+  `data-rg-format="true"`) declared in Python; `app.js` owns masking and the
+  block on non-numeric key presses. Never inline a mask in a template.
+- Interactive targets keep a 44px minimum (`min-h-11`); `[hidden]` is neutralized at the
+  end of the components layer because `@apply`-ed `display` beats preflight otherwise.
 
 ## Commit and Pull Request Guidelines
 

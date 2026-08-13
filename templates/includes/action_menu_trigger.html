@@ -1,0 +1,32 @@
+{% comment %}
+Kebab trigger for a row action menu. Use inside a `[data-action-menu]` wrapper:
+
+  <div class="action-menu" data-action-menu>
+    {% include 'includes/action_menu_trigger.html' with menu_scope='produto' menu_key=product.pk menu_label='Ações do produto' menu_context=product %}
+    <div class="action-menu-panel" role="menu" hidden
+         aria-labelledby="acoes-produto-{{ product.pk }}-trigger">
+      <a href="…" class="action-menu-item" role="menuitem" tabindex="-1">Editar</a>
+    </div>
+  </div>
+
+`menu_context` names the record so a screen reader announces which row the menu
+belongs to instead of reading eight identical "Ações" buttons. `menu_scope` +
+`menu_key` build the trigger id (`acoes-<scope>-<key>-trigger`) so the panel can
+point at it with `aria-labelledby` — a `role="menu"` needs its own accessible
+name. They are two variables and not one concatenated string because Django's
+`add` filter returns an empty string when joining text to an integer pk.
+
+Menu items carry `tabindex="-1"`: the ARIA menu pattern moves between items with
+the arrow keys (handled in `static/js/app.js`), while `Tab` leaves the menu
+instead of walking through every entry. The 44px square keeps the touch target
+above the 40px floor.
+{% endcomment %}
+
+<button type="button"
+        {% if menu_scope and menu_key %}id="acoes-{{ menu_scope }}-{{ menu_key }}-trigger"{% endif %}
+        class="action-menu-trigger" aria-haspopup="menu" aria-expanded="false">
+  <span class="sr-only">{{ menu_label|default:'Ações' }}{% if menu_context %}: {{ menu_context }}{% endif %}</span>
+  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="M10 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+  </svg>
+</button>

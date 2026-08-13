@@ -2,6 +2,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET
 from django.views.generic import TemplateView
 
@@ -50,6 +51,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         indicators = []
         if 'movements' in allowed_module_keys:
+            self.add_today_summary(context)
             rental_counts = Rental.objects.aggregate(
                 to_pick_up=Count(
                     'id',
@@ -84,3 +86,33 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         context['indicators'] = indicators
         return context
+
+    TODAY_SUMMARY_LIMIT = 6
+
+    def add_today_summary(self, context):
+        """Today's pickups and returns for the dashboard "Resumo de hoje" panel.
+
+        Built on ``Rental.pending_pickup_queryset()`` rather than repeating its
+        exclusion here: that classmethod is the single definition of "a garment
+        actually waiting to be picked up", and a copy would let this panel drift
+        away from the movements screens the operator opens next.
+        """
+        today = timezone.localdate()
+        pickups = (
+            Rental.pending_pickup_queryset()
+            .filter(pickup_date=today)
+            .select_related('customer')
+            .order_by('number')
+        )
+        returns = (
+            Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date=today)
+            .select_related('customer')
+            .order_by('number')
+        )
+
+        context['today'] = today
+        context['today_pickups'] = pickups[: self.TODAY_SUMMARY_LIMIT]
+        context['today_returns'] = returns[: self.TODAY_SUMMARY_LIMIT]
+        context['today_pickups_total'] = pickups.count()
+        context['today_returns_total'] = returns.count()
+        context['today_summary_limit'] = self.TODAY_SUMMARY_LIMIT
