@@ -389,6 +389,7 @@ class AvailabilityView(CatalogAccessMixin, TemplateView):
                 is_active=True,
             )
             .select_related('category')
+            .order_by('is_placeholder', 'category__prefix', 'code', 'pk')
         )
         if not products:
             context['error'] = (

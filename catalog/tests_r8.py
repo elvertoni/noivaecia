@@ -201,6 +201,17 @@ class AvailabilityDisambiguationTests(TestCase):
         self.assertEqual(response.context['product'], self.p1)
         self.assertTrue(response.context.get('checked'))
 
+    def test_placeholder_candidate_sorted_last_and_flagged(self):
+        placeholder = Product.objects.create(
+            category=self.cat_a, code=1, description='VES1 · NULO',
+            is_placeholder=True, value=Decimal('0'),
+        )
+        response = self.client.get(self.url, {'prefix': 'VES', 'code': '1'})
+        candidates = response.context['candidates']
+        self.assertEqual(candidates[-1], placeholder)
+        self.assertFalse(candidates[0].is_placeholder)
+        self.assertContains(response, 'Cadastro provisório', count=1)
+
     def test_rented_product_shows_rental(self):
         _make_rental_with_item(self.p3)
         response = self.client.get(self.url, {'prefix': 'VES', 'code': '2', 'date': '2026-06-05'})

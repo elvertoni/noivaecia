@@ -39,7 +39,12 @@
             <input type="hidden" name="date" value="{{ date }}">
             <input type="hidden" name="product_id" value="{{ candidate.pk }}">
             <div>
-              <p class="font-semibold text-app-ink">{{ candidate.category.prefix }}{{ candidate.code }} · {{ candidate.description }}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="font-semibold text-app-ink">{{ candidate.category.prefix }}{{ candidate.code }} · {{ candidate.description }}</p>
+                {% if candidate.is_placeholder %}
+                  <span class="badge badge-warning">Cadastro provisório</span>
+                {% endif %}
+              </div>
               <p class="mt-1 text-sm text-app-muted">
                 Cor: {{ candidate.color|default:'Não informada' }} · Tamanho: {{ candidate.size|default:'Não informado' }}
                 {% if candidate.notes %} · {{ candidate.notes|truncatechars:60 }}{% endif %}
