@@ -47,9 +47,12 @@ class SubmissionTokenForm(forms.Form):
 class GenerateReceivablesForm(forms.Form):
     """Generate N installments for a rental (RF-19)."""
 
+    # No ``initial``: this form rewrites the rental's payment plan, so an
+    # untouched submit must fail validation instead of silently collapsing the
+    # remaining balance into a single installment.
     installments = forms.IntegerField(
-        label='Número de parcelas futuras', min_value=1, max_value=9, initial=1,
-        widget=forms.NumberInput(attrs={'class': INPUT_CLASS}),
+        label='Número de parcelas futuras', min_value=1, max_value=9,
+        widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'placeholder': 'Ex.: 3'}),
     )
     first_due_date = forms.DateField(
         label='Primeiro vencimento futuro', required=False,

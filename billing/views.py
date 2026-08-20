@@ -1,5 +1,6 @@
 import csv
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -13,6 +14,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import FormView, ListView, TemplateView, View
 
 from core.mixins import ModuleAccessMixin, ActionRequiredMixin
+from core.templatetags.core_tags import brl
 from core.ui import parse_br_date
 from company.models import Company
 from customers.models import Customer, _normalize_name
@@ -35,6 +37,7 @@ from .services import (
     interest_breakdown,
     plan_carryover_allocations,
     plan_selected_allocations,
+    preview_future_reprocess,
     reconcile_financial,
     register_receipt,
     reprocess_future_installments,
@@ -69,6 +72,22 @@ DUPLICATE_SUBMISSION_MESSAGE = (
 def _receipt_key(scope, token):
     """Derive a stable receipt idempotency key from one page submission."""
     return uuid.uuid5(RECEIPT_KEY_NAMESPACE, f'{scope}:{token}')
+
+
+def _receipt_outcome_message(receivable):
+    """State what the receipt did to *this* installment.
+
+    Completing a title that was received short is the reported pain point: the
+    operator needs to read the resulting balance without reloading the screen
+    and without wondering whether the amount became a separate loose payment.
+    """
+    receivable.refresh_from_db()
+    if receivable.balance <= 0:
+        return 'Recebimento registrado — parcela quitada, saldo R$ 0,00.'
+    return (
+        f'Recebimento registrado — ainda restam R$ {brl(receivable.balance)} '
+        'nesta mesma parcela.'
+    )
 
 
 def _active_cash_account():
@@ -302,7 +321,7 @@ class ReceivablePayView(BillingAccessMixin, ActionRequiredMixin, FormView):
         except ValueError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, 'Recebimento registrado com sucesso.')
+        messages.success(self.request, _receipt_outcome_message(self.receivable))
 
         next_url = self.request.POST.get('next') or self.request.GET.get('next')
         if next_url and url_has_allowed_host_and_scheme(
@@ -923,6 +942,7 @@ class ReceivableListView(BillingAccessMixin, ListView):
         context['rows'] = rows
         context['rental'] = self.rental
         context['generate_form'] = GenerateReceivablesForm()
+        context['reprocess_preview'] = preview_future_reprocess(self.rental)
         return context
 
 
@@ -956,13 +976,26 @@ class GenerateReceivablesView(
             )
             return redirect('billing:list', rental_pk=self.rental.pk)
 
-        if result['protected']:
-            messages.success(
-                self.request,
-                'Parcelas futuras atualizadas. Os recebimentos já registrados foram preservados.',
+        # The service returns ``deleted_count`` and ``adjusted_partials`` so the
+        # operator is told which titles changed instead of finding out later.
+        parts = [f'{len(result["created"])} parcela(s) futura(s) criada(s)']
+        if result['deleted_count']:
+            parts.append(f'{result["deleted_count"]} título(s) sem recebimento substituído(s)')
+        for adjusted in result['adjusted_partials']:
+            parts.append(
+                'título de {due} ajustado de R$ {before} para R$ {after} '
+                '(o saldo de R$ {released} entrou no novo parcelamento)'.format(
+                    due=date.fromisoformat(adjusted['due_date']).strftime('%d/%m/%Y'),
+                    before=adjusted['previous_amount'],
+                    after=adjusted['amount'],
+                    released=adjusted['released_amount'],
+                )
             )
-        else:
-            messages.success(self.request, 'Parcelas geradas com sucesso.')
+        messages.success(
+            self.request,
+            'Parcelas reorganizadas: ' + '; '.join(parts) + '. '
+            'Os recebimentos já registrados foram preservados.',
+        )
         return redirect('billing:list', rental_pk=self.rental.pk)
 
     def form_invalid(self, form):
@@ -979,6 +1012,7 @@ class GenerateReceivablesView(
                 for receivable in self.rental.receivables.select_related('rental__customer')
             ],
             'generate_form': context['form'],
+            'reprocess_preview': preview_future_reprocess(self.rental),
         })
         return context
 
@@ -1077,5 +1111,5 @@ class PaymentView(BillingAccessMixin, ActionRequiredMixin, FormView):
                 f'{installment_count} parcelas.',
             )
         else:
-            messages.success(self.request, 'Recebimento registrado com sucesso.')
+            messages.success(self.request, _receipt_outcome_message(self.receivable))
         return redirect('billing:list', rental_pk=self.receivable.rental_id)

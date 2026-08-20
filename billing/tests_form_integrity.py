@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -127,6 +128,121 @@ class BillingFormIntegrityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('installments', response.context['generate_form'].errors)
         self.assertContains(response, 'Certifique-se que este valor seja maior ou igual a 1.')
+
+    def test_partial_receipt_message_names_the_remaining_balance(self):
+        """The reported scenario: R$ 250 installment received short at R$ 150."""
+        title = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 6, 20), amount=Decimal('250.00')
+        )
+
+        short = self.client.post(
+            reverse('billing:pay_receivable', args=[title.pk]),
+            {
+                'amount': '150,00',
+                'payment_date': '20/06/2026',
+                'method': 'cash',
+                'submission_token': str(uuid.uuid4()),
+            },
+            follow=True,
+        )
+        self.assertIn(
+            'ainda restam R$ 100,00 nesta mesma parcela',
+            str(list(short.context['messages'])[0]),
+        )
+
+        rest = self.client.post(
+            reverse('billing:pay_receivable', args=[title.pk]),
+            {
+                'amount': '100,00',
+                'payment_date': '20/06/2026',
+                'method': 'cash',
+                'submission_token': str(uuid.uuid4()),
+            },
+            follow=True,
+        )
+        self.assertIn(
+            'parcela quitada', str(list(rest.context['messages'])[0])
+        )
+        title.refresh_from_db()
+        self.assertEqual(title.paid_amount, Decimal('250.00'))
+        self.assertEqual(title.balance, Decimal('0.00'))
+
+    def test_untouched_generate_form_rewrites_nothing(self):
+        """A blind submit must fail validation, not collapse the plan into one."""
+        Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 7, 10), amount=Decimal('40.00')
+        )
+        Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 8, 10), amount=Decimal('60.00')
+        )
+        before = set(self.rental.receivables.values_list('pk', flat=True))
+
+        response = self.client.post(
+            reverse('billing:generate', args=[self.rental.pk]), {}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('installments', response.context['generate_form'].errors)
+        self.assertEqual(
+            set(self.rental.receivables.values_list('pk', flat=True)), before
+        )
+
+    def test_generate_form_has_no_prefilled_installment_count(self):
+        response = self.client.get(reverse('billing:list', args=[self.rental.pk]))
+
+        self.assertIsNone(response.context['generate_form']['installments'].value())
+
+    def test_reprocess_panel_confirms_and_names_its_effect(self):
+        Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 7, 10), amount=Decimal('100.00')
+        )
+
+        response = self.client.get(reverse('billing:list', args=[self.rental.pk]))
+
+        self.assertContains(response, 'data-confirm=')
+        self.assertContains(response, 'Reorganizar parcelas')
+        self.assertNotContains(response, 'Atualizar parcelas')
+
+    def test_reprocess_panel_hidden_when_nothing_to_reschedule(self):
+        """Half the production clicks landed on this branch as a failed POST."""
+        paid = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 7, 10), amount=Decimal('100.00')
+        )
+        Payment.objects.create(
+            receivable=paid, payment_date=date(2026, 7, 10), amount=Decimal('100.00')
+        )
+        paid.recalculate_from_payments()
+
+        response = self.client.get(reverse('billing:list', args=[self.rental.pk]))
+
+        self.assertFalse(response.context['reprocess_preview']['can_reprocess'])
+        self.assertContains(response, 'Não há saldo sem histórico financeiro')
+        self.assertNotContains(response, 'data-confirm=')
+
+    def test_reprocess_success_message_discloses_what_changed(self):
+        partial = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 4, 10), amount=Decimal('70.00')
+        )
+        Payment.objects.create(
+            receivable=partial, payment_date=date(2026, 4, 10), amount=Decimal('20.00')
+        )
+        partial.recalculate_from_payments()
+        Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 5, 10), amount=Decimal('30.00')
+        )
+
+        response = self.client.post(
+            reverse('billing:generate', args=[self.rental.pk]),
+            {'installments': '2', 'first_due_date': '01/05/2026'},
+            follow=True,
+        )
+
+        message = str(list(response.context['messages'])[0])
+        self.assertIn('2 parcela(s) futura(s) criada(s)', message)
+        # ``self.receivable`` from setUp plus the one created above.
+        self.assertIn('2 título(s) sem recebimento substituído(s)', message)
+        self.assertIn('ajustado de R$ 70.00 para R$ 20.00', message)
+        self.assertIn('saldo de R$ 50.00 entrou no novo parcelamento', message)
 
     def test_installment_generation_requires_receive_action(self):
         ActionPermission.objects.filter(

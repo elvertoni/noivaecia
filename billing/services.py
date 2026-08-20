@@ -708,6 +708,84 @@ def generate_for_rental(rental, installments=1, first_due_date=None, total_amoun
     return created
 
 
+def _classify_for_reprocess(existing):
+    """Split a rental's receivables into protected / partial / replaceable.
+
+    Single definition shared by ``reprocess_future_installments`` and
+    ``preview_future_reprocess`` so the screen never promises an outcome the
+    rewrite would not produce.
+    """
+    protected = [
+        receivable for receivable in existing
+        if (
+            receivable.paid_amount != 0
+            or receivable.written_off_at is not None
+            or len(receivable.payments.all()) > 0
+        )
+    ]
+    partial = [
+        receivable for receivable in protected
+        if (
+            receivable.written_off_at is None
+            and receivable.paid_amount > 0
+            and receivable.balance > 0
+        )
+    ]
+    replaceable_ids = [
+        receivable.pk for receivable in existing if receivable not in protected
+    ]
+    return protected, partial, replaceable_ids
+
+
+def preview_future_reprocess(rental):
+    """Describe what reprocessing would do, without writing anything.
+
+    Lets the screen disable the action when there is nothing to reschedule and
+    state the real consequences before the operator confirms.  Read-only: no
+    locks, no writes.
+    """
+    existing = list(
+        Receivable.objects.filter(rental=rental)
+        .prefetch_related('payments')
+        .order_by('due_date', 'pk')
+    )
+    protected, partial, replaceable_ids = _classify_for_reprocess(existing)
+    # Mirror the rewrite's order: a partially paid title is first closed at the
+    # amount already received, and only then does the leftover feed the new
+    # schedule. Summing the *current* amounts here would understate what gets
+    # rescheduled and could even hide the panel on a rental that reprocesses
+    # fine.
+    partial_ids = {receivable.pk for receivable in partial}
+    protected_total = sum(
+        (
+            receivable.paid_amount if receivable.pk in partial_ids
+            else receivable.amount
+            for receivable in protected
+        ),
+        Decimal('0'),
+    )
+    remaining = rental.final_value - protected_total
+    return {
+        'deletable_count': len(replaceable_ids),
+        'partial_count': len(partial),
+        'partial_released': sum(
+            (receivable.balance for receivable in partial), Decimal('0')
+        ),
+        'remaining': remaining,
+        # Mirrors the two ``PaymentPlanError`` guards in the rewrite itself.
+        'can_reprocess': remaining > 0,
+        'blocked_reason': (
+            'Os títulos com histórico financeiro superam o valor da locação.'
+            if remaining < 0
+            else (
+                'Não há saldo sem histórico financeiro para reorganizar.'
+                if remaining == 0
+                else ''
+            )
+        ),
+    }
+
+
 def reprocess_future_installments(
     rental,
     installments=1,
@@ -756,29 +834,11 @@ def reprocess_future_installments(
             }
             for receivable in existing
         ]
-        protected = [
-            receivable for receivable in existing
-            if (
-                receivable.paid_amount != 0
-                or receivable.written_off_at is not None
-                or len(receivable.payments.all()) > 0
-            )
-        ]
+        protected, partial, replaceable_ids = _classify_for_reprocess(existing)
         enforced_policy = (
             locked_rental.financial_policy_version
             == locked_rental.FinancialPolicy.ENFORCED_V1
         )
-        partial = [
-            receivable for receivable in protected
-            if (
-                receivable.written_off_at is None
-                and receivable.paid_amount > 0
-                and receivable.balance > 0
-            )
-        ]
-        replaceable_ids = [
-            receivable.pk for receivable in existing if receivable not in protected
-        ]
         # A partially paid title is the normal outcome of the informal payment
         # flow: ``register_payment_with_carryover`` settles whatever the customer
         # handed over and leaves the last title it reaches with a residual
@@ -903,6 +963,7 @@ def reprocess_future_installments(
         # title was closed at the amount already received.
         'adjusted_partials': adjusted_partials,
         'released_amount': released_total,
+        'deleted_count': len(replaceable_ids),
     }
 
 
