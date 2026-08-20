@@ -5,6 +5,7 @@ from django import forms
 from django.utils import timezone
 
 from core.ui import BRMoneyField, DATE_INPUT_ATTRS, DATE_INPUT_FORMATS, INPUT_CLASS
+from rentals.forms import MAX_FUTURE_INSTALLMENTS
 
 from .models import CashAccount, FinancialMovement, Payment
 
@@ -51,7 +52,9 @@ class GenerateReceivablesForm(forms.Form):
     # untouched submit must fail validation instead of silently collapsing the
     # remaining balance into a single installment.
     installments = forms.IntegerField(
-        label='Número de parcelas futuras', min_value=1, max_value=9,
+        label='Número de parcelas futuras',
+        min_value=1,
+        max_value=MAX_FUTURE_INSTALLMENTS,
         widget=forms.NumberInput(attrs={'class': INPUT_CLASS, 'placeholder': 'Ex.: 3'}),
     )
     first_due_date = forms.DateField(

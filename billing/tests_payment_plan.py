@@ -19,6 +19,7 @@ from billing.models import (
 from billing.services import (
     PaymentPlanError,
     create_rental_payment_plan,
+    generate_for_rental,
     register_payment,
     reprocess_future_installments,
 )
@@ -309,6 +310,31 @@ class RentalPaymentPlanServiceTests(TestCase):
             ).exists()
         )
 
+    def test_reprocessing_service_rejects_more_than_contract_limit(self):
+        original = Receivable.objects.create(
+            rental=self.rental,
+            due_date=self.rental.pickup_date,
+            amount=self.rental.total_value,
+        )
+
+        with self.assertRaisesMessage(
+            PaymentPlanError,
+            'Informe no máximo 8 parcelas futuras.',
+        ):
+            reprocess_future_installments(self.rental, installments=9)
+
+        self.assertTrue(Receivable.objects.filter(pk=original.pk).exists())
+        self.assertEqual(self.rental.receivables.count(), 1)
+
+    def test_generation_service_rejects_more_than_contract_limit(self):
+        with self.assertRaisesMessage(
+            PaymentPlanError,
+            'Informe no máximo 8 parcelas futuras.',
+        ):
+            generate_for_rental(self.rental, installments=9)
+
+        self.assertFalse(self.rental.receivables.exists())
+
     def test_reprocessing_splits_legacy_partial_title_into_paid_and_future_parts(self):
         self.rental.financial_policy_version = Rental.FinancialPolicy.LEGACY_ACCESS
         self.rental.save(update_fields=['financial_policy_version', 'updated_at'])
@@ -492,13 +518,16 @@ class RentalContractPaymentPlanTests(TestCase):
             return_date=date(2027, 4, 25),
             total_value=Decimal('1000.00'),
         )
-        create_rental_payment_plan(
-            rental,
-            installments=9,
-            down_payment_amount=Decimal('100.00'),
-            down_payment_date=date(2026, 7, 20),
-            down_payment_method=Payment.Method.PIX,
-        )
+        # Legacy imports may contain more rows than the current creation cap.
+        # Keep print compatibility without allowing new over-limit plans.
+        for index in range(10):
+            Receivable.objects.create(
+                rental=rental,
+                due_date=date(2026, 7, 20) + timedelta(days=index * 30),
+                amount=Decimal('100.00'),
+                paid_amount=Decimal('100.00') if index == 0 else Decimal('0'),
+                last_payment_date=date(2026, 7, 20) if index == 0 else None,
+            )
         receivables = list(rental.receivables.order_by('due_date', 'pk'))
         self.assertEqual(len(receivables), 10)
 

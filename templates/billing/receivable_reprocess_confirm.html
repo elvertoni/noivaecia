@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% load core_tags %}
+
+{% block title %}Confirmar parcelas futuras · Locação #{{ rental.number }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Confirmar reorganização das parcelas</h1>
+      <p class="page-description">Locação #{{ rental.number }} · {{ rental.customer.name }}</p>
+    </div>
+  </div>
+
+  <div class="alert alert-warning" role="alert">
+    <p>
+      <strong>Confira antes de continuar.</strong> A confirmação abaixo apaga os títulos
+      indicados e cria exatamente as novas parcelas desta prévia. Os recebimentos já
+      registrados serão preservados.
+    </p>
+  </div>
+
+  <section aria-labelledby="new-installments-title" class="space-y-3">
+    <div>
+      <h2 id="new-installments-title" class="section-title">Novas parcelas</h2>
+      <p class="mt-1 text-sm text-app-muted">
+        {{ plan.installments }} parcela(s), total de R$ {{ plan.remaining|brl }}.
+      </p>
+    </div>
+    <div class="table-shell">
+      <table class="data-table">
+        <caption class="sr-only">Parcelas que serão criadas para a locação #{{ rental.number }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Parcela</th>
+            <th scope="col">Vencimento</th>
+            <th scope="col" class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for installment in plan.new_schedule %}
+            <tr>
+              <td>{{ installment.number }} de {{ plan.installments }}</td>
+              <td>{{ installment.due_date|date:'d/m/Y' }}</td>
+              <td class="text-right">R$ {{ installment.amount|brl }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="replaced-titles-title" class="space-y-3">
+    <div>
+      <h2 id="replaced-titles-title" class="section-title">Títulos que serão substituídos</h2>
+      <p class="mt-1 text-sm text-app-muted">
+        Somente títulos sem recebimento e sem histórico financeiro são apagados.
+      </p>
+    </div>
+    {% if plan.replaced_receivables %}
+      <div class="table-shell">
+        <table class="data-table">
+          <caption class="sr-only">Títulos que serão apagados e substituídos</caption>
+          <thead>
+            <tr>
+              <th scope="col">Título</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col" class="text-right">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for receivable in plan.replaced_receivables %}
+              <tr>
+                <td>#{{ receivable.id }}</td>
+                <td>{{ receivable.due_date|date:'d/m/Y' }}</td>
+                <td class="text-right">R$ {{ receivable.amount|brl }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-app-muted">Nenhum título sem recebimento será apagado.</p>
+    {% endif %}
+  </section>
+
+  {% if plan.partial_adjustments %}
+    <section aria-labelledby="partial-adjustments-title" class="space-y-3">
+      <div>
+        <h2 id="partial-adjustments-title" class="section-title">Ajustes em títulos parcialmente recebidos</h2>
+        <p class="mt-1 text-sm text-app-muted">
+          Cada título abaixo será fechado no valor já recebido. O saldo liberado já está
+          incluído nas novas parcelas.
+        </p>
+      </div>
+      <div class="table-shell">
+        <table class="data-table">
+          <caption class="sr-only">Ajustes nos títulos parcialmente recebidos</caption>
+          <thead>
+            <tr>
+              <th scope="col">Título</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col" class="text-right">Valor atual</th>
+              <th scope="col" class="text-right">Valor após ajuste</th>
+              <th scope="col" class="text-right">Saldo redistribuído</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for adjustment in plan.partial_adjustments %}
+              <tr>
+                <td>#{{ adjustment.id }}</td>
+                <td>{{ adjustment.due_date|date:'d/m/Y' }}</td>
+                <td class="text-right">R$ {{ adjustment.previous_amount|brl }}</td>
+                <td class="text-right">R$ {{ adjustment.amount|brl }}</td>
+                <td class="text-right">R$ {{ adjustment.released_amount|brl }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <form method="post" action="{% url 'billing:generate' rental.pk %}" class="form-actions">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="yes">
+    <input type="hidden" name="installments" value="{{ submitted_installments }}">
+    <input type="hidden" name="first_due_date" value="{% if submitted_first_due_date %}{{ submitted_first_due_date|date:'Y-m-d' }}{% endif %}">
+    <input type="hidden" name="plan_token" value="{{ plan_token }}">
+    <button type="submit" class="btn btn-primary">Confirmar reorganização das parcelas</button>
+    <a href="{% url 'billing:list' rental.pk %}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

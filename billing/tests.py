@@ -324,6 +324,13 @@ class GenerateReceivablesViewTests(TestCase):
             'installments': 3,
             'first_due_date': '2026-07-01'
         })
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(url, {
+            'confirm': 'yes',
+            'installments': 3,
+            'first_due_date': '2026-07-01',
+            'plan_token': response.context['plan_token'],
+        })
         self.assertEqual(response.status_code, 302)  # Redirect to billing:list
 
         # Validate that the old unpaid receivable was deleted and 3 new ones were created
@@ -352,6 +359,13 @@ class GenerateReceivablesViewTests(TestCase):
         response = self.client.post(url, {
             'installments': 3,
             'first_due_date': '2026-07-01'
+        })
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(url, {
+            'confirm': 'yes',
+            'installments': 3,
+            'first_due_date': '2026-07-01',
+            'plan_token': response.context['plan_token'],
         })
         self.assertEqual(response.status_code, 302)
 

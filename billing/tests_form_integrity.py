@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import ActionPermission, ModulePermission
-from billing.forms import ManualMovementForm, PaymentForm
+from billing.forms import GenerateReceivablesForm, ManualMovementForm, PaymentForm
 from billing.models import (
     CashAccount,
     FinancialMovement,
@@ -192,6 +192,19 @@ class BillingFormIntegrityTests(TestCase):
 
         self.assertIsNone(response.context['generate_form']['installments'].value())
 
+    def test_generate_form_uses_contract_future_installment_limit(self):
+        self.assertEqual(
+            GenerateReceivablesForm.base_fields['installments'].max_value,
+            8,
+        )
+        form = GenerateReceivablesForm(data={
+            'installments': '9',
+            'first_due_date': '20/06/2026',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('installments', form.errors)
+
     def test_reprocess_panel_confirms_and_names_its_effect(self):
         Receivable.objects.create(
             rental=self.rental, due_date=date(2026, 7, 10), amount=Decimal('100.00')
@@ -199,9 +212,94 @@ class BillingFormIntegrityTests(TestCase):
 
         response = self.client.get(reverse('billing:list', args=[self.rental.pk]))
 
-        self.assertContains(response, 'data-confirm=')
-        self.assertContains(response, 'Reorganizar parcelas')
+        self.assertNotContains(response, 'data-confirm=')
+        self.assertContains(response, 'Reorganizar parcelas futuras')
         self.assertNotContains(response, 'Atualizar parcelas')
+
+    def test_first_valid_post_only_renders_exact_read_only_preview(self):
+        old = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 7, 10), amount=Decimal('100.00')
+        )
+        before = set(self.rental.receivables.values_list('pk', flat=True))
+
+        response = self.client.post(
+            reverse('billing:generate', args=[self.rental.pk]),
+            {'installments': '3', 'first_due_date': ''},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'billing/receivable_reprocess_confirm.html')
+        self.assertEqual(
+            set(self.rental.receivables.values_list('pk', flat=True)), before
+        )
+        self.assertTrue(Receivable.objects.filter(pk=old.pk).exists())
+        self.assertContains(response, '10/04/2026')
+        self.assertContains(response, '10/05/2026')
+        self.assertContains(response, '10/06/2026')
+        self.assertContains(response, 'R$ 33,34')
+        self.assertContains(response, 'R$ 33,33', count=2)
+        self.assertContains(response, f'#{old.pk}')
+        self.assertContains(response, 'Confirmar reorganização das parcelas')
+        self.assertContains(response, 'class="btn btn-secondary">Cancelar</a>')
+
+    def test_confirmation_without_server_preview_cannot_reprocess(self):
+        before = set(self.rental.receivables.values_list('pk', flat=True))
+
+        response = self.client.post(
+            reverse('billing:generate', args=[self.rental.pk]),
+            {
+                'confirm': 'yes',
+                'installments': '1',
+                'first_due_date': '20/06/2026',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            set(self.rental.receivables.values_list('pk', flat=True)), before
+        )
+
+    def test_payment_after_preview_makes_confirmation_stale(self):
+        url = reverse('billing:generate', args=[self.rental.pk])
+        preview = self.client.post(
+            url,
+            {'installments': '1', 'first_due_date': ''},
+        )
+        payment = Payment.objects.create(
+            receivable=self.receivable,
+            payment_date=date(2026, 5, 20),
+            amount=Decimal('20.00'),
+        )
+        self.receivable.recalculate_from_payments()
+        before_confirmation = set(
+            self.rental.receivables.values_list('pk', flat=True)
+        )
+
+        response = self.client.post(
+            url,
+            {
+                'confirm': 'yes',
+                'installments': '1',
+                'first_due_date': '',
+                'plan_token': preview.context['plan_token'],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(
+            set(self.rental.receivables.values_list('pk', flat=True)),
+            before_confirmation,
+        )
+        payment.refresh_from_db()
+        self.receivable.refresh_from_db()
+        self.assertEqual(payment.receivable_id, self.receivable.pk)
+        self.assertEqual(self.receivable.amount, Decimal('100.00'))
+        self.assertEqual(self.receivable.paid_amount, Decimal('20.00'))
+        self.assertEqual(self.receivable.balance, Decimal('80.00'))
+        self.assertIn(
+            'mudaram depois da prévia',
+            str(list(response.context['messages'])[0]),
+        )
 
     def test_reprocess_panel_hidden_when_nothing_to_reschedule(self):
         """Half the production clicks landed on this branch as a failed POST."""
@@ -231,9 +329,30 @@ class BillingFormIntegrityTests(TestCase):
             rental=self.rental, due_date=date(2026, 5, 10), amount=Decimal('30.00')
         )
 
-        response = self.client.post(
-            reverse('billing:generate', args=[self.rental.pk]),
+        url = reverse('billing:generate', args=[self.rental.pk])
+        preview = self.client.post(
+            url,
             {'installments': '2', 'first_due_date': '01/05/2026'},
+        )
+        self.assertTemplateUsed(
+            preview, 'billing/receivable_reprocess_confirm.html'
+        )
+        self.assertContains(preview, f'#{partial.pk}')
+        self.assertContains(preview, 'R$ 70,00')
+        self.assertContains(preview, 'R$ 20,00')
+        self.assertContains(preview, 'R$ 50,00')
+        self.assertEqual(
+            [item['amount'] for item in preview.context['plan']['new_schedule']],
+            [Decimal('40.00'), Decimal('40.00')],
+        )
+        response = self.client.post(
+            url,
+            {
+                'confirm': 'yes',
+                'installments': '2',
+                'first_due_date': '01/05/2026',
+                'plan_token': preview.context['plan_token'],
+            },
             follow=True,
         )
 

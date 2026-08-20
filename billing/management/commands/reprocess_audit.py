@@ -59,6 +59,17 @@ def _schedule_signature(entries):
     )
 
 
+def _totals_by_due_date(entries):
+    """Collapse title fragmentation before comparing due-date commitments."""
+    totals = {}
+    for entry in entries:
+        due_date = entry['due_date']
+        totals[due_date] = totals.get(due_date, Decimal('0')) + Decimal(
+            entry['amount']
+        )
+    return totals
+
+
 def _resulting_schedule(metadata):
     """Rebuild the plan as it stood right after *this* event.
 
@@ -110,8 +121,10 @@ def _classify(log):
     metadata = log.metadata or {}
     adjusted = metadata.get('adjusted_partials') or []
 
-    before = _schedule_signature(metadata.get('previous_schedule') or [])
-    after = _schedule_signature(_resulting_schedule(metadata))
+    before_entries = metadata.get('previous_schedule') or []
+    after_entries = _resulting_schedule(metadata)
+    before = _schedule_signature(before_entries)
+    after = _schedule_signature(after_entries)
 
     # A commitment the customer already had must still be there afterwards.
     # Extra rows on top of that are balance that simply had not been scheduled
@@ -124,11 +137,28 @@ def _classify(log):
         else:
             lost.append(commitment)
 
-    if adjusted and lost:
+    # Row-level differences do not prove a due-date change. A R$ 200 title
+    # rewritten as R$ 50 + R$ 150 on the same day preserves the customer's
+    # due-date commitment even though the original (date, amount) tuple is gone.
+    before_by_due = _totals_by_due_date(before_entries)
+    after_by_due = _totals_by_due_date(after_entries)
+    due_shortfalls = [
+        (due_date, amount, after_by_due.get(due_date, Decimal('0')))
+        for due_date, amount in sorted(before_by_due.items())
+        if after_by_due.get(due_date, Decimal('0')) < amount
+    ]
+    due_excesses = [
+        (due_date, before_by_due.get(due_date, Decimal('0')), amount)
+        for due_date, amount in sorted(after_by_due.items())
+        if amount > before_by_due.get(due_date, Decimal('0'))
+    ]
+    due_date_moved = bool(due_shortfalls and due_excesses)
+
+    if adjusted and due_date_moved:
         classification = BOTH
-    elif adjusted:
+    elif adjusted or (lost and not due_date_moved):
         classification = PARTIAL_REWRITTEN
-    elif lost:
+    elif due_date_moved:
         classification = DUE_DATE_MOVED
     elif surviving:
         classification = ADDED
@@ -144,10 +174,21 @@ def _classify(log):
                 after=item['amount'],
             )
         )
-    if lost:
+    if due_date_moved:
         details.append(
-            'deixou de existir {lost} · passou a ser {after}'.format(
-                lost=[f'{due}=R$ {amount}' for due, amount in lost],
+            'reduziu compromisso em {changed} · passou a ser {after}'.format(
+                changed=[
+                    f'{due}: R$ {before_amount} -> R$ {after_amount}'
+                    for due, before_amount, after_amount in due_shortfalls
+                ],
+                after=[f'{due}=R$ {amount}' for due, amount in after],
+            )
+        )
+    elif lost:
+        details.append(
+            'reescreveu valores sem reduzir o total por vencimento: '
+            'antes {before} · depois {after}'.format(
+                before=[f'{due}=R$ {amount}' for due, amount in before],
                 after=[f'{due}=R$ {amount}' for due, amount in after],
             )
         )
@@ -235,9 +276,14 @@ class Command(BaseCommand):
         # ``FinancialMovement.receivable`` is SET_NULL, so a deleted title
         # detaches its cash movement instead of destroying it. The money
         # survives either way; this reports the lost traceability.
-        orphans = FinancialMovement.objects.filter(
-            rental_id__in=affected_rentals, receivable__isnull=True
-        ).count()
+        orphans = (
+            FinancialMovement.objects.filter(
+                rental_id__in=affected_rentals,
+                receivable__isnull=True,
+                receipt__isnull=True,
+            )
+            .count()
+        )
         if orphans:
             self.stdout.write(self.style.WARNING(
                 f'  {orphans} movimento(s) de caixa nas locações afetadas estão '

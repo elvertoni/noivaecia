@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from company.models import Company
 from core.models import AuditLog
+from rentals.forms import MAX_FUTURE_INSTALLMENTS
 
 from .models import (
     CashAccount,
@@ -657,20 +658,37 @@ class PaymentPlanError(ValueError):
         self.field = field
 
 
-def generate_for_rental(rental, installments=1, first_due_date=None, total_amount=None, last_due_date=None):
-    """Create receivables splitting the rental total into N installments (RF-19/8.1.3).
+def _validate_future_installments(installments):
+    try:
+        installments = int(installments or 0)
+    except (TypeError, ValueError) as exc:
+        raise PaymentPlanError(
+            'Informe um número válido de parcelas futuras.',
+            field='installments',
+        ) from exc
+    if installments < 1:
+        raise PaymentPlanError(
+            'Informe ao menos uma parcela futura.',
+            field='installments',
+        )
+    if installments > MAX_FUTURE_INSTALLMENTS:
+        raise PaymentPlanError(
+            f'Informe no máximo {MAX_FUTURE_INSTALLMENTS} parcelas futuras.',
+            field='installments',
+        )
+    return installments
 
-    The total is divided evenly; any rounding remainder lands on the first
-    installment so the sum matches the rental total exactly. Installments fall
-    due monthly starting at ``first_due_date`` (defaults to the return date) or
-    ending at ``last_due_date`` when specified.
-    """
-    installments = max(1, int(installments))
-    total = (
-        Decimal(str(total_amount))
-        if total_amount is not None
-        else Decimal(str(rental.final_value or 0))
-    )
+
+def _future_installment_specs(
+    rental,
+    *,
+    installments,
+    total_amount,
+    first_due_date=None,
+    last_due_date=None,
+):
+    """Return the exact dates and amounts later persisted by the generator."""
+    total = Decimal(str(total_amount))
     if total < 0:
         raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
 
@@ -679,16 +697,25 @@ def generate_for_rental(rental, installments=1, first_due_date=None, total_amoun
         == rental.FinancialPolicy.ENFORCED_V1
     )
     if last_due_date:
-        due_dates = [_add_months(last_due_date, -(installments - 1 - i)) for i in range(installments)]
+        due_dates = [
+            _add_months(last_due_date, -(installments - 1 - index))
+            for index in range(installments)
+        ]
     elif first_due_date:
-        due_dates = [_add_months(first_due_date, i) for i in range(installments)]
+        due_dates = [
+            _add_months(first_due_date, index)
+            for index in range(installments)
+        ]
     elif enforced_policy:
         due_dates = [
-            _add_months(rental.pickup_date, -(installments - 1 - i))
-            for i in range(installments)
+            _add_months(rental.pickup_date, -(installments - 1 - index))
+            for index in range(installments)
         ]
     else:
-        due_dates = [_add_months(rental.return_date, i) for i in range(installments)]
+        due_dates = [
+            _add_months(rental.return_date, index)
+            for index in range(installments)
+        ]
 
     if enforced_policy and max(due_dates) > rental.pickup_date:
         raise PaymentPlanError(
@@ -698,12 +725,55 @@ def generate_for_rental(rental, installments=1, first_due_date=None, total_amoun
 
     base = _quantize_money(total / installments)
     remainder = total - base * installments
+    return [
+        {
+            'number': index + 1,
+            'due_date': due,
+            'amount': base + (remainder if index == 0 else Decimal('0')),
+        }
+        for index, due in enumerate(due_dates)
+    ]
+
+
+def generate_for_rental(
+    rental,
+    installments=1,
+    first_due_date=None,
+    total_amount=None,
+    last_due_date=None,
+):
+    """Create receivables splitting the rental total into N installments (RF-19/8.1.3).
+
+    The total is divided evenly; any rounding remainder lands on the first
+    installment so the sum matches the rental total exactly. Installments fall
+    due monthly starting at ``first_due_date`` (defaults to the return date) or
+    ending at ``last_due_date`` when specified.
+    """
+    installments = _validate_future_installments(installments)
+    total = (
+        Decimal(str(total_amount))
+        if total_amount is not None
+        else Decimal(str(rental.final_value or 0))
+    )
+    if total < 0:
+        raise PaymentPlanError('O valor das parcelas não pode ser negativo.')
+
+    specs = _future_installment_specs(
+        rental,
+        installments=installments,
+        total_amount=total,
+        first_due_date=first_due_date,
+        last_due_date=last_due_date,
+    )
 
     created = []
-    for index, due in enumerate(due_dates):
-        amount = base + (remainder if index == 0 else Decimal('0'))
+    for spec in specs:
         created.append(
-            Receivable.objects.create(rental=rental, due_date=due, amount=amount)
+            Receivable.objects.create(
+                rental=rental,
+                due_date=spec['due_date'],
+                amount=spec['amount'],
+            )
         )
     return created
 
@@ -737,18 +807,8 @@ def _classify_for_reprocess(existing):
     return protected, partial, replaceable_ids
 
 
-def preview_future_reprocess(rental):
-    """Describe what reprocessing would do, without writing anything.
-
-    Lets the screen disable the action when there is nothing to reschedule and
-    state the real consequences before the operator confirms.  Read-only: no
-    locks, no writes.
-    """
-    existing = list(
-        Receivable.objects.filter(rental=rental)
-        .prefetch_related('payments')
-        .order_by('due_date', 'pk')
-    )
+def _future_reprocess_state(rental, existing):
+    """Classify the current titles and calculate the balance to reschedule."""
     protected, partial, replaceable_ids = _classify_for_reprocess(existing)
     # Mirror the rewrite's order: a partially paid title is first closed at the
     # amount already received, and only then does the leftover feed the new
@@ -765,7 +825,7 @@ def preview_future_reprocess(rental):
         Decimal('0'),
     )
     remaining = rental.final_value - protected_total
-    return {
+    state = {
         'deletable_count': len(replaceable_ids),
         'partial_count': len(partial),
         'partial_released': sum(
@@ -783,7 +843,163 @@ def preview_future_reprocess(rental):
                 else ''
             )
         ),
+        '_protected': protected,
+        '_partial': partial,
+        '_replaceable_ids': replaceable_ids,
     }
+    return state
+
+
+def _future_reprocess_signature(rental, existing, plan):
+    """Fingerprint the preview inputs so a stale confirmation cannot write."""
+    payload = {
+        'rental': {
+            'id': rental.pk,
+            'final_value': str(rental.final_value),
+            'pickup_date': rental.pickup_date.isoformat(),
+            'return_date': rental.return_date.isoformat(),
+            'financial_policy_version': rental.financial_policy_version,
+        },
+        'existing': [
+            {
+                'id': item.pk,
+                'due_date': item.due_date.isoformat(),
+                'amount': str(item.amount),
+                'paid_amount': str(item.paid_amount),
+                'balance': str(item.balance),
+                'last_payment_date': (
+                    item.last_payment_date.isoformat()
+                    if item.last_payment_date else None
+                ),
+                'written_off_at': (
+                    item.written_off_at.isoformat()
+                    if item.written_off_at else None
+                ),
+                'payment_ids': sorted(
+                    payment.pk for payment in item.payments.all()
+                ),
+            }
+            for item in existing
+        ],
+        'requested_installments': plan['installments'],
+        'requested_first_due_date': (
+            plan['first_due_date'].isoformat()
+            if plan['first_due_date'] else None
+        ),
+        'new_schedule': [
+            {
+                'due_date': item['due_date'].isoformat(),
+                'amount': str(item['amount']),
+            }
+            for item in plan['new_schedule']
+        ],
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _build_future_reprocess_plan(
+    rental,
+    *,
+    installments,
+    first_due_date=None,
+    existing,
+):
+    """Build the exact read-only plan consumed by preview and persistence."""
+    installments = _validate_future_installments(installments)
+    state = _future_reprocess_state(rental, existing)
+    remaining = state['remaining']
+    if remaining < 0:
+        raise PaymentPlanError(
+            'Os títulos com histórico financeiro superam o valor da locação. '
+            'Revise os recebimentos antes de reprocessar as parcelas.'
+        )
+    if remaining == 0:
+        raise PaymentPlanError(
+            'Não há saldo sem histórico financeiro para gerar novas parcelas.'
+        )
+
+    enforced_policy = (
+        rental.financial_policy_version
+        == rental.FinancialPolicy.ENFORCED_V1
+    )
+    schedule_kwargs = {
+        'installments': installments,
+        'total_amount': remaining,
+    }
+    if enforced_policy and first_due_date is None:
+        schedule_kwargs['last_due_date'] = rental.pickup_date
+    else:
+        schedule_kwargs['first_due_date'] = first_due_date or rental.return_date
+    new_schedule = _future_installment_specs(rental, **schedule_kwargs)
+    effective_due_date = new_schedule[0]['due_date']
+
+    payment_dates = [
+        receivable.last_payment_date
+        for receivable in state['_protected']
+        if receivable.last_payment_date
+    ]
+    if payment_dates and effective_due_date <= max(payment_dates):
+        raise PaymentPlanError(
+            'O primeiro vencimento futuro deve ser posterior ao último recebimento.',
+            field='first_due_date',
+        )
+
+    partial_ids = {item.pk for item in state['_partial']}
+    plan = {
+        **state,
+        'installments': installments,
+        'first_due_date': first_due_date,
+        'new_schedule': new_schedule,
+        'replaced_receivables': [
+            {
+                'id': item.pk,
+                'due_date': item.due_date,
+                'amount': item.amount,
+            }
+            for item in existing
+            if item.pk in state['_replaceable_ids']
+        ],
+        'partial_adjustments': [
+            {
+                'id': item.pk,
+                'due_date': item.due_date,
+                'previous_amount': item.amount,
+                'amount': item.paid_amount,
+                'released_amount': item.balance,
+            }
+            for item in existing
+            if item.pk in partial_ids
+        ],
+    }
+    plan['signature'] = _future_reprocess_signature(rental, existing, plan)
+    return plan
+
+
+def preview_future_reprocess(rental, installments=None, first_due_date=None):
+    """Describe a reprocessing operation exactly, without writing anything.
+
+    Without an installment count this returns only the current eligibility used
+    by the list screen. With a count it returns the exact dates, amounts,
+    replacements and partial adjustments used by the write service.
+    """
+    existing = list(
+        Receivable.objects.filter(rental=rental)
+        .prefetch_related('payments')
+        .order_by('due_date', 'pk')
+    )
+    if installments is None:
+        state = _future_reprocess_state(rental, existing)
+        return {
+            key: value for key, value in state.items() if not key.startswith('_')
+        }
+    plan = _build_future_reprocess_plan(
+        rental,
+        installments=installments,
+        first_due_date=first_due_date,
+        existing=existing,
+    )
+    return {key: value for key, value in plan.items() if not key.startswith('_')}
 
 
 def reprocess_future_installments(
@@ -793,6 +1009,7 @@ def reprocess_future_installments(
     *,
     user=None,
     reason='Reorganização manual das parcelas futuras.',
+    expected_plan_signature=None,
 ):
     """Replace only receivables without payment history.
 
@@ -812,9 +1029,7 @@ def reprocess_future_installments(
     per rewritten title, with its previous and new amount) and
     ``released_amount``.  Both are also written to the ``AuditLog`` entry.
     """
-    installments = int(installments or 0)
-    if installments < 1:
-        raise PaymentPlanError('Informe ao menos uma parcela futura.')
+    installments = _validate_future_installments(installments)
 
     with transaction.atomic():
         locked_rental = rental.__class__.objects.select_for_update().get(pk=rental.pk)
@@ -834,11 +1049,23 @@ def reprocess_future_installments(
             }
             for receivable in existing
         ]
-        protected, partial, replaceable_ids = _classify_for_reprocess(existing)
-        enforced_policy = (
-            locked_rental.financial_policy_version
-            == locked_rental.FinancialPolicy.ENFORCED_V1
+        plan = _build_future_reprocess_plan(
+            locked_rental,
+            installments=installments,
+            first_due_date=first_due_date,
+            existing=existing,
         )
+        if (
+            expected_plan_signature is not None
+            and plan['signature'] != expected_plan_signature
+        ):
+            raise PaymentPlanError(
+                'Os títulos desta locação mudaram depois da prévia. '
+                'Revise os valores e confirme novamente.'
+            )
+        protected = plan['_protected']
+        partial = plan['_partial']
+        replaceable_ids = plan['_replaceable_ids']
         # A partially paid title is the normal outcome of the informal payment
         # flow: ``register_payment_with_carryover`` settles whatever the customer
         # handed over and leaves the last title it reaches with a residual
@@ -870,62 +1097,17 @@ def reprocess_future_installments(
             (Decimal(item['released_amount']) for item in adjusted_partials),
             Decimal('0'),
         )
-        protected_total = sum(
-            (receivable.amount for receivable in protected),
-            Decimal('0'),
-        )
-        remaining = locked_rental.final_value - protected_total
-        if remaining < 0:
-            raise PaymentPlanError(
-                'Os títulos com histórico financeiro superam o valor da locação. '
-                'Revise os recebimentos antes de reprocessar as parcelas.'
-            )
-        if remaining == 0:
-            raise PaymentPlanError(
-                'Não há saldo sem histórico financeiro para gerar novas parcelas.'
-            )
-        if enforced_policy:
-            if first_due_date:
-                due_dates = [
-                    _add_months(first_due_date, index)
-                    for index in range(installments)
-                ]
-            else:
-                due_dates = [
-                    _add_months(
-                        locked_rental.pickup_date,
-                        -(installments - 1 - index),
-                    )
-                    for index in range(installments)
-                ]
-            if max(due_dates) > locked_rental.pickup_date:
-                raise PaymentPlanError(
-                    'A última parcela deve vencer até a data de retirada.',
-                    field='first_due_date',
-                )
-            effective_due_date = due_dates[0]
-        else:
-            effective_due_date = first_due_date or locked_rental.return_date
-        payment_dates = [
-            receivable.last_payment_date
-            for receivable in protected
-            if receivable.last_payment_date
-        ]
-        if payment_dates and effective_due_date <= max(payment_dates):
-            raise PaymentPlanError(
-                'O primeiro vencimento futuro deve ser posterior ao último recebimento.'
-            )
+        remaining = plan['remaining']
 
         Receivable.objects.filter(pk__in=replaceable_ids).delete()
-        generate_kwargs = {
-            'installments': installments,
-            'total_amount': remaining,
-        }
-        if enforced_policy and first_due_date is None:
-            generate_kwargs['last_due_date'] = locked_rental.pickup_date
-        else:
-            generate_kwargs['first_due_date'] = effective_due_date
-        created = generate_for_rental(locked_rental, **generate_kwargs)
+        created = [
+            Receivable.objects.create(
+                rental=locked_rental,
+                due_date=item['due_date'],
+                amount=item['amount'],
+            )
+            for item in plan['new_schedule']
+        ]
         AuditLog.record(
             user=user,
             action='reprocess_future_installments',

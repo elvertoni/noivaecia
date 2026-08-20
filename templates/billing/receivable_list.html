@@ -17,8 +17,10 @@
   <div class="panel">
     <h2 class="section-title">Reorganizar parcelas futuras</h2>
     <p class="mt-1 text-sm text-app-muted">
-      Não recarrega a tela: <strong>apaga</strong> os títulos sem recebimento e refaz o
-      parcelamento do saldo. Entradas e títulos com histórico financeiro são preservados.
+      Esta ação <strong>apaga</strong> os títulos sem recebimento e refaz o parcelamento
+      do saldo. Os recebimentos e a trilha financeira são preservados. Se houver título
+      parcialmente recebido, ele será fechado no valor pago e o saldo entrará no novo
+      parcelamento. Você verá uma prévia completa antes de confirmar.
     </p>
     {% if reprocess_preview.can_reprocess %}
       <p class="mt-2 text-sm text-app-muted">
@@ -31,15 +33,12 @@
         {% endif %}
       </p>
       <form method="post" action="{% url 'billing:generate' rental.pk %}"
-            class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
-            data-confirm="Refazer o parcelamento da locação #{{ rental.number }}? {% if reprocess_preview.deletable_count %}{{ reprocess_preview.deletable_count }} título(s) sem recebimento será(ão) apagado(s) e recriado(s). {% endif %}{% if reprocess_preview.partial_count %}{{ reprocess_preview.partial_count }} título parcialmente recebido será fechado no valor já pago, devolvendo R$ {{ reprocess_preview.partial_released|brl }} ao novo parcelamento. {% endif %}O saldo de R$ {{ reprocess_preview.remaining|brl }} será redividido. Os recebimentos registrados não são alterados."
-            data-confirm-title="Reorganizar parcelas futuras"
-            data-confirm-action="Reorganizar parcelas">
+            class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         {% csrf_token %}
         {% for field in generate_form %}
           {% include 'includes/form_field.html' with field=field only %}
         {% endfor %}
-        <button type="submit" class="btn btn-primary">Reorganizar parcelas</button>
+        <button type="submit" class="btn btn-primary">Reorganizar parcelas futuras</button>
       </form>
     {% else %}
       <p class="mt-4 text-sm text-app-muted">{{ reprocess_preview.blocked_reason }}</p>

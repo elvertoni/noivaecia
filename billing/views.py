@@ -4,11 +4,12 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core import signing
 from django.db import transaction
 from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import FormView, ListView, TemplateView, View
@@ -67,6 +68,8 @@ DUPLICATE_SUBMISSION_MESSAGE = (
     'Este recebimento já foi enviado com outros valores. Recarregue a tela e '
     'confira o que foi registrado antes de tentar de novo.'
 )
+
+REPROCESS_CONFIRMATION_SALT = 'billing.reprocess_future_installments'
 
 
 def _receipt_key(scope, token):
@@ -961,13 +964,81 @@ class GenerateReceivablesView(
         self.rental = get_object_or_404(Rental, pk=kwargs['rental_pk'])
         return super().dispatch(request, *args, **kwargs)
 
+    def _render_confirmation(self, form):
+        try:
+            plan = preview_future_reprocess(
+                self.rental,
+                installments=form.cleaned_data['installments'],
+                first_due_date=form.cleaned_data.get('first_due_date'),
+            )
+        except PaymentPlanError as exc:
+            form.add_error(exc.field, str(exc))
+            return self.form_invalid(form)
+
+        first_due_date = form.cleaned_data.get('first_due_date')
+        token = signing.dumps(
+            {
+                'rental_id': self.rental.pk,
+                'installments': form.cleaned_data['installments'],
+                'first_due_date': (
+                    first_due_date.isoformat() if first_due_date else None
+                ),
+                'plan_signature': plan['signature'],
+            },
+            salt=REPROCESS_CONFIRMATION_SALT,
+        )
+        return render(
+            self.request,
+            'billing/receivable_reprocess_confirm.html',
+            {
+                'rental': self.rental,
+                'plan': plan,
+                'plan_token': token,
+                'submitted_installments': form.cleaned_data['installments'],
+                'submitted_first_due_date': first_due_date,
+            },
+        )
+
+    def _confirmed_plan_signature(self, form):
+        try:
+            payload = signing.loads(
+                self.request.POST.get('plan_token', ''),
+                salt=REPROCESS_CONFIRMATION_SALT,
+            )
+        except signing.BadSignature:
+            return None
+
+        first_due_date = form.cleaned_data.get('first_due_date')
+        expected_payload = {
+            'rental_id': self.rental.pk,
+            'installments': form.cleaned_data['installments'],
+            'first_due_date': (
+                first_due_date.isoformat() if first_due_date else None
+            ),
+        }
+        if any(payload.get(key) != value for key, value in expected_payload.items()):
+            return None
+        return payload.get('plan_signature')
+
     def form_valid(self, form):
+        if self.request.POST.get('confirm') != 'yes':
+            return self._render_confirmation(form)
+
+        plan_signature = self._confirmed_plan_signature(form)
+        if not plan_signature:
+            messages.error(
+                self.request,
+                'A confirmação não é válida. Revise a prévia e confirme novamente.',
+            )
+            return redirect('billing:list', rental_pk=self.rental.pk)
+
         try:
             result = reprocess_future_installments(
                 self.rental,
                 installments=form.cleaned_data['installments'],
                 first_due_date=form.cleaned_data.get('first_due_date'),
                 user=self.request.user,
+                expected_plan_signature=plan_signature,
             )
         except PaymentPlanError as exc:
             messages.error(

@@ -13,6 +13,7 @@ from billing.services import (
     register_receipt,
     reprocess_future_installments,
 )
+from core.models import AuditLog
 from customers.models import Customer
 from rentals.models import Rental
 
@@ -143,8 +144,6 @@ class ReprocessAuditCommandTests(TestCase):
 
     def test_audit_flags_a_deleted_title_that_carried_money(self):
         """Guard against a future regression in the protection filter."""
-        from core.models import AuditLog
-
         AuditLog.objects.create(
             action='reprocess_future_installments',
             model_name='Rental',
@@ -165,6 +164,94 @@ class ReprocessAuditCommandTests(TestCase):
         output = self._run()
         self.assertIn('ALERTA', output)
         self.assertIn('apagado com R$ 40.00 recebido', output)
+
+    def test_partial_split_on_same_due_date_is_only_value_rewritten(self):
+        """Fragmenting a title on its date must not invent a date change."""
+        AuditLog.objects.create(
+            action='reprocess_future_installments',
+            model_name='Rental',
+            object_id=str(self.rental.pk),
+            metadata={
+                'previous_schedule': [{
+                    'id': 901,
+                    'due_date': '2026-05-10',
+                    'amount': '200.00',
+                    'paid_amount': '50.00',
+                    'balance': '150.00',
+                }],
+                'protected_receivable_ids': [901],
+                'adjusted_partials': [{
+                    'id': 901,
+                    'due_date': '2026-05-10',
+                    'previous_amount': '200.00',
+                    'amount': '50.00',
+                    'released_amount': '150.00',
+                }],
+                'deleted_receivable_ids': [],
+                'new_schedule': [{
+                    'id': 902,
+                    'due_date': '2026-05-10',
+                    'amount': '150.00',
+                }],
+            },
+        )
+
+        output = self._run()
+
+        self.assertIn('valor-reescrito: 1', output)
+        self.assertIn('vencimento-e-valor: 0', output)
+        self.assertIn('sem reduzir o total por vencimento', output)
+
+    def test_multi_title_receipt_movement_is_not_reported_as_orphan(self):
+        account = CashAccount.objects.create(name='Caixa multi-título')
+        first = Receivable.objects.create(
+            rental=self.rental,
+            due_date=date(2026, 4, 10),
+            amount=Decimal('150.00'),
+        )
+        second = Receivable.objects.create(
+            rental=self.rental,
+            due_date=date(2026, 5, 10),
+            amount=Decimal('150.00'),
+        )
+        receipt = register_receipt(
+            idempotency_key=uuid.uuid4(),
+            payload={
+                'rental_id': self.rental.pk,
+                'cash_account_id': account.pk,
+                'received_on': date(2026, 4, 10),
+                'amount': Decimal('100.00'),
+                'method': 'cash',
+                'notes': '',
+                'allocations': [
+                    {
+                        'receivable_id': first.pk,
+                        'cash_amount': Decimal('50.00'),
+                        'interest_amount': Decimal('0'),
+                        'discount_amount': Decimal('0'),
+                    },
+                    {
+                        'receivable_id': second.pk,
+                        'cash_amount': Decimal('50.00'),
+                        'interest_amount': Decimal('0'),
+                        'discount_amount': Decimal('0'),
+                    },
+                ],
+            },
+        )
+        reprocess_future_installments(
+            self.rental,
+            installments=1,
+            first_due_date=date(2026, 6, 1),
+        )
+
+        movement = receipt.financial_movement
+        self.assertIsNone(movement.receivable_id)
+        self.assertEqual(movement.receipt, receipt)
+        self.assertIn(
+            'nenhum movimento de caixa ficou sem título vinculado',
+            self._run(),
+        )
 
     def test_rewrite_that_moves_a_due_date_is_flagged(self):
         Receivable.objects.create(
@@ -244,6 +331,8 @@ class ReprocessAuditCommandTests(TestCase):
         output = self._run()
         self.assertIn('R$ 200.00 -> R$ 50.00', output)
         self.assertIn('alteraram o plano combinado', output)
+        self.assertIn('vencimento-e-valor: 1', output)
+        self.assertIn('valor-reescrito: 0', output)
 
     def test_only_changed_hides_noop_events(self):
         """A rewrite that reproduces the same plan is churn, not damage."""
