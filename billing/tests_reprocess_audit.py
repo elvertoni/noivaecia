@@ -180,6 +180,51 @@ class ReprocessAuditCommandTests(TestCase):
         self.assertIn('vencimento-alterado: 1', output)
         self.assertIn('alteraram o plano combinado', output)
 
+    def test_scheduling_unscheduled_balance_is_not_treated_as_damage(self):
+        """The panel's legitimate use: the rental had balance with no title.
+
+        Nothing the customer already agreed to disappears, so this must not be
+        reported alongside the rewrites that moved a due date.
+        """
+        settled = Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 4, 10), amount=Decimal('100.00')
+        )
+        Payment.objects.create(
+            receivable=settled, payment_date=date(2026, 4, 10), amount=Decimal('100.00')
+        )
+        settled.recalculate_from_payments()
+
+        reprocess_future_installments(
+            self.rental, installments=1, first_due_date=date(2026, 5, 1)
+        )
+
+        output = self._run()
+        self.assertIn('parcela-adicionada: 1', output)
+        self.assertIn('sem mexer no que já existia', output)
+        self.assertIn('Nenhum plano de parcelas foi alterado', output)
+        self.assertNotIn('alteraram o plano combinado', output)
+
+    def test_each_event_is_judged_against_its_own_outcome(self):
+        """Two rewrites on one rental must not contaminate each other.
+
+        Comparing an old event against the rental's *current* titles would
+        blame the first rewrite for what the second one did.
+        """
+        Receivable.objects.create(
+            rental=self.rental, due_date=date(2026, 5, 10), amount=Decimal('300.00')
+        )
+        reprocess_future_installments(
+            self.rental, installments=1, first_due_date=date(2026, 5, 10)
+        )
+        reprocess_future_installments(
+            self.rental, installments=2, first_due_date=date(2026, 4, 1)
+        )
+
+        output = self._run()
+        self.assertIn('Total de eventos: 2', output)
+        self.assertIn('no-op: 1', output)
+        self.assertIn('vencimento-alterado: 1', output)
+
     def test_rewrite_of_a_partially_paid_title_is_flagged(self):
         partial = Receivable.objects.create(
             rental=self.rental, due_date=date(2026, 4, 10), amount=Decimal('200.00')

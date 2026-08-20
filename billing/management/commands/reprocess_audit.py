@@ -15,7 +15,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from billing.models import FinancialMovement, Receivable
+from billing.models import FinancialMovement
 from core.models import AuditLog
 
 
@@ -37,9 +37,15 @@ CSV_HEADERS = (
 )
 
 NO_OP = 'no-op'
+ADDED = 'parcela-adicionada'
 DUE_DATE_MOVED = 'vencimento-alterado'
 PARTIAL_REWRITTEN = 'valor-reescrito'
 BOTH = 'vencimento-e-valor'
+
+CLASSIFICATIONS = (NO_OP, ADDED, DUE_DATE_MOVED, PARTIAL_REWRITTEN, BOTH)
+
+# Only these mean the plan agreed with the customer stopped holding.
+NEEDS_REVIEW = (DUE_DATE_MOVED, PARTIAL_REWRITTEN, BOTH)
 
 
 def _schedule_signature(entries):
@@ -51,6 +57,34 @@ def _schedule_signature(entries):
     return sorted(
         (entry['due_date'], Decimal(entry['amount'])) for entry in entries
     )
+
+
+def _resulting_schedule(metadata):
+    """Rebuild the plan as it stood right after *this* event.
+
+    Comparing against the rental's current receivables would be wrong: a rental
+    reprocessed more than once would have every earlier event judged against
+    the outcome of the later ones. The metadata is self-contained — protected
+    titles (with any adjusted amount applied) plus the titles just created.
+    """
+    protected_ids = set(metadata.get('protected_receivable_ids') or [])
+    adjusted = {
+        item['id']: item['amount']
+        for item in (metadata.get('adjusted_partials') or [])
+    }
+    kept = [
+        {
+            'due_date': entry['due_date'],
+            'amount': adjusted.get(entry['id'], entry['amount']),
+        }
+        for entry in (metadata.get('previous_schedule') or [])
+        if entry['id'] in protected_ids
+    ]
+    created = [
+        {'due_date': entry['due_date'], 'amount': entry['amount']}
+        for entry in (metadata.get('new_schedule') or [])
+    ]
+    return kept + created
 
 
 def _money_touched(log):
@@ -74,22 +108,30 @@ def _money_touched(log):
 
 def _classify(log):
     metadata = log.metadata or {}
-    previous = metadata.get('previous_schedule') or []
     adjusted = metadata.get('adjusted_partials') or []
 
-    current = _schedule_signature([
-        {'due_date': item.due_date.isoformat(), 'amount': str(item.amount)}
-        for item in Receivable.objects.filter(rental_id=log.object_id)
-    ])
-    before = _schedule_signature(previous)
+    before = _schedule_signature(metadata.get('previous_schedule') or [])
+    after = _schedule_signature(_resulting_schedule(metadata))
 
-    schedule_changed = current != before
-    if adjusted and schedule_changed:
+    # A commitment the customer already had must still be there afterwards.
+    # Extra rows on top of that are balance that simply had not been scheduled
+    # yet — the panel doing its job, not a plan being rewritten.
+    surviving = list(after)
+    lost = []
+    for commitment in before:
+        if commitment in surviving:
+            surviving.remove(commitment)
+        else:
+            lost.append(commitment)
+
+    if adjusted and lost:
         classification = BOTH
     elif adjusted:
         classification = PARTIAL_REWRITTEN
-    elif schedule_changed:
+    elif lost:
         classification = DUE_DATE_MOVED
+    elif surviving:
+        classification = ADDED
     else:
         classification = NO_OP
 
@@ -102,11 +144,17 @@ def _classify(log):
                 after=item['amount'],
             )
         )
-    if schedule_changed:
+    if lost:
         details.append(
-            'plano anterior {before} · plano atual {current}'.format(
-                before=[f'{due}=R$ {amount}' for due, amount in before],
-                current=[f'{due}=R$ {amount}' for due, amount in current],
+            'deixou de existir {lost} · passou a ser {after}'.format(
+                lost=[f'{due}=R$ {amount}' for due, amount in lost],
+                after=[f'{due}=R$ {amount}' for due, amount in after],
+            )
+        )
+    elif surviving:
+        details.append(
+            'acrescentou {extra} sem mexer no que já existia'.format(
+                extra=[f'{due}=R$ {amount}' for due, amount in surviving],
             )
         )
     return classification, '; '.join(details) or 'sem diferença'
@@ -114,8 +162,9 @@ def _classify(log):
 
 class Command(BaseCommand):
     help = (
-        'Classifica os reprocessamentos de parcelas registrados no AuditLog '
-        '(no-op / vencimento alterado / valor reescrito). Somente leitura.'
+        'Classifica os reprocessamentos de parcelas registrados no AuditLog: '
+        'no-op, parcela adicionada, vencimento alterado, valor reescrito. '
+        'Somente leitura — nada é revertido.'
     )
 
     def add_arguments(self, parser):
@@ -127,7 +176,10 @@ class Command(BaseCommand):
         parser.add_argument(
             '--only-changed',
             action='store_true',
-            help='Omite os eventos classificados como no-op.',
+            help=(
+                'Mostra apenas os eventos que desfizeram um compromisso já '
+                'existente (omite no-op e parcela-adicionada).'
+            ),
         )
 
     def handle(self, *args, **options):
@@ -146,7 +198,7 @@ class Command(BaseCommand):
                     f'#{log.pk} · locação {log.object_id} · título {entry["id"]} '
                     f'apagado com R$ {entry["paid_amount"]} recebido'
                 )
-            if options['only_changed'] and classification == NO_OP:
+            if options['only_changed'] and classification not in NEEDS_REVIEW:
                 continue
             rows.append((
                 str(log.pk),
@@ -163,7 +215,7 @@ class Command(BaseCommand):
 
         self.stdout.write('')
         self.stdout.write(f'Total de eventos: {sum(tally.values())}')
-        for classification in (NO_OP, DUE_DATE_MOVED, PARTIAL_REWRITTEN, BOTH):
+        for classification in CLASSIFICATIONS:
             self.stdout.write(f'  {classification}: {tally[classification]}')
 
         self.stdout.write('')
@@ -196,9 +248,7 @@ class Command(BaseCommand):
                 '  nenhum movimento de caixa ficou sem título vinculado.'
             ))
 
-        needing_review = (
-            tally[DUE_DATE_MOVED] + tally[PARTIAL_REWRITTEN] + tally[BOTH]
-        )
+        needing_review = sum(tally[name] for name in NEEDS_REVIEW)
         if needing_review:
             self.stdout.write(self.style.WARNING(
                 f'{needing_review} evento(s) alteraram o plano combinado com a '
