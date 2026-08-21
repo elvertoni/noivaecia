@@ -16,6 +16,7 @@ from billing.models import CashAccount, FinancialMovement, Receivable
 from catalog.models import Category, Product
 from company.models import Company
 from core.management.commands.import_legacy_access import (
+    IMPORTER_VERSION,
     audit_id_column_sql,
     as_bool,
     as_date,
@@ -491,7 +492,11 @@ class NormalizedImportTests(TestCase):
             )
             row = cursor.fetchone()
         self.assertIsNotNone(row)
-        self.assertIn('2026.06.12', row[0])
+        # Pinned to the constant, not to a literal: two imports run under
+        # different rules have to be distinguishable in the audit table, so the
+        # version must be bumped whenever the import rules change — and this
+        # assertion should not be what blocks that.
+        self.assertEqual(row[0], IMPORTER_VERSION)
 
     def test_new_records_use_ids_after_the_imported_range(self):
         customer = Customer.objects.create(name='Cliente posterior')

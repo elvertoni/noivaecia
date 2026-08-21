@@ -27,24 +27,45 @@
     {% if not product.is_active %}
       <span class="badge badge-info">fora do acervo</span>
     {% endif %}
-    {% if siblings %}
-      <span class="badge badge-danger">{{ siblings|length }} produto(s) duplicado(s) com mesmo código</span>
+    {% if live_siblings %}
+      <span class="badge badge-danger">{{ live_siblings|length }} produto(s) duplicado(s) com mesmo código</span>
+    {% elif retired_siblings %}
+      <span class="badge badge-info">{{ retired_siblings|length }} cadastro(s) anterior(es) neste código</span>
     {% endif %}
   </div>
 
-  {# Duplicate siblings warning (R8.03) #}
-  {% if siblings %}
+  {# Two live items on one code: a real defect, and the uniqueness rule should
+     prevent it. Kept visible in case that guard is ever absent. (R8.03) #}
+  {% if live_siblings %}
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
       <p class="font-semibold text-amber-800">Atenção: código duplicado</p>
       <p class="text-sm text-amber-700 mt-1">
-        Existe(m) {{ siblings|length }} outro(s) produto(s) com o mesmo código {{ product.category.prefix }}{{ product.code }}:
+        Existe(m) {{ live_siblings|length }} outro(s) produto(s) no acervo com o mesmo código {{ product.category.prefix }}{{ product.code }}:
       </p>
       <ul class="mt-2 space-y-1">
-        {% for s in siblings %}
+        {% for s in live_siblings %}
           <li class="text-sm text-amber-700">
             <a href="{% url 'catalog:product_history' s.pk %}" class="text-link font-medium">#{{ s.pk }}</a>
             — {{ s.description }} · {{ s.color|default:'—' }} · {{ s.size|default:'—' }}
             {% if s.is_placeholder %}<span class="badge badge-warning ml-1">placeholder</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {# Retired rows on this code are ordinary history: the code was reused. #}
+  {% if retired_siblings %}
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p class="font-semibold text-app-ink">Cadastros anteriores deste código</p>
+      <p class="text-sm text-app-muted mt-1">
+        O código {{ product.category.prefix }}{{ product.code }} já foi usado por {{ retired_siblings|length }} peça(s) retirada(s) do acervo. As locações antigas seguem no histórico com a descrição que tinham na época.
+      </p>
+      <ul class="mt-2 space-y-1">
+        {% for s in retired_siblings %}
+          <li class="text-sm text-app-muted">
+            <a href="{% url 'catalog:product_history' s.pk %}" class="text-link font-medium">#{{ s.pk }}</a>
+            — {{ s.description }} · {{ s.color|default:'—' }} · {{ s.size|default:'—' }}
           </li>
         {% endfor %}
       </ul>

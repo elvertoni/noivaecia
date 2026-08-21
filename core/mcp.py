@@ -8,7 +8,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.deletion import ProtectedError, RestrictedError
 from django.db.models.functions import Coalesce
@@ -345,6 +345,13 @@ class AdminMCPToolset(MCPToolset):
 
     @staticmethod
     def _validate_delete(model, obj):
+        if model._meta.label == 'catalog.Product':
+            raise ValueError(
+                'Produtos não são excluídos fisicamente: o código é a identidade da '
+                'peça no contrato e na etiqueta, e apagar a linha libera o código sem '
+                'deixar rastro. Retire do acervo (is_active=False) — o código fica '
+                'disponível para reaproveitamento e o histórico mantém a âncora.'
+            )
         if model._meta.label != 'rentals.Rental':
             return
         payment_model = apps.get_model('billing.Payment')
@@ -486,6 +493,13 @@ class AdminMCPToolset(MCPToolset):
                     obj,
                     {'entity': entity},
                 )
+        except IntegrityError as exc:
+            # full_clean() and save() are not atomic against a concurrent
+            # writer; the database constraint is what arbitrates, and it
+            # surfaces here rather than as a raw traceback.
+            raise ValueError(
+                'Registro não gravado: viola uma restrição de unicidade do banco.'
+            ) from exc
         except DjangoValidationError as exc:
             raise ValueError(self._format_validation_error(exc)) from exc
         return self._serialize(obj)
@@ -518,6 +532,13 @@ class AdminMCPToolset(MCPToolset):
                     obj,
                     {'entity': entity, 'updated_fields': sorted(data)},
                 )
+        except IntegrityError as exc:
+            # full_clean() and save() are not atomic against a concurrent
+            # writer; the database constraint is what arbitrates, and it
+            # surfaces here rather than as a raw traceback.
+            raise ValueError(
+                'Registro não gravado: viola uma restrição de unicidade do banco.'
+            ) from exc
         except DjangoValidationError as exc:
             raise ValueError(self._format_validation_error(exc)) from exc
         return self._serialize(obj)

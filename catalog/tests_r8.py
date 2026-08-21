@@ -11,6 +11,10 @@ from django.urls import reverse
 from accounts.models import ModulePermission
 from accounts.models import ActionPermission
 from catalog.models import Category, Product
+from catalog.tests_support import (
+    UNIQUE_CATEGORY_PREFIX,
+    lift_unique_indexes,
+)
 from company.models import Company
 from customers.models import Customer
 from rentals.models import Rental, RentalItem
@@ -19,11 +23,16 @@ User = get_user_model()
 
 
 def _make_catalog():
-    """Create two categories and four products (two with duplicate prefix+code)."""
+    """Two categories and four rows; VES1 carries a retired twin.
+
+    ``catalog_product_unique_active_code`` allows any number of retired rows per
+    code and exactly one live one — the shape production is left in by
+    ``dedupe_product_codes --quarantine``.
+    """
     cat_a = Category.objects.create(prefix='VES', name='Vestidos')
     cat_b = Category.objects.create(prefix='TRN', name='Ternos', is_placeholder=True)
     p1 = Product.objects.create(category=cat_a, code=1, description='Vestido branco', color='branco', size='M', value=Decimal('100'))
-    p2 = Product.objects.create(category=cat_a, code=1, description='Vestido off-white', color='off-white', size='G', value=Decimal('120'))
+    p2 = Product.objects.create(category=cat_a, code=1, description='Vestido off-white', color='off-white', size='G', value=Decimal('120'), is_active=False)
     p3 = Product.objects.create(category=cat_a, code=2, description='Vestido azul', color='azul', size='P', value=Decimal('90'))
     p4 = Product.objects.create(category=cat_b, code=10, description='Terno preto', color='preto', size='44', value=Decimal('150'), is_placeholder=True)
     return cat_a, cat_b, p1, p2, p3, p4
@@ -58,10 +67,10 @@ class ProductListFiltersTests(TestCase):
         self.client.force_login(self.user)
         self.url = reverse('catalog:product_list')
 
-    def test_no_filters_returns_all(self):
+    def test_no_filters_returns_the_live_collection(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['products'].count(), 4)
+        self.assertEqual(response.context['products'].count(), 3)
 
     def test_filter_by_prefix(self):
         response = self.client.get(self.url, {'prefix': 'VES'})
@@ -70,7 +79,7 @@ class ProductListFiltersTests(TestCase):
         self.assertNotIn(self.p4.pk, codes)
 
     def test_filter_by_code(self):
-        response = self.client.get(self.url, {'code': '1'})
+        response = self.client.get(self.url, {'code': '1', 'status': 'all'})
         pks = {p.pk for p in response.context['products']}
         self.assertIn(self.p1.pk, pks)
         self.assertIn(self.p2.pk, pks)
@@ -87,7 +96,7 @@ class ProductListFiltersTests(TestCase):
         self.assertEqual(pks, {self.p1.pk})
 
     def test_filter_by_size(self):
-        response = self.client.get(self.url, {'size': 'G'})
+        response = self.client.get(self.url, {'size': 'G', 'status': 'all'})
         pks = {p.pk for p in response.context['products']}
         self.assertEqual(pks, {self.p2.pk})
 
@@ -97,7 +106,7 @@ class ProductListFiltersTests(TestCase):
         self.assertEqual(pks, {self.p4.pk})
 
     def test_filter_duplicate_only(self):
-        response = self.client.get(self.url, {'duplicate': '1'})
+        response = self.client.get(self.url, {'duplicate': '1', 'status': 'all'})
         pks = {p.pk for p in response.context['products']}
         # p1 and p2 share (VES, 1)
         self.assertIn(self.p1.pk, pks)
@@ -119,7 +128,8 @@ class ProductSearchViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         ids = {row['id'] for row in response.json()['results']}
         self.assertIn(self.p1.pk, ids)
-        self.assertIn(self.p2.pk, ids)
+        # The picker never offers a retired row.
+        self.assertNotIn(self.p2.pk, ids)
         self.assertNotIn(self.p3.pk, ids)
 
     def test_search_by_prefix_and_code(self):
@@ -141,7 +151,8 @@ class ProductListBadgesTests(TestCase):
         self.client.force_login(self.user)
 
     def test_duplicate_ids_in_context(self):
-        response = self.client.get(reverse('catalog:product_list'))
+        # A live row and its retired twin only show up together under "Todos".
+        response = self.client.get(reverse('catalog:product_list'), {'status': 'all'})
         dup_ids = response.context['duplicate_ids']
         cat_a = Category.objects.get(prefix='VES')
         p1 = Product.objects.get(category=cat_a, code=1, color='branco')
@@ -169,15 +180,35 @@ class ProductListBadgesTests(TestCase):
             category.prefix: category.product_count
             for category in response.context['categories']
         }
-        self.assertEqual(categories['VES'], 2)
+        self.assertEqual(categories['VES'], 1)
         self.assertEqual(categories['TRN'], 1)
 
 
 # ── R8.03 Availability disambiguation ────────────────────────────────────────
 
 class AvailabilityDisambiguationTests(TestCase):
+    """Two categories can still collapse onto one printed code.
+
+    ``catalog_product_unique_active_code`` is scoped to ``category_id``, while
+    the lookup matches ``prefix__iexact``.  Before
+    ``catalog_category_prefix_unique_ci`` those were different keys, and ``VES``
+    next to ``ves`` put two live items behind a single tag — the residual path
+    this screen exists to handle, and the reason it was not retired.
+    """
+
     def setUp(self):
+        # ``catalog_category_prefix_unique_ci`` now forbids ``ves`` beside
+        # ``VES``, so this screen should never fire again.  It is kept as the
+        # fallback for a code that still resolves to two live items — a
+        # rolled-back migration, a restored backup — and the only way to test
+        # that is to reproduce the state the guard prevents.
+        lift_unique_indexes(UNIQUE_CATEGORY_PREFIX)
         self.cat_a, self.cat_b, self.p1, self.p2, self.p3, self.p4 = _make_catalog()
+        self.shadow = Category.objects.create(prefix='ves', name='Vestidos (legado)')
+        self.twin = Product.objects.create(
+            category=self.shadow, code=1, description='Vestido marfim',
+            color='marfim', size='G', value=Decimal('120'),
+        )
         self.user = _make_user()
         self.client.force_login(self.user)
         self.url = reverse('catalog:availability')
@@ -202,8 +233,9 @@ class AvailabilityDisambiguationTests(TestCase):
         self.assertTrue(response.context.get('checked'))
 
     def test_placeholder_candidate_sorted_last_and_flagged(self):
+        third = Category.objects.create(prefix='Ves', name='Vestidos (import)')
         placeholder = Product.objects.create(
-            category=self.cat_a, code=1, description='VES1 · NULO',
+            category=third, code=1, description='VES1 · NULO',
             is_placeholder=True, value=Decimal('0'),
         )
         response = self.client.get(self.url, {'prefix': 'VES', 'code': '1'})

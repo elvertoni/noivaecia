@@ -94,7 +94,25 @@ completo no momento do cutover.
    recebíveis e movimentos financeiros. Divergência grande para baixo significa
    export truncado: pare e investigue.
 7. **`import_legacy_access --reset --confirm-reset`** para valer.
-8. **Pós-processamento obrigatório:**
+8. **Conferir as decisões de código duplicado.** O Access carrega ~40 códigos com
+   mais de um cadastro, e o importador resolve cada um mantendo ativo o de menor
+   `legacy_id` (é a linha à qual todo `RentalItem` fica ligado, porque `locado`
+   referencia por `prefixo+codigo`, não por id de produto). Os demais entram
+   **anulados**, não excluídos.
+   - Leia `duplicate_products_retired` e `duplicate_products_detail` no resumo do
+     import — ficam gravados em `legacy_import_audit`.
+   - `python manage.py dedupe_product_codes` (dry-run) para ver a triagem.
+   - **Avise a cliente:** cerca de 40 peças reais saem da busca até ela dizer
+     quais ficam. Nenhuma é apagada; contratos antigos seguem intactos porque
+     `RentalItem` guarda snapshot congelado da peça. Reativar é um clique na tela
+     de produtos.
+   - Com a decisão dela: `--pair PREFIXOCODIGO` funde, `--keep PK` mantém a peça
+     escolhida e anula as outras, `--quarantine` resolve os casos em que só um
+     cadastro tem locação.
+   - A migration `catalog.0010` **não aplica** enquanto sobrar código com dois
+     itens ativos: ela levanta `RuntimeError` em português com a amostra dos
+     códigos, antes de tocar no schema.
+9. **Pós-processamento obrigatório:**
    - `python manage.py post_legacy_import --dry-run` e revisar as quantidades;
    - `python manage.py post_legacy_import --apply` para normalizar cidades, reconstruir
      todos os campos de busca de clientes/produtos e zerar preços positivos do cadastro;
@@ -102,7 +120,7 @@ completo no momento do cutover.
    - restaurar somente os campos configuráveis da `Company` salvos no passo 5. Para a
      numeração use `max(last_rental_number_salvo, last_rental_number_importado)`; nunca
      sobrescreva PK ou timestamps. O pós-processamento não altera a empresa.
-9. **Validar:**
+10. **Validar:**
    - `python manage.py homologation_report`
    - `python manage.py cpf_duplicate_report` (esperado: ~518 duplicatas legadas reais;
      não é bug, ver auditoria de 2026-07-20)
@@ -110,7 +128,7 @@ completo no momento do cutover.
      itens e recebíveis;
    - `python manage.py check` e `curl -fsS https://noivaseciabandeirantes.com.br/healthz/`;
    - Conferir na UI uma locação recente conhecida, com itens, recebíveis e valores.
-10. **A loja passa a usar só o sistema novo.** O BRcom vira arquivo morto — **não
+11. **A loja passa a usar só o sistema novo.** O BRcom vira arquivo morto — **não
     desinstale**, guarde o `.mdb` e o executável indefinidamente. Reconcilie o stack com
     `cd ~/noivaecia && ./scripts/deploy.sh --skip-build`, espere app e scheduler
     convergirem e só então valide o health público e reabra a operação.

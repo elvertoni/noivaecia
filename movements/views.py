@@ -414,9 +414,15 @@ class PickupListView(MovementsAccessMixin, ListView):
         if customer_q:
             qs = qs.filter(customer__name_search__icontains=_normalize_name(customer_q))
         if product_q:
+            # The frozen snapshot is searched alongside the live catalogue row:
+            # a retired code can be reused by another piece, and matching only
+            # the live description would hide this movement under the name it
+            # was actually contracted with.
             qs = qs.filter(
                 Q(items__product__category__prefix__icontains=product_q)
                 | Q(items__product__description_search__icontains=_normalize_name(product_q))
+                | Q(items__product_prefix_snapshot__icontains=product_q)
+                | Q(items__product_description_snapshot__icontains=product_q)
             ).distinct()
         return qs
 
@@ -464,9 +470,15 @@ class ReturnListView(MovementsAccessMixin, ListView):
         if customer_q:
             qs = qs.filter(customer__name_search__icontains=_normalize_name(customer_q))
         if product_q:
+            # The frozen snapshot is searched alongside the live catalogue row:
+            # a retired code can be reused by another piece, and matching only
+            # the live description would hide this movement under the name it
+            # was actually contracted with.
             qs = qs.filter(
                 Q(items__product__category__prefix__icontains=product_q)
                 | Q(items__product__description_search__icontains=_normalize_name(product_q))
+                | Q(items__product_prefix_snapshot__icontains=product_q)
+                | Q(items__product_description_snapshot__icontains=product_q)
             ).distinct()
         return qs
 

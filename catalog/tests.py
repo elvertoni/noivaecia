@@ -23,10 +23,14 @@ class CatalogModelTests(TestCase):
         category = Category.objects.create(prefix='VN', name='Vestidos')
         self.assertEqual(str(category), 'VN · Vestidos')
 
-    def test_product_allows_legacy_duplicate_codes(self):
+    def test_retired_rows_may_keep_a_code_already_in_use(self):
+        """Reuse revives a retired row, so retired rows must keep their code."""
         category = Category.objects.create(prefix='VN', name='Vestidos')
         Product.objects.create(category=category, code=1, description='A', value=10)
-        Product.objects.create(category=category, code=1, description='B', value=20)
+        Product.objects.create(
+            category=category, code=1, description='NULO', value=0, is_active=False,
+        )
+
         self.assertEqual(Product.objects.filter(category=category, code=1).count(), 2)
 
 
@@ -72,12 +76,14 @@ class InactiveProductCodesViewTests(TestCase):
         self.category = Category.objects.create(prefix='VF', name='Vestidos de festa')
         self.other_category = Category.objects.create(prefix='TRN', name='Ternos')
 
-    def test_lists_archived_and_legacy_null_codes_from_selected_category(self):
+    def test_lists_retired_codes_from_selected_category_once_each(self):
         Product.objects.create(
             category=self.category, code=38, description='Nulo', value=0, is_active=False,
         )
+        # Left over from before the codes were deduplicated: the same free code
+        # must still be offered a single time.
         Product.objects.create(
-            category=self.category, code=38, description='Nulo', value=0, is_active=True,
+            category=self.category, code=38, description='Nulo', value=0, is_active=False,
         )
         Product.objects.create(
             category=self.category, code=39, description='Ativo', value=100, is_active=True,
@@ -92,13 +98,50 @@ class InactiveProductCodesViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['results'], [
-            {'code': 38, 'label': 'VF38', 'records': 2},
+            {'code': 38, 'label': 'VF38', 'previous': 'Nulo', 'past_rentals': 0},
+        ])
+
+    def test_active_code_is_never_offered_for_reuse(self):
+        Product.objects.create(
+            category=self.category, code=41, description='Vestido', value=100, is_active=True,
+        )
+
+        response = self.client.get(
+            reverse('catalog:inactive_product_codes'), {'category': self.category.pk},
+        )
+
+        self.assertEqual(response.json()['results'], [])
+
+    def test_reuse_listing_reports_the_history_carried_by_the_code(self):
+        product = Product.objects.create(
+            category=self.category, code=42, description='Vestido antigo', value=100,
+            is_active=False,
+        )
+        rental = Rental.objects.create(
+            number=90,
+            customer=Customer.objects.create(name='Clara'),
+            pickup_date=date(2026, 5, 1),
+            return_date=date(2026, 5, 5),
+        )
+        RentalItem.objects.create(rental=rental, product=product, value=100)
+
+        response = self.client.get(
+            reverse('catalog:inactive_product_codes'), {'category': self.category.pk},
+        )
+
+        self.assertEqual(response.json()['results'], [
+            {
+                'code': 42,
+                'label': 'VF42',
+                'previous': 'Vestido antigo',
+                'past_rentals': 1,
+            },
         ])
 
     def test_create_form_has_inactive_code_picker(self):
         response = self.client.get(reverse('catalog:product_create'))
 
-        self.assertContains(response, 'Reaproveitar código anulado ou retirado')
+        self.assertContains(response, 'Reaproveitar código anulado')
         self.assertContains(response, reverse('catalog:inactive_product_codes'))
 
 
@@ -152,7 +195,13 @@ class ProductDeleteViewTests(TestCase):
         self.client.force_login(self.user)
         self.category = Category.objects.create(prefix='VN', name='Vestidos')
 
-    def test_deletes_product_without_related_rentals(self):
+    def test_retires_product_without_related_rentals_instead_of_deleting_it(self):
+        """The row must survive so the code keeps a single owner.
+
+        Dropping the row silently freed the ``(category, code)`` slot with no
+        trace, and the next registration of that code became an untracked
+        second row — the duplication the legacy system never produced.
+        """
         product = Product.objects.create(
             category=self.category,
             code=1,
@@ -163,12 +212,16 @@ class ProductDeleteViewTests(TestCase):
         response = self.client.post(reverse('catalog:product_delete', args=[product.pk]))
 
         self.assertRedirects(response, reverse('catalog:product_list'))
-        self.assertFalse(Product.objects.filter(pk=product.pk).exists())
+        product.refresh_from_db()
+        self.assertFalse(product.is_active)
         self.assertIn(
-            'Produto excluído com sucesso.',
-            [str(message) for message in get_messages(response.wsgi_request)],
+            'O código VN1 fica anulado e disponível para reaproveitamento',
+            ' '.join(str(message) for message in get_messages(response.wsgi_request)),
         )
         self.assertTrue(
+            AuditLog.objects.filter(action='product_archive', object_id=str(product.pk)).exists()
+        )
+        self.assertFalse(
             AuditLog.objects.filter(action='product_delete', object_id=str(product.pk)).exists()
         )
 
@@ -190,7 +243,7 @@ class ProductDeleteViewTests(TestCase):
 
         confirmation = self.client.get(url)
         self.assertContains(confirmation, 'Retirar produto do acervo')
-        self.assertContains(confirmation, 'sem apagar locações ou contratos existentes')
+        self.assertContains(confirmation, 'As locações e contratos já existentes continuam intactos.')
         self.assertContains(confirmation, '<form method="post" class="mt-6 form-actions">')
 
         response = self.client.post(url)
@@ -203,38 +256,8 @@ class ProductDeleteViewTests(TestCase):
             AuditLog.objects.filter(action='product_archive', object_id=str(product.pk)).exists()
         )
         self.assertIn(
-            'Produto retirado do acervo com sucesso. O histórico de locações foi preservado.',
-            [str(message) for message in get_messages(response.wsgi_request)],
-        )
-
-    def test_archives_when_protected_relation_appears_during_delete(self):
-        product = Product.objects.create(
-            category=self.category,
-            code=2,
-            description='Vestido concorrente',
-            value=300,
-        )
-        rental = Rental.objects.create(
-            number=2,
-            customer=Customer.objects.create(name='Ana'),
-            pickup_date=date(2026, 7, 10),
-            return_date=date(2026, 7, 20),
-        )
-        item = RentalItem.objects.create(rental=rental, product=product, value=300)
-        protected = ProtectedError('Locação criada durante a exclusão.', {item})
-
-        with patch.object(type(product.rental_items), 'exists', return_value=False):
-            with patch.object(Product, 'delete', side_effect=protected):
-                response = self.client.post(
-                    reverse('catalog:product_delete', args=[product.pk])
-                )
-
-        self.assertRedirects(response, reverse('catalog:product_list'))
-        product.refresh_from_db()
-        self.assertFalse(product.is_active)
-        self.assertTrue(RentalItem.objects.filter(pk=item.pk, product=product).exists())
-        self.assertTrue(
-            AuditLog.objects.filter(action='product_archive', object_id=str(product.pk)).exists()
+            'o histórico de locações foi preservado',
+            ' '.join(str(message) for message in get_messages(response.wsgi_request)),
         )
 
     def test_repeated_forged_post_does_not_duplicate_archive_audit(self):

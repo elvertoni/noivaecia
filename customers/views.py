@@ -277,9 +277,15 @@ class CustomerDetailView(ModuleAccessMixin, DetailView):
         if rental_status:
             rentals_qs = rentals_qs.filter(status=rental_status)
         if product_q:
+            # Search the frozen snapshot as well as the live catalogue row: a
+            # code can be retired and reused, and after that the row carries a
+            # different piece.  Matching only the live description would hide
+            # the rental under the name it was actually contracted with.
             rentals_qs = rentals_qs.filter(
                 Q(items__product__description__icontains=product_q)
                 | Q(items__product__category__prefix__icontains=product_q)
+                | Q(items__product_description_snapshot__icontains=product_q)
+                | Q(items__product_prefix_snapshot__icontains=product_q)
             ).distinct()
         rentals_paginator = Paginator(rentals_qs, self.rentals_paginate_by)
         rentals_page = rentals_paginator.get_page(self.request.GET.get('rental_page'))

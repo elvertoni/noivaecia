@@ -256,7 +256,11 @@ class ImportQualityViewTests(TestCase):
     def test_duplicate_pairs_in_context(self):
         cat = Category.objects.create(prefix='DUP', name='Dup')
         Product.objects.create(category=cat, code=1, description='A', value=Decimal('10'))
-        Product.objects.create(category=cat, code=1, description='B', value=Decimal('10'))
+        # Only one may be live: the KPI counts codes carrying more than one
+        # registration, which after the cleanup means history, not a defect.
+        Product.objects.create(
+            category=cat, code=1, description='B', value=Decimal('10'), is_active=False,
+        )
         r = self.client.get(reverse('maintenance:import_quality'))
         self.assertGreaterEqual(r.context['duplicate_product_pairs'], 1)
 

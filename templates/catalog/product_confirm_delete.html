@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load core_tags %}
 
-{% block title %}{% if has_related_rentals %}Retirar produto do acervo{% else %}Excluir produto{% endif %} · Noivas &amp; Cia{% endblock %}
+{% block title %}Retirar produto do acervo · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-lg">
@@ -9,39 +9,31 @@
     {% if not object.is_active %}
       <h1 class="page-title">Produto fora do acervo</h1>
       <p class="mt-2 text-sm text-slate-600">
-        <strong>{{ object }}</strong> já está arquivado e não aparece nas consultas operacionais.
+        <strong>{{ object }}</strong> já está anulado e não aparece nas consultas operacionais.
+        O código <strong>{{ object.category.prefix }}{{ object.code }}</strong> está livre para reaproveitamento.
       </p>
       <div class="mt-6 form-actions">
-        <a href="{% url 'catalog:product_list' %}?status=inactive" class="btn btn-secondary">Voltar aos arquivados</a>
+        <a href="{% url 'catalog:product_list' %}?status=inactive" class="btn btn-secondary">Voltar aos anulados</a>
       </div>
-    {% elif has_related_rentals %}
+    {% else %}
       <h1 class="page-title">Retirar produto do acervo</h1>
       <p class="mt-2 text-sm text-slate-600">
-        <strong>{{ object }}</strong> possui histórico e será arquivado, sem apagar locações ou contratos existentes.
+        <strong>{{ object }}</strong> será anulado.
+        {% if has_related_rentals %}
+          As locações e contratos já existentes continuam intactos.
+        {% endif %}
       </p>
       <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
-        Depois desta ação, o produto deixará de aparecer na disponibilidade e nos seletores de novas locações. A reativação continuará disponível na lista de arquivados.
+        O cadastro não é apagado: o código <strong>{{ object.category.prefix }}{{ object.code }}</strong> continua
+        reservado a este registro e fica disponível na lista de códigos anulados. Ao cadastrar uma peça nova com
+        esse código, o sistema reaproveita este mesmo registro — é assim que o código não duplica.
+        A peça deixa de aparecer na disponibilidade e nos seletores de novas locações, e a reativação
+        continua disponível na lista de anulados.
       </div>
       {% if request.user|has_action:'catalog.delete' %}
         <form method="post" class="mt-6 form-actions">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger">Retirar do acervo</button>
-          <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
-        </form>
-      {% else %}
-        <div class="mt-6 form-actions">
-          <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Voltar aos produtos</a>
-        </div>
-      {% endif %}
-    {% else %}
-      <h1 class="page-title">Excluir produto</h1>
-      <p class="mt-2 text-sm text-slate-600">
-        Tem certeza que deseja excluir <strong>{{ object }}</strong>? Como não há locações vinculadas, o cadastro será apagado permanentemente. Esta ação não pode ser desfeita.
-      </p>
-      {% if request.user|has_action:'catalog.delete' %}
-        <form method="post" class="mt-6 form-actions">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-danger">Excluir permanentemente</button>
           <a href="{% url 'catalog:product_list' %}" class="btn btn-secondary">Cancelar</a>
         </form>
       {% else %}

@@ -29,6 +29,7 @@ from django.utils import timezone
 
 from billing.models import CashAccount, FinancialMovement, Payment, Receivable
 from catalog.models import Category, Product
+from catalog.services import LEGACY_FREED_MARKER, is_free_code_slot
 from company.models import Company
 from core.management.commands.golive_backup import _backup_sqlite
 from customers.models import Customer
@@ -37,7 +38,16 @@ from notifications.models import CustomerMessage
 from rentals.models import Rental, RentalItem
 
 
-IMPORTER_VERSION = '2026.06.12-r2'
+IMPORTER_VERSION = '2026.08.21-r3'
+
+#: Written into ``Product.legacy_notes`` when two Access rows claim the same
+#: ``(prefixo, codigo)`` and the importer has to pick which one keeps the slot.
+#: The discarded row stays in the catalogue, retired, so the owner can revive it
+#: from the product screen once she says which piece is on the rack.
+DUPLICATE_CODE_MARKER = (
+    '[import] código {prefix}{code} tinha mais de um cadastro no Access; '
+    'este foi anulado e o cadastro #{kept} ficou com o código.'
+)
 
 TABLES = (
     'categoria',
@@ -686,8 +696,7 @@ class Command(BaseCommand):
 
     def _load_products(self, tables, categories):
         products = []
-        product_by_key = {}
-        duplicate_keys = defaultdict(list)
+        rows_by_key = defaultdict(list)
         max_product_id = 0
 
         for row in tables['produtos']:
@@ -713,11 +722,55 @@ class Command(BaseCommand):
                 updated_at=self.now,
             )
             products.append(product)
+            rows_by_key[(prefix, code)].append(product)
 
-            key = (prefix, code)
-            duplicate_keys[key].append(legacy_id)
-            if key not in product_by_key or legacy_id < product_by_key[key].id:
-                product_by_key[key] = product
+        # ``(category, code)`` is the piece's identity in this business — it is
+        # printed on the contract and written on the physical tag — so at most
+        # one live row may hold it.  Two legacy shapes break that here, and both
+        # are folded onto ``is_active`` *before* the insert, so the rows land
+        # already correct instead of being repaired afterwards.
+        product_by_key = {}
+        freed_count = 0
+        deduped = []
+        for (prefix, code), rows in sorted(rows_by_key.items()):
+            # (1) BRcom never deleted a product row: retiring an item rewrote
+            # its description to NULO, and a blank Access description became
+            # PREFIXCODE just above.  Those are free code slots, not pieces.
+            # ``catalog.0009`` folds them onto is_active=False after the fact;
+            # applying the same rule here — from the same helper, never a second
+            # copy of it — makes a fresh import land in the state the migration
+            # produces.  NULA is not a marker: it is a real description word
+            # ("VEST NULA MANGA" = sleeveless) on 340 legacy rows.
+            for product in rows:
+                if is_free_code_slot(product, prefix):
+                    self._retire_product(product, LEGACY_FREED_MARKER)
+                    freed_count += 1
+
+            # (2) What is left can still be two real pieces sharing a code — 40
+            # such codes exist in the Access dump, and nothing in it says which
+            # row is the garment on the rack: ``locado`` links by
+            # ``(prefixo, codigo)``, not by product id.  Keep the lowest legacy
+            # id: it is the row every RentalItem below binds to, and the same
+            # survivor ``dedupe_product_codes`` picks, so the history stays on a
+            # live row and both code paths agree.  The rest are retired, not
+            # deleted, and reported for the owner's triage.
+            live = [product for product in rows if product.is_active]
+            if len(live) > 1:
+                keep = min(live, key=lambda product: product.id)
+                for product in live:
+                    if product.id == keep.id:
+                        continue
+                    self._retire_product(product, DUPLICATE_CODE_MARKER.format(
+                        prefix=prefix, code=code, kept=keep.id,
+                    ))
+                    deduped.append(f'{prefix}{code}#{product.id}>{keep.id}')
+                live = [keep]
+
+            # An all-free-slot code keeps its lowest row as the anchor for the
+            # rental history, retired — exactly what catalog.0009 leaves behind.
+            product_by_key[(prefix, code)] = (
+                live[0] if live else min(rows, key=lambda product: product.id)
+            )
 
         # Placeholder products for items in locado without entry in produtos (R4.06)
         placeholder_count = 0
@@ -751,16 +804,63 @@ class Command(BaseCommand):
             next_id += 1
             placeholder_count += 1
 
-        duplicate_count = sum(1 for ids in duplicate_keys.values() if len(ids) > 1)
+        duplicate_count = sum(1 for rows in rows_by_key.values() if len(rows) > 1)
+        self._assert_one_live_row_per_code(products)
         self._bulk_create(Product, products)
         self.summary['products'] = len(products)
+        self.summary['free_code_slots_retired'] = freed_count
         self.summary['duplicate_product_keys'] = duplicate_count
+        self.summary['duplicate_products_retired'] = len(deduped)
+        # The audit table has to carry every decision, so two imports of the
+        # same .mdb can be diffed line by line.
+        self.summary['duplicate_products_detail'] = ' '.join(deduped) or 'nenhum'
         self.summary['placeholder_products'] = placeholder_count
+        if freed_count:
+            self.stdout.write(
+                f'  Codigos livres anulados (NULO/vazio/PREFIXOCODIGO): {freed_count}'
+            )
+        if deduped:
+            self.stdout.write(self.style.WARNING(
+                f'  Codigos com mais de um cadastro no Access: {len(deduped)} '
+                'cadastro(s) anulado(s) para deixar um item vivo por codigo.'
+            ))
+            for entry in deduped:
+                self.stdout.write(f'    {entry}')
+            self.stdout.write('  Revise com: python manage.py dedupe_product_codes')
         if placeholder_count:
             self.stdout.write(
                 self.style.WARNING(f'  Produtos placeholder criados: {placeholder_count}')
             )
         return product_by_key
+
+    def _retire_product(self, product, marker):
+        """Take a row out of the collection, recording why, before it is inserted."""
+        product.is_active = False
+        notes = product.legacy_notes.strip()
+        product.legacy_notes = '\n'.join(filter(None, (notes, marker)))
+
+    def _assert_one_live_row_per_code(self, products):
+        """Fail loudly, in Portuguese, instead of on a raw IntegrityError.
+
+        ``bulk_create`` skips ``full_clean``, so a rule that ever missed a shape
+        would surface as a driver-level constraint error halfway through a
+        cutover window, with no clue about which code caused it.
+        """
+        live = defaultdict(list)
+        for product in products:
+            if product.is_active:
+                live[(product.category.prefix, product.code)].append(product.id)
+        clashes = {key: ids for key, ids in live.items() if len(ids) > 1}
+        if clashes:
+            detail = ', '.join(
+                f'{prefix}{code}={sorted(ids)}'
+                for (prefix, code), ids in sorted(clashes.items())
+            )
+            raise CommandError(
+                'Importacao abortada: mais de um cadastro ativo no mesmo codigo. '
+                f'{detail}'
+            )
+
 
     # -----------------------------------------------------------------------
     # Rentals (R4.09)

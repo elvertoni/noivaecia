@@ -31,10 +31,13 @@
     </div>
 
     <div class="panel-spacious text-center">
-      <p class="stat-label">Pares de produtos duplicados</p>
+      <p class="stat-label">Códigos com mais de um cadastro</p>
       <p class="stat-value {% if duplicate_product_pairs > 0 %}text-amber-600{% else %}text-green-600{% endif %}">{{ duplicate_product_pairs }}</p>
       {% if duplicate_product_pairs > 0 %}
-        <a href="{% url 'catalog:product_list' %}?duplicate=1" class="text-link text-xs mt-1 block">Ver duplicados</a>
+        {# Sem status=all a lista sai vazia: o selo de duplicado sobre a
+           situação padrão só marca códigos com duas linhas ativas, o que a
+           restrição de unicidade tornou impossível. #}
+        <a href="{% url 'catalog:product_list' %}?duplicate=1&amp;status=all" class="text-link text-xs mt-1 block">Ver códigos</a>
       {% endif %}
     </div>
 

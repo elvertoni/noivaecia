@@ -1,7 +1,7 @@
 import re
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
@@ -25,6 +25,13 @@ from .availability import (
 )
 from .forms import AvailabilityQueryForm, CategoryForm, CategoryMergeForm, ProductForm
 from .models import Category, Product
+from .services import (
+    active_code_holder,
+    clear_legacy_freed_marker,
+    code_taken_message,
+    is_free_code_slot,
+    product_audit_snapshot,
+)
 
 
 class CatalogAccessMixin(ModuleAccessMixin):
@@ -205,11 +212,163 @@ class ProductListView(CatalogAccessMixin, ListView):
 
 
 class ProductCreateView(CatalogAccessMixin, SuccessMessageMixin, CreateView):
+    """Register a product, reviving a retired code instead of duplicating it.
+
+    A code is the item's identity in this business — it is printed on the
+    contract and written on the physical tag.  When the operator reuses a
+    retired code the row that owns it is rewritten back into service, which is
+    what the legacy system did and what keeps one code bound to one row.
+    Rental history is unaffected: ``RentalItem`` froze a full snapshot of the
+    piece when the line was created, so past contracts and reports keep
+    printing the garment that was actually rented.
+    """
+
     model = Product
     form_class = ProductForm
     template_name = 'catalog/product_form.html'
     success_url = reverse_lazy('catalog:product_list')
     success_message = 'Produto cadastrado com sucesso.'
+
+    REUSABLE_FIELDS = ('description', 'color', 'size', 'value', 'notes')
+
+    def form_valid(self, form):
+        reusable = form.reusable_product
+        if reusable is None:
+            # ``ProductForm.clean`` found the code free, but nothing held the
+            # slot between that SELECT and this INSERT.  The partial index is
+            # the real arbiter and reports the loser of the race here; the inner
+            # savepoint keeps the transaction usable so the form can be
+            # re-rendered with a proper field error instead of a 500.
+            try:
+                with transaction.atomic():
+                    return super().form_valid(form)
+            except IntegrityError:
+                category = form.cleaned_data['category']
+                code = form.cleaned_data['code']
+                holder = active_code_holder(category.pk, code)
+                if holder is None:
+                    # A different constraint fired; do not swallow its cause.
+                    raise
+                form.add_error('code', code_taken_message(
+                    category.prefix, code, holder,
+                ))
+                return self.form_invalid(form)
+
+        with transaction.atomic():
+            product = get_object_or_404(
+                Product.objects.select_for_update().select_related('category'),
+                pk=reusable.pk,
+            )
+            if product.is_active:
+                # Another operator revived or recreated it between validation
+                # and here; re-run validation so they see the live holder.
+                form.add_error('code', (
+                    f'O código {product.category.prefix}{product.code} acabou de ser '
+                    'ocupado por outro usuário. Confira o acervo e tente novamente.'
+                ))
+                return self.form_invalid(form)
+
+            previous_repr = str(product)[:200]
+            previous_description = product.description
+            for field in self.REUSABLE_FIELDS:
+                setattr(product, field, form.cleaned_data[field])
+            product.is_active = True
+            # Real data was just supplied, so the incomplete-import flag no
+            # longer applies to this row.
+            product.is_placeholder = False
+            # The row stops being a freed legacy slot here; leaving the sentinel
+            # would let a reverse of catalog.0009 reactivate this item later,
+            # after it is legitimately retired again.
+            clear_legacy_freed_marker(product)
+            product.save()
+
+            absorbed, kept_apart = self._absorb_retired_siblings(product)
+            past_rentals = product.rental_items.count()
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='product_code_reuse',
+                model_name='Product',
+                object_id=str(product.pk),
+                object_repr=str(product)[:200],
+                reason='Código anulado reaproveitado por um novo item do acervo.',
+                metadata={
+                    'description': {
+                        'from': previous_description,
+                        'to': product.description,
+                    },
+                    'is_active': {'from': False, 'to': True},
+                    'previous_repr': previous_repr,
+                    'past_rental_items': past_rentals,
+                    'absorbed': absorbed,
+                },
+            )
+
+        self.object = product
+        label = f'{product.category.prefix}{product.code}'
+        message = f'Código {label} reaproveitado por "{product.description}".'
+        if absorbed:
+            message += (
+                f' {len(absorbed)} cadastro(s) anulado(s) do mesmo código foram '
+                'consolidados neste registro.'
+            )
+        if past_rentals:
+            message += (
+                f' As {past_rentals} locações antigas deste código seguem no histórico '
+                'com a descrição que tinham na época.'
+            )
+        messages.success(self.request, message)
+        if kept_apart:
+            names = ', '.join(f'"{s.description}"' for s in kept_apart[:3])
+            # The default product list only flags codes held by two *live*
+            # items, so point at the filter combination that actually shows a
+            # live/retired pair.
+            messages.warning(self.request, (
+                f'O código {label} ainda tem {len(kept_apart)} cadastro(s) anulado(s) '
+                f'com descrição própria ({names}). Eles foram mantidos por precaução. '
+                'Para conferir se são a mesma peça, abra Produtos com "Situação no '
+                'acervo: Todos" e marque "Apenas duplicados".'
+            ))
+        return redirect(self.get_success_url())
+
+    def _absorb_retired_siblings(self, survivor):
+        """Fold leftover *empty slots* on this code into the revived row.
+
+        Duplicates predating the cleanup can leave several retired rows on one
+        code.  Reviving just one would leave the rest holding rental history
+        under a code they no longer represent.
+
+        Only rows that never held a piece — the legacy ``NULO`` shells and the
+        importer's blank-description fallback — are consolidated.  A retired row
+        carrying a real description is a distinct garment whose history must not
+        be silently merged into another; deciding that two descriptions name the
+        same piece is the owner's call, and it belongs in
+        ``dedupe_product_codes`` where it is reported and dry-run first.
+        """
+        siblings = list(
+            Product.objects.select_for_update()
+            .filter(
+                category_id=survivor.category_id,
+                code=survivor.code,
+                is_active=False,
+            )
+            .exclude(pk=survivor.pk)
+            .select_related('category')
+        )
+        empty_slots = [s for s in siblings if is_free_code_slot(s)]
+        # Reported by the caller once the transaction commits — a message
+        # queued here would outlive a rollback and describe a merge that never
+        # happened.
+        kept_apart = [s for s in siblings if not is_free_code_slot(s)]
+        if not empty_slots:
+            return [], kept_apart
+
+        absorbed = [product_audit_snapshot(slot) for slot in empty_slots]
+        RentalItem.objects.filter(
+            product_id__in=[slot.pk for slot in empty_slots],
+        ).update(product=survivor)
+        for slot in empty_slots:
+            slot.delete()
+        return absorbed, kept_apart
 
 
 class ProductUpdateView(CatalogAccessMixin, SuccessMessageMixin, UpdateView):
@@ -221,6 +380,16 @@ class ProductUpdateView(CatalogAccessMixin, SuccessMessageMixin, UpdateView):
 
 
 class ProductDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
+    """Retire a product without ever dropping its row.
+
+    Physically deleting a product used to be allowed whenever it had no rental
+    history, which silently freed the ``(category, code)`` slot with no record
+    that the code had ever existed — the next registration of that code became
+    an untraceable second row.  The legacy system never deleted a product row
+    for exactly this reason, so retiring is always in place: the row keeps the
+    code, and ``ProductCreateView`` revives it when the code is reused.
+    """
+
     action_key = 'catalog.delete'
     model = Product
     template_name = 'catalog/product_confirm_delete.html'
@@ -237,37 +406,14 @@ class ProductDeleteView(CatalogAccessMixin, ActionRequiredMixin, DeleteView):
                 Product.objects.select_for_update().select_related('category'),
                 pk=self.object.pk,
             )
-            product_id = product.pk
-            product_repr = str(product)[:200]
-
-            if product.rental_items.exists():
-                archived = self._archive_product(product, product_repr)
-            else:
-                try:
-                    # The savepoint keeps the outer transaction usable when a
-                    # rental item is attached between the existence check and
-                    # the delete attempt.
-                    with transaction.atomic():
-                        product.delete()
-                except ProtectedError:
-                    product = Product.objects.select_for_update().get(pk=product_id)
-                    archived = self._archive_product(product, product_repr)
-                else:
-                    AuditLog.objects.create(
-                        user=self.request.user,
-                        action='product_delete',
-                        model_name='Product',
-                        object_id=str(product_id),
-                        object_repr=product_repr,
-                        reason='Exclusão física de produto sem histórico de locações.',
-                    )
-                    messages.success(self.request, 'Produto excluído com sucesso.')
-                    return redirect(self.success_url)
+            archived = self._archive_product(product, str(product)[:200])
+            label = f'{product.category.prefix}{product.code}'
 
         if archived:
             messages.success(
                 self.request,
-                'Produto retirado do acervo com sucesso. O histórico de locações foi preservado.',
+                f'Produto retirado do acervo com sucesso. O código {label} fica anulado e '
+                'disponível para reaproveitamento, e o histórico de locações foi preservado.',
             )
         else:
             messages.info(self.request, 'Este produto já estava fora do acervo.')
@@ -303,9 +449,35 @@ class ProductReactivateView(CatalogAccessMixin, ActionRequiredMixin, View):
                 messages.info(request, 'Este produto já está ativo no acervo.')
                 return redirect('catalog:product_list')
 
-            product_repr = str(product)[:200]
-            product.is_active = True
-            product.save(update_fields=['is_active', 'updated_at'])
+            # Reactivating must not put a second live item on the same code:
+            # duplicates left over from the legacy import still share slots, and
+            # the operator would end up with two "VF731" in the pickers.
+            holder = active_code_holder(
+                product.category_id, product.code, exclude_pk=product.pk,
+            )
+            if holder is None:
+                product_repr = str(product)[:200]
+                try:
+                    # The lock above covers this row only.  Another operator can
+                    # be reactivating a second retired row of the same code
+                    # right now, and the partial index is what sees that.
+                    with transaction.atomic():
+                        product.is_active = True
+                        product.save(update_fields=['is_active', 'updated_at'])
+                except IntegrityError:
+                    holder = active_code_holder(
+                        product.category_id, product.code, exclude_pk=product.pk,
+                    )
+                    if holder is None:
+                        raise
+            if holder is not None:
+                messages.error(
+                    request,
+                    f'O código {product.category.prefix}{product.code} já está no acervo, '
+                    f'usado por "{holder.description}". Retire esse item antes de reativar este.',
+                )
+                return redirect('catalog:product_list')
+
             AuditLog.objects.create(
                 user=request.user,
                 action='product_reactivate',
@@ -333,12 +505,20 @@ class ProductHistoryView(CatalogAccessMixin, DetailView):
     def get_context_data(self, **kwargs):
         from rentals.models import RentalItem
         ctx = super().get_context_data(**kwargs)
-        # Detect siblings (same prefix+code) for duplicate warning
-        siblings = Product.objects.filter(
-            category=self.object.category,
-            code=self.object.code,
-        ).exclude(pk=self.object.pk)
-        ctx['siblings'] = list(siblings)
+        # Other rows on this code.  A retired one is ordinary history — the
+        # code was reused, which is the supported flow — so flagging it as a
+        # defect would train the operator to ignore the warning.  A *live* one
+        # is the real defect, and ``catalog_product_unique_active_code`` should
+        # make it impossible; it stays reported in case the guard is ever gone.
+        siblings = list(
+            Product.objects.filter(
+                category=self.object.category,
+                code=self.object.code,
+            ).exclude(pk=self.object.pk)
+        )
+        ctx['siblings'] = siblings
+        ctx['live_siblings'] = [s for s in siblings if s.is_active]
+        ctx['retired_siblings'] = [s for s in siblings if not s.is_active]
         # Recent rental items — latest 50
         rental_items = (
             RentalItem.objects.filter(product=self.object)
@@ -520,7 +700,44 @@ class CategoryMergeView(CatalogAccessMixin, ActionRequiredMixin, View):
             target = categories[target.pk]
             product_count = Product.objects.filter(category=source).count()
             item_count = RentalItem.objects.filter(product__category=source).count()
-            Product.objects.filter(category=source).update(category=target)
+
+            # Moving the products wholesale would silently put two live items on
+            # the same code whenever both categories use it — the exact
+            # duplication this catalogue is being cleaned up for.
+            colliding = sorted(
+                Product.objects.filter(
+                    category=source, is_active=True,
+                    code__in=Product.objects.filter(
+                        category=target, is_active=True,
+                    ).values('code'),
+                ).values_list('code', flat=True)
+            )
+            if colliding:
+                shown = ', '.join(f'{target.prefix}{code}' for code in colliding[:10])
+                extra = f' e mais {len(colliding) - 10}' if len(colliding) > 10 else ''
+                messages.error(
+                    request,
+                    f'A mesclagem criaria códigos repetidos em {target.prefix}: {shown}{extra}. '
+                    'Retire do acervo ou renumere esses itens antes de mesclar.',
+                )
+                return redirect('catalog:category_merge')
+
+            try:
+                # The collision check above locks the two categories, not the
+                # products: an item created or reactivated in the target during
+                # the operation escapes it.  Own savepoint so the failed UPDATE
+                # does not abort the whole merge transaction.
+                with transaction.atomic():
+                    Product.objects.filter(category=source).update(category=target)
+            except IntegrityError:
+                messages.error(
+                    request,
+                    f'A mesclagem criaria códigos repetidos em {target.prefix} — um item '
+                    'foi cadastrado ou reativado durante a operação. Refaça a conferência '
+                    'e tente de novo.',
+                )
+                return redirect('catalog:category_merge')
+
             AuditLog.objects.create(
                 user=request.user,
                 action='category_merge',
@@ -628,7 +845,12 @@ class ProductSearchView(View):
 
 
 class InactiveProductCodesView(CatalogAccessMixin, View):
-    """List reusable codes from archived or legacy-null inventory items."""
+    """List retired codes available for reuse.
+
+    ``is_active=False`` is the single meaning of "this code is free" — the
+    legacy ``description='NULO'`` shells were folded into it by migration
+    ``catalog.0009``, so this endpoint no longer needs a second dialect.
+    """
 
     def get(self, request, *args, **kwargs):
         category_id = request.GET.get('category', '').strip()
@@ -643,26 +865,35 @@ class InactiveProductCodesView(CatalogAccessMixin, View):
 
         codes_in_use = Product.objects.filter(
             category=category, is_active=True,
-        ).exclude(description__iexact='nulo').values('code')
+        ).values('code')
 
-        codes = (
-            Product.objects.filter(category=category)
-            .filter(Q(is_active=False) | Q(description__iexact='nulo'))
-            .exclude(code__in=codes_in_use)
-            .values('code')
-            .annotate(records=Count('pk'))
+        retired = Product.objects.filter(
+            category=category, is_active=False,
+        ).exclude(code__in=codes_in_use)
+
+        # One entry per code, and the history it carries is the total across
+        # every retired row on that code — reviving it consolidates them all,
+        # so reporting only the first row's count would understate it.
+        totals = (
+            retired.values('code')
+            .annotate(past_rentals=Count('rental_items'))
             .order_by('code')
         )
-        return JsonResponse({
-            'results': [
-                {
-                    'code': row['code'],
-                    'label': f'{category.prefix}{row["code"]}',
-                    'records': row['records'],
-                }
-                for row in codes
-            ],
-        })
+        # The oldest row owns the slot, so its description is what the operator
+        # recognises as "what this code used to be".
+        descriptions = {}
+        for code, description in retired.order_by('-pk').values_list('code', 'description'):
+            descriptions[code] = description
+
+        return JsonResponse({'results': [
+            {
+                'code': row['code'],
+                'label': f'{category.prefix}{row["code"]}',
+                'previous': descriptions.get(row['code'], ''),
+                'past_rentals': row['past_rentals'],
+            }
+            for row in totals
+        ]})
 
 
 class ProductBrowseView(View):

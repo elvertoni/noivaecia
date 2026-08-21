@@ -179,6 +179,10 @@ class ImportQualityView(MaintenanceAccessMixin, TemplateView):
         ctx['placeholder_products'] = Product.objects.filter(is_placeholder=True).count()
         ctx['placeholder_customers'] = Customer.objects.filter(is_placeholder=True).count()
 
+        # Counts codes carrying more than one registration.  Since
+        # ``catalog_product_unique_active_code`` at most one of them is live, so
+        # this is a history signal — a code that was retired and reused — not
+        # two garments competing for one tag.
         dup_pairs = (
             Product.objects.values('category_id', 'code')
             .annotate(cnt=Count('id'))
