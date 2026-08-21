@@ -19,9 +19,11 @@ from notifications.services import (
     dispatch_customer_message,
     format_whatsapp_number,
     pickup_reminder_queue,
+    pickup_reminder_queue_with_skipped,
     render_pickup_message,
     render_return_message,
     return_reminder_queue,
+    return_reminder_queue_with_skipped,
     validate_message_template,
 )
 from rentals.models import Rental, RentalItem
@@ -354,6 +356,155 @@ class ReturnReminderQueueTests(TestCase):
         )
         queue = return_reminder_queue(TODAY)
         self.assertEqual(queue, [])
+
+
+# ── skipped (unreachable) reminders ─────────────────────────────────────────
+
+class ReminderQueueSkippedTests(TestCase):
+    """Rentals eligible by date/status whose customer has no usable mobile
+    must surface as *skipped* instead of vanishing from the panel."""
+
+    def setUp(self):
+        _make_company()
+
+    def test_pickup_incomplete_phone_is_skipped_not_queued(self):
+        customer = _make_customer(name='Sem Ddd', phone_mobile='99999-8888')
+        rental = _make_rental(40, customer, Rental.Status.PENDING,
+                              pickup_date=TODAY + timedelta(days=1),
+                              return_date=TODAY + timedelta(days=7))
+
+        queue, skipped = pickup_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(queue, [])
+        self.assertEqual(len(skipped), 1)
+        self.assertEqual(skipped[0]['rental'], rental)
+        self.assertEqual(skipped[0]['customer'], customer)
+        self.assertEqual(skipped[0]['phone'], '99999-8888')
+
+    def test_pickup_missing_phone_is_skipped_with_empty_raw_number(self):
+        customer = _make_customer(name='Sem Celular', phone_mobile='')
+        _make_rental(41, customer, Rental.Status.PENDING,
+                     pickup_date=TODAY + timedelta(days=1),
+                     return_date=TODAY + timedelta(days=7))
+
+        queue, skipped = pickup_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(queue, [])
+        self.assertEqual(len(skipped), 1)
+        self.assertEqual(skipped[0]['phone'], '')
+
+    def test_pickup_valid_phone_is_queued_and_not_skipped(self):
+        customer = _make_customer(name='Com Celular')
+        rental = _make_rental(42, customer, Rental.Status.PENDING,
+                              pickup_date=TODAY + timedelta(days=1),
+                              return_date=TODAY + timedelta(days=7))
+
+        queue, skipped = pickup_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(skipped, [])
+        self.assertEqual([entry['rental'] for entry in queue], [rental])
+        self.assertEqual(queue[0]['phone'], '5543999998888')
+
+    def test_return_incomplete_phone_is_skipped_not_queued(self):
+        customer = _make_customer(name='Devolucao Sem Ddd', phone_mobile='123')
+        rental = _make_rental(43, customer, Rental.Status.PICKED_UP,
+                              pickup_date=TODAY - timedelta(days=7),
+                              return_date=TODAY)
+
+        queue, skipped = return_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(queue, [])
+        self.assertEqual([entry['rental'] for entry in skipped], [rental])
+        self.assertEqual(skipped[0]['phone'], '123')
+
+    def test_return_valid_phone_is_queued_and_not_skipped(self):
+        customer = _make_customer(name='Devolucao Ok')
+        rental = _make_rental(44, customer, Rental.Status.PICKED_UP,
+                              pickup_date=TODAY - timedelta(days=7),
+                              return_date=TODAY)
+
+        queue, skipped = return_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(skipped, [])
+        self.assertEqual([entry['rental'] for entry in queue], [rental])
+
+    def test_ineligible_rentals_never_reach_skipped(self):
+        """Only rentals the queue would otherwise send to are reported: a wrong
+        date, a wrong status or an already-attempted rental stay out of both
+        lists even when the phone is unusable."""
+        customer = _make_customer(name='Nao Elegivel', phone_mobile='123')
+        _make_rental(45, customer, Rental.Status.PENDING,
+                     pickup_date=TODAY + timedelta(days=3),
+                     return_date=TODAY + timedelta(days=9))
+        _make_rental(46, customer, Rental.Status.CANCELLED,
+                     pickup_date=TODAY + timedelta(days=1),
+                     return_date=TODAY + timedelta(days=7))
+        already = _make_rental(47, customer, Rental.Status.PENDING,
+                               pickup_date=TODAY + timedelta(days=1),
+                               return_date=TODAY + timedelta(days=7))
+        CustomerMessage.objects.create(
+            rental=already, customer=customer,
+            kind=CustomerMessage.Kind.PICKUP_REMINDER,
+            phone='123', status=CustomerMessage.Status.SENT,
+        )
+
+        queue, skipped = pickup_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(queue, [])
+        self.assertEqual(skipped, [])
+
+    def test_queue_and_skipped_come_from_a_single_query(self):
+        queued_customer = _make_customer(name='Alice')
+        skipped_customer = _make_customer(name='Zilda', phone_mobile='9999')
+        _make_rental(48, queued_customer, Rental.Status.PENDING,
+                     pickup_date=TODAY + timedelta(days=1),
+                     return_date=TODAY + timedelta(days=7))
+        _make_rental(49, skipped_customer, Rental.Status.PENDING,
+                     pickup_date=TODAY + timedelta(days=1),
+                     return_date=TODAY + timedelta(days=7))
+
+        with self.assertNumQueries(1):
+            queue, skipped = pickup_reminder_queue_with_skipped(TODAY)
+
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(len(skipped), 1)
+
+    def test_legacy_queue_functions_still_return_only_the_queue(self):
+        queued = _make_customer(name='Fila Ok')
+        unreachable = _make_customer(name='Fila Sem Tel', phone_mobile='')
+        pickup = _make_rental(50, queued, Rental.Status.PENDING,
+                              pickup_date=TODAY + timedelta(days=1),
+                              return_date=TODAY + timedelta(days=7))
+        _make_rental(51, unreachable, Rental.Status.PENDING,
+                     pickup_date=TODAY + timedelta(days=1),
+                     return_date=TODAY + timedelta(days=7))
+        returning = _make_rental(52, queued, Rental.Status.PICKED_UP,
+                                 pickup_date=TODAY - timedelta(days=7),
+                                 return_date=TODAY)
+
+        self.assertEqual(
+            [entry['rental'] for entry in pickup_reminder_queue(TODAY)], [pickup],
+        )
+        self.assertEqual(
+            [entry['rental'] for entry in return_reminder_queue(TODAY)], [returning],
+        )
+
+    def test_empty_day_returns_two_empty_lists(self):
+        self.assertEqual(pickup_reminder_queue_with_skipped(TODAY), ([], []))
+        self.assertEqual(return_reminder_queue_with_skipped(TODAY), ([], []))
+
+    def test_defaults_to_localdate_when_today_omitted(self):
+        from django.utils import timezone as dj_timezone
+        customer = _make_customer(name='Sem Today Skip', phone_mobile='9999')
+        tomorrow = dj_timezone.localdate() + timedelta(days=1)
+        rental = _make_rental(53, customer, Rental.Status.PENDING,
+                              pickup_date=tomorrow,
+                              return_date=tomorrow + timedelta(days=7))
+
+        queue, skipped = pickup_reminder_queue_with_skipped()
+
+        self.assertEqual(queue, [])
+        self.assertEqual([entry['rental'] for entry in skipped], [rental])
 
 
 # ── dispatch_customer_message ───────────────────────────────────────────────

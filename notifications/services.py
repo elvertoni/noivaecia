@@ -409,57 +409,90 @@ def _already_attempted_rental_ids(kind):
     ).values_list('rental_id', flat=True)
 
 
-def pickup_reminder_queue(today=None):
-    """Rentals eligible for the eve-of-pickup reminder: ``pending`` rentals
-    whose ``pickup_date`` is tomorrow, with a valid phone and no prior
-    pickup reminder attempt for that rental."""
-    today = today or timezone.localdate()
+def _split_reminder_queue(rentals, render_message):
+    """Split date/status-eligible ``rentals`` into the sendable queue and the
+    ones dropped for lacking a usable mobile number.
+
+    ``format_whatsapp_number`` remains the only authority on what a valid
+    number is; this merely keeps what it rejected instead of discarding it, so
+    the panel can show the customers that would otherwise vanish in silence.
+    Each skipped entry carries the raw registered phone (``phone``), which is
+    empty when the customer has no mobile at all.
+    """
+    queue = []
+    skipped = []
+    for rental in rentals:
+        customer = rental.customer
+        phone = format_whatsapp_number(customer.phone_mobile_digits)
+        if not phone:
+            skipped.append({
+                'rental': rental,
+                'customer': customer,
+                'phone': customer.phone_mobile or '',
+            })
+            continue
+        queue.append({
+            'rental': rental,
+            'customer': customer,
+            'phone': phone,
+            'message': render_message(rental),
+        })
+    return queue, skipped
+
+
+def _pickup_reminder_rentals(today):
     target_date = today + timedelta(days=1)
-    rentals = (
+    return (
         Rental.objects.filter(status=Rental.Status.PENDING, pickup_date=target_date)
         .exclude(pk__in=_already_attempted_rental_ids(CustomerMessage.Kind.PICKUP_REMINDER))
         .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
     )
-    queue = []
-    for rental in rentals:
-        phone = format_whatsapp_number(rental.customer.phone_mobile_digits)
-        if not phone:
-            continue
-        queue.append({
-            'rental': rental,
-            'customer': rental.customer,
-            'phone': phone,
-            'message': render_pickup_message(rental),
-        })
-    return queue
 
 
-def return_reminder_queue(today=None):
-    """Rentals eligible for the return-day reminder: ``picked_up`` rentals
-    whose ``return_date`` is today, with a valid phone and no prior return
-    reminder attempt for that rental."""
-    today = today or timezone.localdate()
-    rentals = (
+def _return_reminder_rentals(today):
+    return (
         Rental.objects.filter(status=Rental.Status.PICKED_UP, return_date=today)
         .exclude(pk__in=_already_attempted_rental_ids(CustomerMessage.Kind.RETURN_REMINDER))
         .annotate(item_count=Count('items'))
         .select_related('customer')
         .order_by('customer__name')
     )
-    queue = []
-    for rental in rentals:
-        phone = format_whatsapp_number(rental.customer.phone_mobile_digits)
-        if not phone:
-            continue
-        queue.append({
-            'rental': rental,
-            'customer': rental.customer,
-            'phone': phone,
-            'message': render_return_message(rental),
-        })
-    return queue
+
+
+def pickup_reminder_queue_with_skipped(today=None):
+    """``(queue, skipped)`` for the eve-of-pickup reminder, from a single
+    query: the sendable queue plus the eligible rentals whose customer has no
+    usable mobile number."""
+    today = today or timezone.localdate()
+    return _split_reminder_queue(
+        _pickup_reminder_rentals(today), render_pickup_message,
+    )
+
+
+def return_reminder_queue_with_skipped(today=None):
+    """``(queue, skipped)`` for the return-day reminder, from a single query:
+    the sendable queue plus the eligible rentals whose customer has no usable
+    mobile number."""
+    today = today or timezone.localdate()
+    return _split_reminder_queue(
+        _return_reminder_rentals(today), render_return_message,
+    )
+
+
+def pickup_reminder_queue(today=None):
+    """Rentals eligible for the eve-of-pickup reminder: ``pending`` rentals
+    whose ``pickup_date`` is tomorrow, with a valid phone and no prior
+    pickup reminder attempt for that rental."""
+    return pickup_reminder_queue_with_skipped(today)[0]
+
+
+def return_reminder_queue(today=None):
+    """Rentals eligible for the return-day reminder: ``picked_up`` rentals
+    whose ``return_date`` is today, with a valid phone and no prior return
+    reminder attempt for that rental."""
+    return return_reminder_queue_with_skipped(today)[0]
 
 
 _MESSAGE_RENDERERS = {

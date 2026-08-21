@@ -27,7 +27,9 @@ from .services import (
     dispatch_customer_message,
     get_default_message_template,
     pickup_reminder_queue,
+    pickup_reminder_queue_with_skipped,
     return_reminder_queue,
+    return_reminder_queue_with_skipped,
     validate_message_template,
 )
 
@@ -80,9 +82,15 @@ class WhatsAppPanelView(NotificationsAccessMixin, TemplateView):
                     'Não foi possível consultar o WhatsApp agora. '
                     'Tente novamente em alguns instantes.'
                 )
+        # One pass per kind: the queue and the rentals dropped for an unusable
+        # mobile number come from the same query.
+        pickup_items, pickup_skipped = pickup_reminder_queue_with_skipped(today=today)
+        return_items, return_skipped = return_reminder_queue_with_skipped(today=today)
         ctx.update({
-            'pickup_items': pickup_reminder_queue(today=today),
-            'return_items': return_reminder_queue(today=today),
+            'pickup_items': pickup_items,
+            'pickup_skipped': pickup_skipped,
+            'return_items': return_items,
+            'return_skipped': return_skipped,
             'tomorrow': today + timedelta(days=1),
             'today': today,
             'evolution_configured': evolution_configured,

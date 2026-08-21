@@ -150,8 +150,12 @@
         </div>
       </form>
     {% else %}
-      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma retirada para avisar amanhã.</div>
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">
+        {% if pickup_skipped %}Nenhuma retirada pode ser avisada por WhatsApp amanhã.{% else %}Nenhuma retirada para avisar amanhã.{% endif %}
+      </div>
     {% endif %}
+
+    {% include 'includes/whatsapp_skipped_reminders.html' with items=pickup_skipped %}
   </section>
 
   {# ── Devoluções de hoje ──────────────────────────────────────────── #}
@@ -226,8 +230,12 @@
         </div>
       </form>
     {% else %}
-      <div class="table-empty rounded-xl border border-app-border bg-app-surface">Nenhuma devolução para avisar hoje.</div>
+      <div class="table-empty rounded-xl border border-app-border bg-app-surface">
+        {% if return_skipped %}Nenhuma devolução pode ser avisada por WhatsApp hoje.{% else %}Nenhuma devolução para avisar hoje.{% endif %}
+      </div>
     {% endif %}
+
+    {% include 'includes/whatsapp_skipped_reminders.html' with items=return_skipped %}
   </section>
 
   {# ── Enviados recentemente ───────────────────────────────────────── #}

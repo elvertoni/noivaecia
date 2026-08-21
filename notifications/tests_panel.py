@@ -182,6 +182,116 @@ class PanelQueueRenderingTests(TestCase):
         self.assertContains(r, reverse('notifications:connection'))
 
 
+class PanelSkippedReminderTests(TestCase):
+    """The panel must show whoever the queue drops for an unusable mobile,
+    so a short queue is never mistaken for "nobody to notify"."""
+
+    def setUp(self):
+        _make_company()
+        self.user = _make_user()
+        # The operator who fixes the register also has the customers module.
+        ModulePermission.objects.create(
+            user=self.user, module_key='customers', allowed=True,
+        )
+        self.client.force_login(self.user)
+        self.url = reverse('notifications:whatsapp_panel')
+
+    @mock.patch('notifications.views.timezone')
+    def test_pickup_without_ddd_is_listed_as_skipped_and_not_queued(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        customer = _make_customer(name='Sonia Sem Ddd', mobile='98765-4321')
+        rental = _make_pickup_rental(920, customer=customer)
+
+        r = self.client.get(self.url)
+
+        self.assertEqual(r.status_code, 200)
+        pickup_pks = {item['rental'].pk for item in r.context['pickup_items']}
+        skipped_pks = {item['rental'].pk for item in r.context['pickup_skipped']}
+        self.assertNotIn(rental.pk, pickup_pks)
+        self.assertIn(rental.pk, skipped_pks)
+        self.assertContains(r, 'Fora da fila: 1 cliente com celular ausente ou inválido')
+        self.assertContains(r, 'não vão receber o aviso')
+        self.assertContains(r, 'SONIA SEM DDD')
+        self.assertContains(r, '98765-4321')
+        self.assertContains(r, reverse('customers:update', args=[customer.pk]))
+
+    @mock.patch('notifications.views.timezone')
+    def test_return_without_mobile_is_listed_as_skipped(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        customer = _make_customer(name='Rita Sem Celular', mobile='')
+        rental = _make_return_rental(921, customer=customer)
+
+        r = self.client.get(self.url)
+
+        return_pks = {item['rental'].pk for item in r.context['return_items']}
+        skipped_pks = {item['rental'].pk for item in r.context['return_skipped']}
+        self.assertNotIn(rental.pk, return_pks)
+        self.assertIn(rental.pk, skipped_pks)
+        self.assertContains(r, 'sem celular cadastrado')
+        self.assertContains(r, 'Nenhuma devolução pode ser avisada por WhatsApp hoje.')
+
+    @mock.patch('notifications.views.timezone')
+    def test_skipped_count_is_pluralized(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        _make_pickup_rental(922, customer=_make_customer(name='Uma', mobile='1111'))
+        _make_pickup_rental(923, customer=_make_customer(name='Outra', mobile=''))
+
+        r = self.client.get(self.url)
+
+        self.assertEqual(len(r.context['pickup_skipped']), 2)
+        self.assertContains(r, 'Fora da fila: 2 clientes com celular ausente ou inválido')
+
+    @mock.patch('notifications.views.timezone')
+    def test_valid_mobile_renders_no_skipped_block(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        _make_pickup_rental(924)
+        _make_return_rental(925)
+
+        r = self.client.get(self.url)
+
+        self.assertEqual(r.context['pickup_skipped'], [])
+        self.assertEqual(r.context['return_skipped'], [])
+        self.assertNotContains(r, 'Fora da fila')
+
+    @mock.patch('notifications.views.timezone')
+    def test_empty_queues_and_no_skipped_render_the_plain_empty_state(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+
+        r = self.client.get(self.url)
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context['pickup_skipped'], [])
+        self.assertEqual(r.context['return_skipped'], [])
+        self.assertNotContains(r, 'Fora da fila')
+        self.assertContains(r, 'Nenhuma retirada para avisar amanhã.')
+        self.assertContains(r, 'Nenhuma devolução para avisar hoje.')
+
+    @mock.patch('notifications.views.timezone')
+    def test_correction_link_hidden_without_customers_module(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        outsider = _make_user()  # movements module only
+        self.client.force_login(outsider)
+        customer = _make_customer(name='Sem Permissao', mobile='1111')
+        _make_pickup_rental(926, customer=customer)
+
+        r = self.client.get(self.url)
+
+        self.assertContains(r, 'Fora da fila')
+        self.assertNotContains(r, reverse('customers:update', args=[customer.pk]))
+        self.assertNotContains(r, 'Corrigir cadastro')
+
+    @mock.patch('notifications.views.timezone')
+    def test_correction_link_shown_with_customers_module(self, mock_timezone):
+        mock_timezone.localdate.return_value = TODAY
+        customer = _make_customer(name='Com Permissao', mobile='1111')
+        _make_pickup_rental(927, customer=customer)
+
+        r = self.client.get(self.url)
+
+        self.assertContains(r, reverse('customers:update', args=[customer.pk]))
+        self.assertContains(r, 'Corrigir cadastro')
+
+
 class PanelActionGatingTests(TestCase):
     """Buttons for fine-grained actions must not render without them (R3.11)."""
 

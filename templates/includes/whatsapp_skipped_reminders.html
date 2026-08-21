@@ -1,0 +1,30 @@
+{% load core_tags %}
+{% comment %}
+Customers that the reminder queue drops because their mobile number cannot be
+turned into a WhatsApp number. Expects `items` (list of dicts with `rental`,
+`customer` and the raw rejected `phone`). Renders nothing when empty.
+{% endcomment %}
+{% if items %}
+  <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <h3 class="font-semibold">Fora da fila: {{ items|length }} cliente{{ items|length|pluralize }} com celular ausente ou inválido</h3>
+    <p class="mt-1 leading-6">
+      Estes clientes <strong>não vão receber o aviso</strong> por WhatsApp. Não é erro do sistema:
+      o celular precisa estar cadastrado com DDD e número válido. Corrija o cadastro e a locação
+      volta para a fila.
+    </p>
+    <ul class="mt-3 space-y-2">
+      {% for item in items %}
+        <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span class="font-medium text-amber-900">{{ item.customer.name }}</span>
+          <a href="{% url 'rentals:detail' item.rental.pk %}" class="inline-flex min-h-11 items-center text-link">#{{ item.rental.number }}</a>
+          <span class="whitespace-nowrap text-xs">
+            {% if item.phone %}celular “{{ item.phone }}” inválido{% else %}sem celular cadastrado{% endif %}
+          </span>
+          {% if request.user|has_module:'customers' %}
+            <a href="{% url 'customers:update' item.customer.pk %}" class="btn btn-secondary btn-sm">Corrigir cadastro</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
