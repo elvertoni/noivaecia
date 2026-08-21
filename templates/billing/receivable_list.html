@@ -87,10 +87,22 @@
                     </form>
                   {% endif %}
                 </div>
-              {% elif not row.obj.is_paid and request.user|has_action:'billing.receive' %}
-                <a href="{% url 'billing:pay' row.obj.pk %}" class="inline-flex min-h-11 items-center text-link">Receber</a>
               {% else %}
-                <span class="badge badge-success">Quitado</span>
+                <div class="inline-flex flex-col items-end gap-1">
+                  {% if not row.obj.is_paid and request.user|has_action:'billing.receive' %}
+                    <a href="{% url 'billing:pay' row.obj.pk %}" class="inline-flex min-h-11 items-center text-link">Receber</a>
+                  {% elif row.obj.is_paid %}
+                    <span class="badge badge-success">Quitado</span>
+                  {% endif %}
+                  {% if row.correction_payment and request.user|has_action:'billing.reverse' %}
+                    {% if request.user|has_action:'billing.receive' %}
+                      <a href="{% url 'billing:reverse_payment' row.correction_payment.pk %}?corrigir=1&amp;next={{ request.get_full_path|urlencode }}"
+                         class="inline-flex min-h-11 items-center text-link text-sm">
+                        Corrigir recebimento
+                      </a>
+                    {% endif %}
+                  {% endif %}
+                </div>
               {% endif %}
             </td>
           </tr>

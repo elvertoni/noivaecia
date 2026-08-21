@@ -283,6 +283,141 @@ class ReceiptReversalViewTests(ReceiptViewTestCase):
         self.assertEqual(reconciliation['net_movements'], Decimal('0.00'))
 
 
+class PaymentCorrectionFlowTests(ReceiptViewTestCase):
+    """A typing error can be corrected from the installment that shows it."""
+
+    def setUp(self):
+        super().setUp()
+        self._pay(self.installments[0], '30,00')
+        self.receipt = Receipt.objects.get()
+        self.payment = self.receipt.allocations.get().payment
+
+    def test_rental_installment_exposes_correction_next_to_receiving(self):
+        response = self.client.get(
+            reverse('billing:list', args=[self.rental.pk]),
+        )
+
+        self.assertContains(response, 'Receber')
+        self.assertContains(response, 'Corrigir recebimento')
+        self.assertContains(
+            response,
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+        )
+
+    def test_correction_action_requires_receive_and_reverse_permissions(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='billing.reverse',
+        ).delete()
+
+        response = self.client.get(
+            reverse('billing:list', args=[self.rental.pk]),
+        )
+
+        self.assertNotContains(response, 'Corrigir recebimento')
+
+    def test_correction_url_cannot_bypass_receive_permission(self):
+        ActionPermission.objects.filter(
+            user=self.user,
+            action_key='billing.receive',
+        ).delete()
+
+        response = self.client.post(
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+            {
+                'reason': 'Correção de valor digitado incorretamente.',
+                'submission_token': str(uuid.uuid4()),
+                'corrigir': '1',
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.receipt.refresh_from_db()
+        self.assertFalse(hasattr(self.receipt, 'reversal'))
+
+    def test_correction_confirmation_explains_and_prefills_the_reason(self):
+        response = self.client.get(
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+            {
+                'corrigir': '1',
+                'next': reverse('billing:list', args=[self.rental.pk]),
+            },
+        )
+
+        self.assertContains(response, 'Corrigir recebimento')
+        self.assertContains(response, 'Estornar e corrigir')
+        self.assertContains(response, 'Correção de valor digitado incorretamente.')
+        self.assertEqual(
+            response.context['return_url'],
+            reverse('billing:list', args=[self.rental.pk]),
+        )
+
+    def test_correction_confirmation_rejects_external_return_url(self):
+        response = self.client.get(
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+            {
+                'corrigir': '1',
+                'next': 'https://example.net/steal-session',
+            },
+        )
+
+        self.assertIsNone(response.context['return_url'])
+        self.assertNotContains(response, 'https://example.net/steal-session')
+
+    def test_confirming_correction_reverses_then_opens_the_same_installment(self):
+        response = self.client.post(
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+            {
+                'reason': 'Correção de valor digitado incorretamente.',
+                'submission_token': str(uuid.uuid4()),
+                'corrigir': '1',
+                'next': reverse('billing:list', args=[self.rental.pk]),
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse('billing:pay', args=[self.installments[0].pk]),
+        )
+        self.receipt.refresh_from_db()
+        self.installments[0].refresh_from_db()
+        self.assertTrue(hasattr(self.receipt, 'reversal'))
+        self.assertEqual(self.installments[0].paid_amount, Decimal('0.00'))
+        self.assertEqual(self.installments[0].balance, Decimal('60.00'))
+        self.assertContains(
+            response,
+            'Recebimento de R$ 30,00 estornado. Informe abaixo o valor correto',
+        )
+
+    def test_correct_value_is_a_new_auditable_receipt(self):
+        self.client.post(
+            reverse('billing:reverse_payment', args=[self.payment.pk]),
+            {
+                'reason': 'Correção de valor digitado incorretamente.',
+                'submission_token': str(uuid.uuid4()),
+                'corrigir': '1',
+            },
+        )
+
+        self._pay(self.installments[0], '45,00')
+
+        self.receipt.refresh_from_db()
+        self.installments[0].refresh_from_db()
+        corrected_receipt = (
+            Receipt.objects.filter(kind=Receipt.Kind.INFLOW)
+            .exclude(pk=self.receipt.pk)
+            .get()
+        )
+        self.assertTrue(hasattr(self.receipt, 'reversal'))
+        self.assertEqual(corrected_receipt.amount, Decimal('45.00'))
+        self.assertEqual(self.installments[0].paid_amount, Decimal('45.00'))
+        self.assertEqual(self.installments[0].balance, Decimal('15.00'))
+        self.assertEqual(Receipt.objects.count(), 3)
+        self.assertEqual(FinancialMovement.objects.count(), 3)
+
+
 class ReceivablePayViewReceiptTests(ReceiptViewTestCase):
     """The single-title screen writes a one-allocation receipt."""
 

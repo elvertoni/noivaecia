@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core import signing
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
@@ -91,6 +92,38 @@ def _receipt_outcome_message(receivable):
         f'Recebimento registrado — ainda restam R$ {brl(receivable.balance)} '
         'nesta mesma parcela.'
     )
+
+
+def _receivable_rows(receivables, company):
+    """Build display rows and expose the latest correctable cash act.
+
+    A title may have several payments, including reversal rows.  The counter
+    workflow needs the most recent active inflow so an operator can correct a
+    typing error from the installment itself without hunting through reports.
+    """
+    receivables = list(receivables)
+    latest_payment_by_receivable = {}
+    payments = (
+        Payment.objects.filter(
+            receivable_id__in=[item.pk for item in receivables],
+            is_reversal=False,
+            reversed_by__isnull=True,
+        )
+        .order_by('-payment_date', '-created_at', '-pk')
+    )
+    for payment in payments:
+        latest_payment_by_receivable.setdefault(
+            payment.receivable_id,
+            payment,
+        )
+    return [
+        {
+            'obj': receivable,
+            'correction_payment': latest_payment_by_receivable.get(receivable.pk),
+            **interest_breakdown(receivable, company=company),
+        }
+        for receivable in receivables
+    ]
 
 
 def _active_cash_account():
@@ -497,7 +530,36 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
     template_name = 'billing/payment_reversal.html'
     form_class = ReversalForm
 
+    def _return_to_origin(self):
+        if self.return_url:
+            return redirect(self.return_url)
+        if self.payment.customer_id:
+            return redirect(
+                'billing:customer_receivables',
+                pk=self.payment.customer_id,
+            )
+        return redirect('billing:receivables')
+
     def dispatch(self, request, *args, **kwargs):
+        self.correction_mode = (
+            request.POST.get('corrigir') == '1'
+            or request.GET.get('corrigir') == '1'
+        )
+        if self.correction_mode and request.user.is_authenticated:
+            can_correct = (
+                request.user.has_action('billing.receive')
+                and request.user.has_action('billing.reverse')
+            )
+            if not can_correct:
+                raise PermissionDenied
+        candidate_return_url = request.POST.get('next') or request.GET.get('next')
+        self.return_url = None
+        if candidate_return_url and url_has_allowed_host_and_scheme(
+            candidate_return_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            self.return_url = candidate_return_url
         self.payment = get_object_or_404(
             Payment.objects.select_related(
                 'receipt_allocation__receipt',
@@ -514,15 +576,21 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
         )
         if already_reversed:
             messages.error(request, 'Este recebimento já foi estornado.')
-            if self.payment.customer_id:
-                return redirect('billing:customer_receivables', pk=self.payment.customer_id)
-            return redirect('billing:receivables')
+            return self._return_to_origin()
         return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if self.correction_mode:
+            initial['reason'] = 'Correção de valor digitado incorretamente.'
+        return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['payment'] = self.payment
         context['receipt'] = self.receipt
+        context['correction_mode'] = self.correction_mode
+        context['return_url'] = self.return_url
         if self.receipt is not None:
             # The operator must see the whole act they are undoing, not just
             # the slice they clicked on.
@@ -535,6 +603,10 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
 
     def form_valid(self, form):
         reason = form.cleaned_data['reason']
+        corrected_amount = (
+            self.receipt.amount if self.receipt is not None else self.payment.amount
+        )
+        correction_receivable_id = self.payment.receivable_id
         try:
             if self.receipt is not None:
                 reverse_receipt(
@@ -557,14 +629,19 @@ class PaymentReversalView(BillingAccessMixin, ActionRequiredMixin, FormView):
                 )
         except ReceiptIdempotencyConflict:
             messages.error(self.request, DUPLICATE_SUBMISSION_MESSAGE)
-            return redirect('billing:receivables')
+            return self._return_to_origin()
         except ValueError as exc:
             messages.error(self.request, str(exc))
-            return redirect('billing:receivables')
+            return self._return_to_origin()
+        if self.correction_mode:
+            messages.success(
+                self.request,
+                f'Recebimento de R$ {brl(corrected_amount)} estornado. '
+                'Informe abaixo o valor correto e registre novamente.',
+            )
+            return redirect('billing:pay', pk=correction_receivable_id)
         messages.success(self.request, 'Estorno registrado com sucesso.')
-        if self.payment.customer_id:
-            return redirect('billing:customer_receivables', pk=self.payment.customer_id)
-        return redirect('billing:receivables')
+        return self._return_to_origin()
 
 
 class ReceivableReopenView(BillingAccessMixin, ActionRequiredMixin, View):
@@ -938,10 +1015,7 @@ class ReceivableListView(BillingAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         company = Company.load()
-        rows = [
-            {'obj': rec, **interest_breakdown(rec, company=company)}
-            for rec in context['receivables']
-        ]
+        rows = _receivable_rows(context['receivables'], company)
         context['rows'] = rows
         context['rental'] = self.rental
         context['generate_form'] = GenerateReceivablesForm()
@@ -1078,10 +1152,10 @@ class GenerateReceivablesView(
         company = Company.load()
         context.update({
             'rental': self.rental,
-            'rows': [
-                {'obj': receivable, **interest_breakdown(receivable, company=company)}
-                for receivable in self.rental.receivables.select_related('rental__customer')
-            ],
+            'rows': _receivable_rows(
+                self.rental.receivables.select_related('rental__customer'),
+                company,
+            ),
             'generate_form': context['form'],
             'reprocess_preview': preview_future_reprocess(self.rental),
         })

@@ -1,15 +1,26 @@
 {% extends 'base.html' %}
 {% load core_tags %}
 
-{% block title %}Estornar recebimento · Noivas &amp; Cia{% endblock %}
+{% block title %}{% if correction_mode %}Corrigir recebimento{% else %}Estornar recebimento{% endif %} · Noivas &amp; Cia{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-lg">
   <div class="panel-spacious space-y-5">
 
     <div>
-      <h1 class="page-title">Estornar recebimento</h1>
-      {% if receipt %}
+      <h1 class="page-title">{% if correction_mode %}Corrigir recebimento{% else %}Estornar recebimento{% endif %}</h1>
+      {% if correction_mode %}
+        <p class="page-description">
+          O lançamento incorreto será estornado com o histórico preservado. Em seguida,
+          registre novamente o valor correto na mesma parcela.
+        </p>
+        {% if receipt and receipt_allocations|length > 1 %}
+          <p class="mt-2 text-sm font-medium text-amber-800">
+            Este recebimento atingiu {{ receipt_allocations|length }} parcelas. A correção
+            desfaz o recibo inteiro antes de registrar o valor correto.
+          </p>
+        {% endif %}
+      {% elif receipt %}
         <p class="page-description">
           Este recebimento faz parte de um recibo único. O estorno desfaz o recibo
           inteiro e gera um único movimento de saída no caixa.
@@ -80,6 +91,8 @@
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
+      {% if correction_mode %}<input type="hidden" name="corrigir" value="1">{% endif %}
+      {% if return_url %}<input type="hidden" name="next" value="{{ return_url }}">{% endif %}
       {% for field in form.hidden_fields %}{{ field }}{% endfor %}
       {% for field in form.visible_fields %}
         {% include 'includes/form_field.html' with field=field only %}
@@ -87,9 +100,13 @@
 
       <div class="form-actions">
         {% if request.user|has_action:'billing.reverse' %}
-          <button type="submit" class="btn btn-danger">Confirmar estorno</button>
+          <button type="submit" class="btn btn-danger">
+            {% if correction_mode %}Estornar e corrigir{% else %}Confirmar estorno{% endif %}
+          </button>
         {% endif %}
-        {% if payment.customer_id %}
+        {% if return_url %}
+          <a href="{{ return_url }}" class="btn btn-secondary">Cancelar</a>
+        {% elif payment.customer_id %}
           <a href="{% url 'billing:customer_receivables' payment.customer_id %}" class="btn btn-secondary">Cancelar</a>
         {% else %}
           <a href="{% url 'billing:receivables' %}" class="btn btn-secondary">Cancelar</a>
