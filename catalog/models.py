@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Upper
 from django.urls import reverse
 
 from core.models import TimeStampedModel
@@ -19,6 +20,21 @@ class Category(TimeStampedModel):
         verbose_name = 'categoria'
         verbose_name_plural = 'categorias'
         ordering = ('prefix',)
+        constraints = [
+            # ``prefix`` is already unique, but uniqueness in PostgreSQL is
+            # case-sensitive while availability and product lookup match it with
+            # ``prefix__iexact``.  ``VF`` and ``vf`` therefore read as one
+            # category on screen and are two in the database — and each may hold
+            # its own live code 731, putting "VF731" on screen twice.  That is
+            # the duplication the catalogue is being cleaned up for, so the rule
+            # cannot live only in ``CategoryForm.clean_prefix``: the admin, the
+            # shell and data migrations all reach ``Category`` without it.
+            models.UniqueConstraint(
+                Upper('prefix'),
+                name='catalog_category_prefix_unique_ci',
+                violation_error_message='Já existe uma categoria com este prefixo.',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.prefix} · {self.name}'
@@ -61,6 +77,22 @@ class Product(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(value__gte=0),
                 name='catalog_product_value_gte_0',
+            ),
+            # The code is the piece's identity in this business — it goes on the
+            # printed contract and on the physical tag — so it must mean exactly
+            # one item in the collection.  Form validation is check-then-insert
+            # and loses the race; the admin, the MCP tools and the importer skip
+            # the form entirely.  Only the index arbitrates.  The condition lets
+            # many retired rows share a code, which is how the legacy system
+            # parked freed slots and how reuse revives them.
+            models.UniqueConstraint(
+                fields=('category', 'code'),
+                condition=models.Q(is_active=True),
+                name='catalog_product_unique_active_code',
+                violation_error_message=(
+                    'Este código já está no acervo desta categoria. Retire o item '
+                    'atual antes de reaproveitar o código.'
+                ),
             ),
         ]
 
